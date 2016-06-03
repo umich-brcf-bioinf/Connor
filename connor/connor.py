@@ -4,8 +4,8 @@ Created on Jun 3, 2016
 @author: pulintz, cgates
 '''
 from __future__ import print_function, absolute_import, division
-from _collections import defaultdict
-from Bio.AlignIO.Interfaces import AlignmentWriter
+from collections import defaultdict
+import pysam
 
 class LightweightAlignment(object):
     """ Minimal info from PySam.AlignedSegment"""
@@ -35,11 +35,28 @@ def _build_read_families(aligned_segments,coord_read_name_dict):
             yield family_dict.pop(key)
 
 def _build_consensus_pair(alignments):
-    start_alignment = alignments[0]
-    for alignment in alignments[1:]:
-        if alignment.query_name == start_alignment.query_name:
+    start_alignment = None
+    for alignment in alignments:
+        if not start_alignment:
+            start_alignment = alignment
+        elif alignment.query_name == start_alignment.query_name:
             return (start_alignment, alignment)
 
 
+def main():
+    mybam = "/Volumes/MyPassport/Data/Rubicon/CU1/BAM/EGFR-ENSG00000146648.1percent.500x.properpairs.2.bam"
+    bamfile = pysam.AlignmentFile(mybam, "rb")
+    lw_aligns = [LightweightAlignment(align) for align in bamfile.fetch()]
+    align_family_dict = _build_alignment_family_dict(lw_aligns)
+    bamfile.close()
+    bamfile = pysam.AlignmentFile(mybam, "rb")
+    outfile = pysam.AlignmentFile("/tmp/out.bam", "wb", template=bamfile)
+    for family in _build_read_families(bamfile.fetch(), align_family_dict):
+        read1, read2 = _build_consensus_pair(family)
+        outfile.write(read1)
+        outfile.write(read2)
+    outfile.close()
+    bamfile.close()
+
 if __name__ == '__main__':
-    pass
+    main()

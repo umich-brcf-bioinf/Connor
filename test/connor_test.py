@@ -75,12 +75,12 @@ class TestConnor(unittest.TestCase):
         align_A1 = align_seg("alignA", 'chr1', 100, 10)
         align_B0 = align_seg("alignB", 'chr1', 10, 100)
         align_B1 = align_seg("alignB", 'chr1', 100, 10)
-        alignments = [align_A0, align_B0, align_B1, align_A1]
+        alignments = set([align_A0, align_B0, align_B1, align_A1])
 
         actual_pair = connor._build_consensus_pair(alignments)
 
-        expected_pair = (align_A0, align_A1)
-        self.assertEquals(expected_pair, actual_pair)
+        expected_pair = set([align_B0, align_B1])
+        self.assertEquals(expected_pair, set(actual_pair))
 
 
 class TestLightweightAlignment(unittest.TestCase):
