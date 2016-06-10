@@ -50,13 +50,13 @@ def _pysam_alignments_from_bam(bam_filename):
 
 class ConnorTest(unittest.TestCase):
 
-    def test_build_alignment_family_dict(self):
+    def test_build_coordinate_read_name_manifest(self):
         Align = namedtuple('Align', 'name key')
         align1 = Align(name='align1', key=3)
         align2 = Align(name='align2', key=3)
         align3 = Align(name='align3', key=4)
 
-        actual_dict = connor._build_alignment_family_dict([align1,
+        actual_dict = connor._build_coordinate_read_name_manifest([align1,
                                                            align2,
                                                            align3])
 
@@ -64,20 +64,20 @@ class ConnorTest(unittest.TestCase):
                          4: set(['align3'])}
         self.assertEquals(expected_dict, actual_dict)
 
-    def test_build_read_families_oneFamily(self):
+    def test_build_coordinate_families_oneFamily(self):
         align_A0 = align_seg("alignA", 'chr1', 10, 100)
         align_A1 = align_seg("alignA", 'chr1', 100, 10)
         align_B0 = align_seg("alignB", 'chr1', 10, 100)
         align_B1 = align_seg("alignB", 'chr1', 100, 10)
         alignments = [align_A0, align_B0, align_A1, align_B1]
-        coord_read_name_dict = {('chr1', 10, 100): set(['alignA', 'alignB'])}
+        coord_read_name_manifest = {('chr1', 10, 100): set(['alignA', 'alignB'])}
 
-        actual_families = [family for family in connor._build_read_families(alignments, coord_read_name_dict)]
+        actual_families = [family for family in connor._build_coordinate_families(alignments, coord_read_name_manifest)]
 
         expected_families = [set([align_A0, align_A1, align_B0, align_B1])]
         self.assertEquals(expected_families, actual_families)
 
-    def test_build_read_families_threeFamilies(self):
+    def test_build_coordinate_families_threeFamilies(self):
         align_A0 = align_seg("alignA", 'chr1', 10, 100)
         align_A1 = align_seg("alignA", 'chr1', 100, 10)
         align_B0 = align_seg("alignB", 'chr1', 10, 100)
@@ -88,18 +88,18 @@ class ConnorTest(unittest.TestCase):
         align_D1 = align_seg("alignD", 'chr1', 300, 30)
         alignments = [align_A0, align_B0, align_C0, align_A1, align_B1,
                       align_D0, align_D1, align_C1]
-        coord_read_name_dict = {('chr1', 10, 100): set(['alignA', 'alignB']),
+        coord_read_name_manifest = {('chr1', 10, 100): set(['alignA', 'alignB']),
                                 ('chr1', 20, 200): set(['alignC']),
                                 ('chr1', 30, 300): set(['alignD'])}
 
-        actual_families = [family for family in connor._build_read_families(alignments, coord_read_name_dict)]
+        actual_families = [family for family in connor._build_coordinate_families(alignments, coord_read_name_manifest)]
 
         expected_families = [set([align_A0, align_A1, align_B0, align_B1]),
                              set([align_D0, align_D1]),
                              set([align_C0, align_C1])]
         self.assertEquals(expected_families, actual_families)
 
-    def test_build_consensus_read(self):
+    def test_build_consensus_pair(self):
         align_A0 = align_seg("alignA", 'chr1', 10, 100)
         align_A1 = align_seg("alignA", 'chr1', 100, 10)
         align_B0 = align_seg("alignB", 'chr1', 10, 100)
@@ -166,10 +166,18 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             connor.main(input_bam, output_bam)
             alignments = _pysam_alignments_from_bam(output_bam)
             self.assertEquals(4, len(alignments))
-            self.assertEquals(("readNameA2", 100), (alignments[0].qname, alignments[0].reference_start + 1))
-            self.assertEquals(("readNameA2", 300), (alignments[1].qname, alignments[1].reference_start + 1))
-            self.assertEquals(("readNameB1", 200), (alignments[2].qname, alignments[2].reference_start + 1))
-            self.assertEquals(("readNameB1", 400), (alignments[3].qname, alignments[3].reference_start + 1))
+            self.assertEquals(("readNameA2", 100),
+                              (alignments[0].qname,
+                               alignments[0].reference_start + 1))
+            self.assertEquals(("readNameA2", 300),
+                              (alignments[1].qname,
+                               alignments[1].reference_start + 1))
+            self.assertEquals(("readNameB1", 200),
+                              (alignments[2].qname,
+                               alignments[2].reference_start + 1))
+            self.assertEquals(("readNameB1", 400),
+                              (alignments[3].qname,
+                               alignments[3].reference_start + 1))
 
     def test_distinctPairStartsAreNotCombined(self):
         sam_contents = \
@@ -187,10 +195,18 @@ readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
             connor.main(input_bam, output_bam)
             alignments = _pysam_alignments_from_bam(output_bam)
             self.assertEquals(4, len(alignments))
-            self.assertEquals(("readNameA1", 100), (alignments[0].qname, alignments[0].reference_start + 1))
-            self.assertEquals(("readNameA1", 300), (alignments[1].qname, alignments[1].reference_start + 1))
-            self.assertEquals(("readNameB1", 100), (alignments[2].qname, alignments[2].reference_start + 1))
-            self.assertEquals(("readNameB1", 500), (alignments[3].qname, alignments[3].reference_start + 1))
+            self.assertEquals(("readNameA1", 100),
+                              (alignments[0].qname,
+                               alignments[0].reference_start + 1))
+            self.assertEquals(("readNameA1", 300),
+                              (alignments[1].qname,
+                               alignments[1].reference_start + 1))
+            self.assertEquals(("readNameB1", 100),
+                              (alignments[2].qname,
+                               alignments[2].reference_start + 1))
+            self.assertEquals(("readNameB1", 500),
+                              (alignments[3].qname,
+                               alignments[3].reference_start + 1))
 
 
 if __name__ == "__main__":
