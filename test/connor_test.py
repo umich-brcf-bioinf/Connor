@@ -1,5 +1,5 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
-#pylint: disable=protected-access, missing-docstring
+#pylint: disable=protected-access, missing-docstring, too-many-locals
 from __future__ import print_function, absolute_import
 from collections import namedtuple
 import os
@@ -12,13 +12,15 @@ MockPysamAlignedSegment = namedtuple('MockPysamAlignedSegment',
                                      ('query_name,'
                                       'reference_name,'
                                       'reference_start,'
-                                      'next_reference_start'))
+                                      'next_reference_start,'
+                                      'sequence'))
 
-def align_seg(a, b, c, d):
+def align_seg(a, b, c, d, e='AAACCC'):
     return MockPysamAlignedSegment(query_name=a,
                                    reference_name=b,
                                    reference_start=c,
-                                   next_reference_start=d)
+                                   next_reference_start=d,
+                                   sequence=e)
 
 def _create_file(path, filename, contents):
     filename = os.path.join(path, filename)
@@ -48,6 +50,46 @@ def _pysam_alignments_from_bam(bam_filename):
     infile.close()
     return aligned_segments
 
+class PairedAlignmentTest(unittest.TestCase):
+    def test_init(self):
+        alignment1l = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        alignment1r = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        actual_paired_alignment = connor.PairedAlignment(alignment1l, alignment1r)
+
+        self.assertIs(alignment1l, actual_paired_alignment.left_alignment)
+        self.assertIs(alignment1r, actual_paired_alignment.right_alignment)
+
+    def test_eq(self):
+        left = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        right = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        other = align_seg("alignB", 'chr1', 100, 200, "AAANNNNNNN")
+
+        base = connor.PairedAlignment(left, right)
+        self.assertEquals(base, connor.PairedAlignment(left, right))
+        self.assertNotEquals(base, connor.PairedAlignment(other, right))
+        self.assertNotEquals(base, connor.PairedAlignment(left, other))
+
+    def test_hash(self):
+        left_A = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        right_A = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        left_B = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        right_B = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+
+        actual_set = set()
+        base = connor.PairedAlignment(left_A, right_A)
+        actual_set.add(base)
+        self.assertEquals(1, len(actual_set))
+
+        actual_set.add(base)
+        self.assertEquals(1, len(actual_set))
+
+        actual_set.add(connor.PairedAlignment(left_A, right_A))
+        self.assertEquals(1, len(actual_set))
+
+        actual_set.add(connor.PairedAlignment(left_B, right_B))
+        self.assertEquals(1, len(actual_set))
+
+
 class ConnorTest(unittest.TestCase):
 
     def test_build_coordinate_read_name_manifest(self):
@@ -74,7 +116,9 @@ class ConnorTest(unittest.TestCase):
 
         actual_families = [family for family in connor._build_coordinate_families(alignments, coord_read_name_manifest)]
 
-        expected_families = [set([align_A0, align_A1, align_B0, align_B1])]
+        pair_A = connor.PairedAlignment(align_A0, align_A1)
+        pair_B = connor.PairedAlignment(align_B0, align_B1)
+        expected_families = [set([pair_A, pair_B])]
         self.assertEquals(expected_families, actual_families)
 
     def test_build_coordinate_families_threeFamilies(self):
@@ -94,9 +138,14 @@ class ConnorTest(unittest.TestCase):
 
         actual_families = [family for family in connor._build_coordinate_families(alignments, coord_read_name_manifest)]
 
-        expected_families = [set([align_A0, align_A1, align_B0, align_B1]),
-                             set([align_D0, align_D1]),
-                             set([align_C0, align_C1])]
+        pair_A = connor.PairedAlignment(align_A0, align_A1)
+        pair_B = connor.PairedAlignment(align_B0, align_B1)
+        pair_C = connor.PairedAlignment(align_C0, align_C1)
+        pair_D = connor.PairedAlignment(align_D0, align_D1)
+
+        expected_families = [set([pair_A, pair_B]),
+                             set([pair_D]),
+                             set([pair_C])]
         self.assertEquals(expected_families, actual_families)
 
     def test_build_consensus_pair(self):
@@ -104,20 +153,18 @@ class ConnorTest(unittest.TestCase):
         align_A1 = align_seg("alignA", 'chr1', 100, 10)
         align_B0 = align_seg("alignB", 'chr1', 10, 100)
         align_B1 = align_seg("alignB", 'chr1', 100, 10)
-        alignments = set([align_A0, align_B0, align_B1, align_A1])
+        alignments = set([connor.PairedAlignment(align_A0, align_A1),
+                          connor.PairedAlignment(align_B0, align_B1)])
 
         actual_pair = connor._build_consensus_pair(alignments)
 
-        expected_pair = set([align_B0, align_B1])
-        self.assertEquals(expected_pair, set(actual_pair))
+        expected_pair = connor.PairedAlignment(align_A0, align_A1)
+        self.assertEquals(expected_pair, actual_pair)
 
 
 class TestLightweightAlignment(unittest.TestCase):
     def test_lightweight_alignment_forwardRead(self):
-        alignedSegment = MockPysamAlignedSegment(query_name="align1",
-                                                 reference_name='chr1',
-                                                 reference_start=10,
-                                                 next_reference_start=100)
+        alignedSegment = align_seg("align1", 'chr1', 10, 100)
 
         actual_lwa = connor.LightweightAlignment(alignedSegment)
 
@@ -125,10 +172,7 @@ class TestLightweightAlignment(unittest.TestCase):
         self.assertEquals(('chr1', 10, 100), actual_lwa.key)
 
     def test_lightweight_alignment_reverseRead(self):
-        alignedSegment = MockPysamAlignedSegment(query_name="align1",
-                                                 reference_name='chr1',
-                                                 reference_start=100,
-                                                 next_reference_start=10)
+        alignedSegment = align_seg("align1", 'chr1', 100, 10)
 
         actual_lwa = connor.LightweightAlignment(alignedSegment)
 
@@ -136,15 +180,36 @@ class TestLightweightAlignment(unittest.TestCase):
         self.assertEquals(('chr1', 10, 100), actual_lwa.key)
 
     def test_lightweight_alignment_weirdRead(self):
-        alignedSegment = MockPysamAlignedSegment(query_name="align1",
-                                                 reference_name='chr1',
-                                                 reference_start=100,
-                                                 next_reference_start=100)
+        alignedSegment = align_seg("align1", 'chr1', 100, 100)
 
         actual_lwa = connor.LightweightAlignment(alignedSegment)
 
         self.assertEquals("align1", actual_lwa.name)
         self.assertEquals(('chr1', 100, 100), actual_lwa.key)
+
+
+    def test_build_tag_families(self):
+        alignment1l = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        alignment1r = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        alignment2l = align_seg("alignB", 'chr1', 100, 200, "GGGNNNNNNN")
+        alignment2r = align_seg("alignB", 'chr1', 200, 100, "TTTNNNNNNN")
+        alignment3l = align_seg("alignC", 'chr1', 100, 200, "AAANNNNNNN")
+        alignment3r = align_seg("alignC", 'chr1', 200, 100, "CCCNNNNNNN")
+
+        align_pair1 = connor.PairedAlignment(alignment1l, alignment1r)
+        align_pair2 = connor.PairedAlignment(alignment2l, alignment2r)
+        align_pair3 = connor.PairedAlignment(alignment3l, alignment3r)
+
+        expected_tag_family_1 = frozenset([align_pair1, align_pair3])
+        expected_tag_family_2 = frozenset([align_pair2])
+        expected_tag_families = [expected_tag_family_1,
+                                 expected_tag_family_2]
+
+        actual_tag_families = connor._build_tag_families(set([align_pair1,
+                                                              align_pair2,
+                                                              align_pair3]))
+
+        self.assertEquals(expected_tag_families, actual_tag_families)
 
 
 class ConnorFunctionalTestCase(unittest.TestCase):
@@ -166,10 +231,10 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             connor.main(input_bam, output_bam)
             alignments = _pysam_alignments_from_bam(output_bam)
             self.assertEquals(4, len(alignments))
-            self.assertEquals(("readNameA2", 100),
+            self.assertEquals(("readNameA1", 100),
                               (alignments[0].qname,
                                alignments[0].reference_start + 1))
-            self.assertEquals(("readNameA2", 300),
+            self.assertEquals(("readNameA1", 300),
                               (alignments[1].qname,
                                alignments[1].reference_start + 1))
             self.assertEquals(("readNameB1", 200),

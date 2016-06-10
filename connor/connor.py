@@ -20,6 +20,23 @@ class LightweightAlignment(object):
         else:
             self.key = (chrom, pos2, pos1)
 
+class PairedAlignment(object):
+    def __init__(self, left_alignment, right_alignment):
+        self.left_alignment = left_alignment
+        self.right_alignment = right_alignment
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __hash__(self):
+        return hash(self.left_alignment) * hash(self.right_alignment)
+
+    def __repr__(self):
+        return ("{}(left={}, "
+                "right={})").format(self.__class__,
+                                    self.left_alignment,
+                                    self.right_alignment)
+
 def _build_coordinate_read_name_manifest(lw_aligns):
     af_dict = defaultdict(set)
     for lwa in lw_aligns:
@@ -28,20 +45,43 @@ def _build_coordinate_read_name_manifest(lw_aligns):
 
 def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
     family_dict = defaultdict(set)
+    pairing_dict = {}
     for aseg in aligned_segments:
-        key = LightweightAlignment(aseg).key
-        family_dict[key].add(aseg)
-        if (2*len(coord_read_name_manifest[key])) == len(family_dict[key]):
-            yield family_dict.pop(key)
+        if not aseg.query_name in pairing_dict:
+            pairing_dict[aseg.query_name]= aseg
+        else:
+            paired_align = PairedAlignment(pairing_dict.pop(aseg.query_name),
+                                           aseg)
+            key = LightweightAlignment(aseg).key
+            family_dict[key].add(paired_align)
+            coord_read_name_manifest[key].remove(aseg.query_name)
+            if not coord_read_name_manifest[key]:
+                yield family_dict.pop(key)
 
-def _build_consensus_pair(alignments):
-    start_alignment = None
-    for alignment in alignments:
-        if not start_alignment:
-            start_alignment = alignment
-        elif alignment.query_name == start_alignment.query_name:
-            return (start_alignment, alignment)
+def _build_consensus_pair(alignment_family):
+    return alignment_family.pop()
 
+
+def _build_tag_families(coordinate_family):
+    families = defaultdict(set)
+    first_left_tag, first_right_tag = None, None
+    left_behind = set()
+    while coordinate_family:
+        for paired_align in coordinate_family:
+            left_tag_id = paired_align.left_alignment.sequence[0:3]
+            right_tag_id = paired_align.right_alignment.sequence[0:3]
+            if not first_left_tag:
+                first_left_tag = left_tag_id
+                right_tag_id = right_tag_id
+                families[(first_left_tag, first_right_tag)].add(paired_align)
+            elif left_tag_id == first_left_tag or right_tag_id == first_right_tag:
+                families[(first_left_tag, first_right_tag)].add(paired_align)
+            else:
+                left_behind.add(paired_align)
+        coordinate_family = set(left_behind)
+        left_behind = set()
+        first_left_tag, first_right_tag = None, None
+    return families.values()
 
 def main(input_bam, output_bam):
     bamfile = pysam.AlignmentFile(input_bam, "rb")
@@ -51,9 +91,9 @@ def main(input_bam, output_bam):
     bamfile = pysam.AlignmentFile(input_bam, "rb")
     outfile = pysam.AlignmentFile(output_bam, "wb", template=bamfile)
     for family in _build_coordinate_families(bamfile.fetch(), coord_manifest):
-        read1, read2 = _build_consensus_pair(family)
-        outfile.write(read1)
-        outfile.write(read2)
+        read_pair = _build_consensus_pair(family)
+        outfile.write(read_pair.left_alignment)
+        outfile.write(read_pair.right_alignment)
     outfile.close()
     bamfile.close()
 
