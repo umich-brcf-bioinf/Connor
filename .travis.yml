@@ -8,7 +8,7 @@ env:
     - PYSAM_VERSION=0.9.0
 
 install:
-    - pip install -q pysam==$PYSAM_VERSION
+    - pip install -q --use-wheel pysam==$PYSAM_VERSION
     - pip install -q -r requirements.txt
 
 script:
