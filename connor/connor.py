@@ -32,9 +32,8 @@ class PairedAlignment(object):
         return hash(self.left_alignment) * hash(self.right_alignment)
 
     def __repr__(self):
-        return ("PairedAlignment(left={}|{}|{}, "
-                "right={}|{}|{})").format(
-                                    self.left_alignment.query_name, 
+        return ("Pair({}|{}|{}, "
+                "{}|{}|{})").format(self.left_alignment.query_name, 
                                     self.left_alignment.reference_start,
                                     self.left_alignment.sequence,
                                     self.right_alignment.query_name, 
@@ -66,26 +65,31 @@ def _build_consensus_pair(alignment_family):
     return alignment_family.pop()
 
 
+def _get_ranked_tags(coordinate_family):
+    tag_count = defaultdict(int)
+    for paired_align in coordinate_family:
+        left_tag_id = paired_align.left_alignment.sequence[0:3]
+        right_tag_id = paired_align.right_alignment.sequence[0:3]
+        tag_count[(left_tag_id, right_tag_id)] += 1
+    tags_by_count = sorted(tag_count.items(),
+                           key=lambda x: (x[1], x[0]),
+                           reverse=True)
+    ranked_tags = [tag_count[0] for (tag_count) in tags_by_count]
+    return ranked_tags
+
+
 def _build_tag_families(coordinate_family):
-    families = defaultdict(set)
-    first_left_tag, first_right_tag = None, None
-    left_behind = set()
-    while coordinate_family:
-        for paired_align in coordinate_family:
-            left_tag_id = paired_align.left_alignment.sequence[0:3]
-            right_tag_id = paired_align.right_alignment.sequence[0:3]
-            if not first_left_tag:
-                first_left_tag = left_tag_id
-                right_tag_id = right_tag_id
-                families[(first_left_tag, first_right_tag)].add(paired_align)
-            elif left_tag_id == first_left_tag or right_tag_id == first_right_tag:
-                families[(first_left_tag, first_right_tag)].add(paired_align)
-            else:
-                left_behind.add(paired_align)
-        coordinate_family = set(left_behind)
-        left_behind = set()
-        first_left_tag, first_right_tag = None, None
-    return set(frozenset(family) for family in families.values())
+    ranked_tags = _get_ranked_tags(coordinate_family)
+    tag_aligns = defaultdict(set)
+    for paired_align in coordinate_family:
+        left_tag_id =  paired_align.left_alignment.sequence[0:3]
+        right_tag_id =  paired_align.right_alignment.sequence[0:3]
+        for best_tag in ranked_tags:
+            if left_tag_id == best_tag[0] or right_tag_id == best_tag[1]:
+                tag_aligns[best_tag].add(paired_align)
+                break
+    return tag_aligns.values()
+
 
 def main(input_bam, output_bam):
     bamfile = pysam.AlignmentFile(input_bam, "rb")
