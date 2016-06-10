@@ -25,7 +25,6 @@ def _build_alignment_family_dict(lw_aligns):
         af_dict[lwa.key].add(lwa.name)
     return af_dict
 
-
 def _build_read_families(aligned_segments,coord_read_name_dict):
     family_dict = defaultdict(set)
     for aseg in aligned_segments:
@@ -43,14 +42,13 @@ def _build_consensus_pair(alignments):
             return (start_alignment, alignment)
 
 
-def main():
-    mybam = "/Volumes/MyPassport/Data/Rubicon/CU1/BAM/EGFR-ENSG00000146648.1percent.500x.properpairs.2.bam"
-    bamfile = pysam.AlignmentFile(mybam, "rb")
+def main(input_bam, output_bam):
+    bamfile = pysam.AlignmentFile(input_bam, "rb")
     lw_aligns = [LightweightAlignment(align) for align in bamfile.fetch()]
     align_family_dict = _build_alignment_family_dict(lw_aligns)
     bamfile.close()
-    bamfile = pysam.AlignmentFile(mybam, "rb")
-    outfile = pysam.AlignmentFile("/tmp/out.bam", "wb", template=bamfile)
+    bamfile = pysam.AlignmentFile(input_bam, "rb")
+    outfile = pysam.AlignmentFile(output_bam, "wb", template=bamfile)
     for family in _build_read_families(bamfile.fetch(), align_family_dict):
         read1, read2 = _build_consensus_pair(family)
         outfile.write(read1)
@@ -59,4 +57,6 @@ def main():
     bamfile.close()
 
 if __name__ == '__main__':
-    main()
+    input_bam="/Volumes/MyPassport/Data/Rubicon/CU1/BAM/EGFR-ENSG00000146648.1percent.500x.properpairs.2.bam"
+    output_bam="/tmp/out.bam"
+    main(input_bam, output_bam)
