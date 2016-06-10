@@ -46,11 +46,11 @@ def _build_consensus_pair(alignments):
 def main(input_bam, output_bam):
     bamfile = pysam.AlignmentFile(input_bam, "rb")
     lw_aligns = [LightweightAlignment(align) for align in bamfile.fetch()]
-    align_family_dict = _build_coordinate_read_name_manifest(lw_aligns)
+    coord_manifest = _build_coordinate_read_name_manifest(lw_aligns)
     bamfile.close()
     bamfile = pysam.AlignmentFile(input_bam, "rb")
     outfile = pysam.AlignmentFile(output_bam, "wb", template=bamfile)
-    for family in _build_coordinate_families(bamfile.fetch(), align_family_dict):
+    for family in _build_coordinate_families(bamfile.fetch(), coord_manifest):
         read1, read2 = _build_consensus_pair(family)
         outfile.write(read1)
         outfile.write(read2)
@@ -58,8 +58,6 @@ def main(input_bam, output_bam):
     bamfile.close()
 
 if __name__ == '__main__':
-    #input_bam="/Volumes/MyPassport/Data/Rubicon/CU1/BAM/EGFR-ENSG00000146648.1percent.500x.properpairs.2.bam"
-    #output_bam="/tmp/out.bam"
-    input_bam = sys.argv[1]
-    output_bam = sys.argv[2]
-    main(input_bam, output_bam)
+    in_bam = sys.argv[1]
+    out_bam = sys.argv[2]
+    main(in_bam, out_bam)
