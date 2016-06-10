@@ -5,6 +5,7 @@ Created on Jun 3, 2016
 '''
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
+import sys
 import pysam
 
 class LightweightAlignment(object):
@@ -19,18 +20,18 @@ class LightweightAlignment(object):
         else:
             self.key = (chrom, pos2, pos1)
 
-def _build_alignment_family_dict(lw_aligns):
+def _build_coordinate_read_name_manifest(lw_aligns):
     af_dict = defaultdict(set)
     for lwa in lw_aligns:
         af_dict[lwa.key].add(lwa.name)
     return af_dict
 
-def _build_read_families(aligned_segments,coord_read_name_dict):
+def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
     family_dict = defaultdict(set)
     for aseg in aligned_segments:
         key = LightweightAlignment(aseg).key
         family_dict[key].add(aseg)
-        if (2*len(coord_read_name_dict[key])) == len(family_dict[key]):
+        if (2*len(coord_read_name_manifest[key])) == len(family_dict[key]):
             yield family_dict.pop(key)
 
 def _build_consensus_pair(alignments):
@@ -45,11 +46,11 @@ def _build_consensus_pair(alignments):
 def main(input_bam, output_bam):
     bamfile = pysam.AlignmentFile(input_bam, "rb")
     lw_aligns = [LightweightAlignment(align) for align in bamfile.fetch()]
-    align_family_dict = _build_alignment_family_dict(lw_aligns)
+    align_family_dict = _build_coordinate_read_name_manifest(lw_aligns)
     bamfile.close()
     bamfile = pysam.AlignmentFile(input_bam, "rb")
     outfile = pysam.AlignmentFile(output_bam, "wb", template=bamfile)
-    for family in _build_read_families(bamfile.fetch(), align_family_dict):
+    for family in _build_coordinate_families(bamfile.fetch(), align_family_dict):
         read1, read2 = _build_consensus_pair(family)
         outfile.write(read1)
         outfile.write(read2)
@@ -57,6 +58,8 @@ def main(input_bam, output_bam):
     bamfile.close()
 
 if __name__ == '__main__':
-    input_bam="/Volumes/MyPassport/Data/Rubicon/CU1/BAM/EGFR-ENSG00000146648.1percent.500x.properpairs.2.bam"
-    output_bam="/tmp/out.bam"
+    #input_bam="/Volumes/MyPassport/Data/Rubicon/CU1/BAM/EGFR-ENSG00000146648.1percent.500x.properpairs.2.bam"
+    #output_bam="/tmp/out.bam"
+    input_bam = sys.argv[1]
+    output_bam = sys.argv[2]
     main(input_bam, output_bam)
