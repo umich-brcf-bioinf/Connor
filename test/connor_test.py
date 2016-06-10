@@ -161,6 +161,29 @@ class ConnorTest(unittest.TestCase):
         expected_pair = connor.PairedAlignment(align_A0, align_A1)
         self.assertEquals(expected_pair, actual_pair)
 
+    def test_build_tag_families(self):
+        alignment1l = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        alignment1r = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        alignment2l = align_seg("alignB", 'chr1', 100, 200, "GGGNNNNNNN")
+        alignment2r = align_seg("alignB", 'chr1', 200, 100, "TTTNNNNNNN")
+        alignment3l = align_seg("alignC", 'chr1', 100, 200, "AAANNNNNNN")
+        alignment3r = align_seg("alignC", 'chr1', 200, 100, "CCCNNNNNNN")
+
+        align_pair1 = connor.PairedAlignment(alignment1l, alignment1r)
+        align_pair2 = connor.PairedAlignment(alignment2l, alignment2r)
+        align_pair3 = connor.PairedAlignment(alignment3l, alignment3r)
+
+        expected_tag_family_1 = frozenset([align_pair1, align_pair3])
+        expected_tag_family_2 = frozenset([align_pair2])
+        expected_tag_families = set([expected_tag_family_1,
+                                     expected_tag_family_2])
+
+        actual_tag_families = connor._build_tag_families(set([align_pair1,
+                                                              align_pair2,
+                                                              align_pair3]))
+
+        self.assertEquals(expected_tag_families, actual_tag_families)
+
 
 class TestLightweightAlignment(unittest.TestCase):
     def test_lightweight_alignment_forwardRead(self):
@@ -186,30 +209,6 @@ class TestLightweightAlignment(unittest.TestCase):
 
         self.assertEquals("align1", actual_lwa.name)
         self.assertEquals(('chr1', 100, 100), actual_lwa.key)
-
-
-    def test_build_tag_families(self):
-        alignment1l = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
-        alignment1r = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
-        alignment2l = align_seg("alignB", 'chr1', 100, 200, "GGGNNNNNNN")
-        alignment2r = align_seg("alignB", 'chr1', 200, 100, "TTTNNNNNNN")
-        alignment3l = align_seg("alignC", 'chr1', 100, 200, "AAANNNNNNN")
-        alignment3r = align_seg("alignC", 'chr1', 200, 100, "CCCNNNNNNN")
-
-        align_pair1 = connor.PairedAlignment(alignment1l, alignment1r)
-        align_pair2 = connor.PairedAlignment(alignment2l, alignment2r)
-        align_pair3 = connor.PairedAlignment(alignment3l, alignment3r)
-
-        expected_tag_family_1 = frozenset([align_pair1, align_pair3])
-        expected_tag_family_2 = frozenset([align_pair2])
-        expected_tag_families = [expected_tag_family_1,
-                                 expected_tag_family_2]
-
-        actual_tag_families = connor._build_tag_families(set([align_pair1,
-                                                              align_pair2,
-                                                              align_pair3]))
-
-        self.assertEquals(expected_tag_families, actual_tag_families)
 
 
 class ConnorFunctionalTestCase(unittest.TestCase):

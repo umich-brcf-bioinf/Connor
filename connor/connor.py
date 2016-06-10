@@ -32,10 +32,14 @@ class PairedAlignment(object):
         return hash(self.left_alignment) * hash(self.right_alignment)
 
     def __repr__(self):
-        return ("{}(left={}, "
-                "right={})").format(self.__class__,
-                                    self.left_alignment,
-                                    self.right_alignment)
+        return ("PairedAlignment(left={}|{}|{}, "
+                "right={}|{}|{})").format(
+                                    self.left_alignment.query_name, 
+                                    self.left_alignment.reference_start,
+                                    self.left_alignment.sequence,
+                                    self.right_alignment.query_name, 
+                                    self.right_alignment.reference_start,
+                                    self.right_alignment.sequence)
 
 def _build_coordinate_read_name_manifest(lw_aligns):
     af_dict = defaultdict(set)
@@ -81,7 +85,7 @@ def _build_tag_families(coordinate_family):
         coordinate_family = set(left_behind)
         left_behind = set()
         first_left_tag, first_right_tag = None, None
-    return families.values()
+    return set(frozenset(family) for family in families.values())
 
 def main(input_bam, output_bam):
     bamfile = pysam.AlignmentFile(input_bam, "rb")
