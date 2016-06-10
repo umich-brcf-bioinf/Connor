@@ -5,7 +5,6 @@ Connor
 Command-line tool to deduplicate reads in bam files based on custom inline barcoding.
 
 The official repository is at:
-
 https://github.com/umich-brcf-bioinf/Connor
 
 --------
