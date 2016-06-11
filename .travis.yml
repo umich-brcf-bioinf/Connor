@@ -8,7 +8,7 @@ env:
     - PYSAM_VERSION=0.9.0
 
 before_install:
-    - wget -nd -nc -r -l1  -A${PYSAM_VERSION}*.whl --execute robots=off http://www.cgat.org/downloads/public/pysam/wheels/
+    - wget -nd -nc -r -l1  -A.whl --execute robots=off http://www.cgat.org/downloads/public/pysam/wheels/
 
 install:
     - pip install -q --use-wheel --find-links=./ pysam==$PYSAM_VERSION
