@@ -100,6 +100,21 @@ class PairedAlignmentTest(unittest.TestCase):
         self.assertEquals(1, len(actual_set))
 
 
+class TagFamiliyTest(unittest.TestCase):
+    
+    def test_build_tag_family(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
+        alignments = [pair1, pair2, pair3]
+        
+        input_umi = "AAANNNCCCNNN"
+        actual_tag_family = connor.TagFamily(input_umi, alignments)
+        
+        self.assertEquals(input_umi, actual_tag_family.umi)
+        self.assertEquals(alignments, actual_tag_family.alignments)
+
+
 class ConnorTest(unittest.TestCase):
 
     def test_build_coordinate_read_name_manifest(self):
@@ -234,7 +249,13 @@ class ConnorTest(unittest.TestCase):
 
         expected_tags = [('AAA', 'CCC'), ('AAA', 'GGG'), ('TTT', 'GGG')]
         self.assertEquals(expected_tags, actual_tags)
-
+        
+#     def test_create_consensus_onepair(self):
+#         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
+#         
+#         actual_consensus = connor._get_consensus_pair([pair0])
+#         expected_tag = "TTTNNNGGGNNN"
+        
 
 class TestLightweightAlignment(unittest.TestCase):
     def test_lightweight_alignment_forwardRead(self):

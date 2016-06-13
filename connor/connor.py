@@ -22,6 +22,8 @@ import pysam
 
 DEFAULT_TAG_LENGTH = 6
 
+
+
 class LightweightAlignment(object):
     '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
     def __init__(self, aligned_segment):
@@ -122,6 +124,14 @@ def _rank_tags(tagged_paired_aligns):
                            key=lambda x: (-1 * x[1], x[0]))
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
+
+
+class TagFamily(object):
+    
+    def __init__(self, umi, list_of_alignments):
+        self.umi = umi
+        self.alignments = list_of_alignments
+
 
 def main(input_bam, output_bam):
     '''Connor entry point.  See help for more info'''
