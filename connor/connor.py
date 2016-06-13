@@ -20,6 +20,7 @@ from collections import defaultdict
 import sys
 import pysam
 
+DEFAULT_TAG_LENGTH = 6
 
 class LightweightAlignment(object):
     '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
@@ -36,9 +37,12 @@ class LightweightAlignment(object):
 
 class PairedAlignment(object):
     '''Represents the left and right align pairs from an single sequence.'''
-    def __init__(self, left_alignment, right_alignment):
+    def __init__(self, left_alignment,
+                 right_alignment,
+                 tag_length=DEFAULT_TAG_LENGTH):
         self.left_alignment = left_alignment
         self.right_alignment = right_alignment
+        self._tag_length = tag_length
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
@@ -48,18 +52,24 @@ class PairedAlignment(object):
 
     def __repr__(self):
         return ("Pair({}|{}|{}, "
-                "{}|{}|{})").format(self.left_alignment.query_name, 
+                "{}|{}|{})").format(self.left_alignment.query_name,
                                     self.left_alignment.reference_start,
                                     self.left_alignment.query_sequence,
-                                    self.right_alignment.query_name, 
+                                    self.right_alignment.query_name,
                                     self.right_alignment.reference_start,
                                     self.right_alignment.query_sequence)
+
+    def get_umi(self):
+        left_tag_id = self.left_alignment.query_sequence[0:self._tag_length]
+        right_tag_id = self.right_alignment.query_sequence[0:self._tag_length]
+        return (left_tag_id, right_tag_id)
+
 
 def _build_coordinate_read_name_manifest(lw_aligns):
     '''Return a dict mapping coordinates to set of aligned querynames.
 
     Constructed on a preliminary pass through the input BAM, this lightweight
-    dict informs downstream processing that the collection of reads at a 
+    dict informs downstream processing that the collection of reads at a
     coordinate can be released.
     '''
     af_dict = defaultdict(set)
@@ -90,15 +100,14 @@ def _build_consensus_pair(alignment_family):
 
 def _build_tag_families(tagged_paired_aligns, ranked_tags):
     '''Return a list of read families; each family is a set of original reads.
-    
+
     Each read is considered against each ranked tag until all reads are
     partitioned into families.'''
     tag_aligns = defaultdict(set)
     for paired_align in tagged_paired_aligns:
-        left_tag_id =  paired_align.left_alignment.query_sequence[0:3]
-        right_tag_id =  paired_align.right_alignment.query_sequence[0:3]
+        (left_umi, right_umi) =  paired_align.get_umi()
         for best_tag in ranked_tags:
-            if left_tag_id == best_tag[0] or right_tag_id == best_tag[1]:
+            if left_umi == best_tag[0] or right_umi == best_tag[1]:
                 tag_aligns[best_tag].add(paired_align)
                 break
     return tag_aligns.values()
@@ -107,12 +116,11 @@ def _rank_tags(tagged_paired_aligns):
     '''Return the list of tags ranked from most to least popular.'''
     tag_count = defaultdict(int)
     for paired_align in tagged_paired_aligns:
-        left_tag_id = paired_align.left_alignment.query_sequence[0:3]
-        right_tag_id = paired_align.right_alignment.query_sequence[0:3]
-        tag_count[(left_tag_id, right_tag_id)] += 1
+        umi =  paired_align.get_umi()
+        tag_count[umi] += 1
     tags_by_count = sorted(tag_count.items(),
                            key=lambda x: (-1 * x[1], x[0]))
-    ranked_tags = [tag_count[0] for (tag_count) in tags_by_count]
+    ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
 def main(input_bam, output_bam):
@@ -134,6 +142,4 @@ def main(input_bam, output_bam):
     bamfile.close()
 
 if __name__ == '__main__':
-    in_bam = sys.argv[1]
-    out_bam = sys.argv[2]
-    main(in_bam, out_bam)
+    main(sys.argv[1], sys.argv[2])

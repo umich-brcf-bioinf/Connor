@@ -1,11 +1,12 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
 #pylint: disable=protected-access, missing-docstring, too-many-locals
+#pylint: disable=too-many-arguments
 from __future__ import print_function, absolute_import
 from collections import namedtuple
 import os
+import unittest
 import pysam
 from testfixtures.tempdirectory import TempDirectory
-import unittest
 from connor import connor
 
 MockPysamAlignedSegment = namedtuple('MockPysamAlignedSegment',
@@ -22,10 +23,10 @@ def align_seg(a, b, c, d, e='AAACCC'):
                                    next_reference_start=d,
                                    query_sequence=e)
 
-def align_pair(q, rn, rs, nrs, s1, s2):
+def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
     alignR = align_seg(q, rn, rs, nrs, s2)
-    return connor.PairedAlignment(alignL, alignR)
+    return connor.PairedAlignment(alignL, alignR, tag_length)
 
 def _create_file(path, filename, contents):
     filename = os.path.join(path, filename)
@@ -59,10 +60,14 @@ class PairedAlignmentTest(unittest.TestCase):
     def test_init(self):
         alignment1l = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
         alignment1r = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
-        actual_paired_alignment = connor.PairedAlignment(alignment1l, alignment1r)
+        tag_length = 6
+        actual_paired_alignment = connor.PairedAlignment(alignment1l,
+                                                         alignment1r,
+                                                         tag_length)
 
         self.assertIs(alignment1l, actual_paired_alignment.left_alignment)
         self.assertIs(alignment1r, actual_paired_alignment.right_alignment)
+        self.assertEquals(("AAANNN","CCCNNN"), actual_paired_alignment.get_umi())
 
     def test_eq(self):
         left = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
