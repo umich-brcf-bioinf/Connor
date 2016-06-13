@@ -13,14 +13,14 @@ MockPysamAlignedSegment = namedtuple('MockPysamAlignedSegment',
                                       'reference_name,'
                                       'reference_start,'
                                       'next_reference_start,'
-                                      'sequence'))
+                                      'query_sequence'))
 
 def align_seg(a, b, c, d, e='AAACCC'):
     return MockPysamAlignedSegment(query_name=a,
                                    reference_name=b,
                                    reference_start=c,
                                    next_reference_start=d,
-                                   sequence=e)
+                                   query_sequence=e)
 
 def align_pair(q, rn, rs, nrs, s1, s2):
     alignL = align_seg(q, rn, rs, nrs, s1)
@@ -167,39 +167,36 @@ class ConnorTest(unittest.TestCase):
         self.assertEquals(expected_pair, actual_pair)
 
     def test_build_tag_families(self):
-        alignment1l = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
-        alignment1r = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
-        alignment2l = align_seg("alignB", 'chr1', 100, 200, "GGGNNNNNNN")
-        alignment2r = align_seg("alignB", 'chr1', 200, 100, "TTTNNNNNNN")
-        alignment3l = align_seg("alignC", 'chr1', 100, 200, "AAANNNNNNN")
-        alignment3r = align_seg("alignC", 'chr1', 200, 100, "CCCNNNNNNN")
-        align_pair1 = connor.PairedAlignment(alignment1l, alignment1r)
-        align_pair2 = connor.PairedAlignment(alignment2l, alignment2r)
-        align_pair3 = connor.PairedAlignment(alignment3l, alignment3r)
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
+        input_pairs = [pair1, pair2, pair3]
+        ranked_tags = [('AAA','CCC'), ('GGG','TTT')]
 
-        actual_tag_family_list = connor._build_tag_families(set([align_pair1,
-                                                                 align_pair2,
-                                                                 align_pair3]))
+        actual_tag_family_list = connor._build_tag_families(input_pairs,
+                                                            ranked_tags)
 
         actual_tag_families = set([frozenset(family) for family in actual_tag_family_list])
-        expected_tag_family_1 = frozenset([align_pair1, align_pair3])
-        expected_tag_family_2 = frozenset([align_pair2])
+        expected_tag_family_1 = frozenset([pair1, pair3])
+        expected_tag_family_2 = frozenset([pair2])
         expected_tag_families = set([expected_tag_family_1,
                                      expected_tag_family_2])
         self.assertEquals(expected_tag_families, actual_tag_families)
 
     def test_build_tag_families_mostPopularTagIsCanonical(self):
-        pair1 = align_pair("alignA", 'chr1', 100, 200, "AAANNN", "CCCNNN")
-        pair2 = align_pair("alignB", 'chr1', 100, 200, "AAANNN", "GGGNNN")
-        pair3 = align_pair("alignC", 'chr1', 100, 200, "AAANNN", "GGGNNN")
-        pair4 = align_pair("alignD", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
-        pair5 = align_pair("alignE", 'chr1', 100, 200, "TTTNNN", "CCCNNN")
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'AAANNN', 'GGGNNN')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'GGGNNN')
+        pair4 = align_pair('alignD', 'chr1', 100, 200, 'TTTNNN', 'GGGNNN')
+        pair5 = align_pair('alignE', 'chr1', 100, 200, 'TTTNNN', 'CCCNNN')
+        input_pairs = [pair1, pair2, pair3, pair4, pair5]
+        ranked_tags = [('AAA','GGG'),
+                       ('AAA','CCC'),
+                       ('TTT', 'CCC'),
+                       ('TTT', 'GGG')]
 
-        actual_tag_family_list = connor._build_tag_families([pair1,
-                                                             pair2,
-                                                             pair3,
-                                                             pair4,
-                                                             pair5])
+        actual_tag_family_list = connor._build_tag_families(input_pairs,
+                                                            ranked_tags)
 
         actual_tag_families = set([frozenset(family) for family in actual_tag_family_list])
         expected_tag_family_1 = frozenset([pair1, pair2, pair3, pair4])
@@ -208,6 +205,30 @@ class ConnorTest(unittest.TestCase):
                                      expected_tag_family_2])
         self.assertEquals(expected_tag_families, actual_tag_families)
 
+    def test_rank_tags_sortsByPopularity(self):
+        pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
+        pair1 = align_pair("align1", 'chr1', 100, 200, "AAANNN", "CCCNNN")
+        pair2 = align_pair("align2", 'chr1', 100, 200, "AAANNN", "GGGNNN")
+        pair3 = align_pair("align3", 'chr1', 100, 200, "AAANNN", "GGGNNN")
+        pair4 = align_pair("align4", 'chr1', 100, 200, "AAANNN", "CCCNNN")
+        pair5 = align_pair("align5", 'chr1', 100, 200, "AAANNN", "GGGNNN")
+        input_aligns = [pair0, pair1, pair2, pair3, pair4, pair5]
+
+        actual_tags = connor._rank_tags(input_aligns)
+
+        expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
+        self.assertEquals(expected_tags, actual_tags)
+
+    def test_rank_tags_breaksTiesByTag(self):
+        pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
+        pair1 = align_pair("align1", 'chr1', 100, 200, "AAANNN", "CCCNNN")
+        pair2 = align_pair("align2", 'chr1', 100, 200, "AAANNN", "GGGNNN")
+        input_aligns = [pair0, pair1, pair2]
+
+        actual_tags = connor._rank_tags(input_aligns)
+
+        expected_tags = [('AAA', 'CCC'), ('AAA', 'GGG'), ('TTT', 'GGG')]
+        self.assertEquals(expected_tags, actual_tags)
 
 
 class TestLightweightAlignment(unittest.TestCase):
