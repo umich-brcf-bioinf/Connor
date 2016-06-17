@@ -178,7 +178,7 @@ class ConnorTest(unittest.TestCase):
 
         actual_pair = connor._build_consensus_pair(alignments)
 
-        expected_pair = connor.PairedAlignment(align_A0, align_A1)
+        expected_pair = connor.PairedAlignment(align_B0, align_B1)
         self.assertEquals(expected_pair, actual_pair)
 
     def test_build_tag_families(self):
@@ -233,12 +233,12 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, 
-                                    "input.sam",
-                                    sam_contents,
-                                    index=False)
-            connor._sort_and_index_bam(input_bam)
-            alignments = pysam.AlignmentFile(input_bam, "rb").fetch()
+            bam = _create_bam(tmp_dir.path, 
+                              "input.sam",
+                              sam_contents,
+                              index=False)
+            connor._sort_and_index_bam(bam)
+            alignments = pysam.AlignmentFile(bam, "rb").fetch()
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(6, len(aligns))
             self.assertEquals([("readNameA1", 100),
@@ -248,6 +248,33 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
                                ("readNameA2", 300),
                                ("readNameB1", 400)],
                               aligns)
+
+            original_dir = os.getcwd()
+            try:
+                os.chdir(tmp_dir.path)
+                os.mkdir("tmp")
+                bam = _create_bam(os.path.join(tmp_dir.path, "tmp"),
+                                  "input.sam",
+                                  sam_contents,
+                                  index=False)
+                bam_filename = os.path.basename(bam)
+
+                connor._sort_and_index_bam(os.path.join("tmp", bam_filename))
+
+                alignments = pysam.AlignmentFile(bam, "rb").fetch()
+                aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
+                self.assertEquals(6, len(aligns))
+                self.assertEquals([("readNameA1", 100),
+                                   ("readNameA2", 100),
+                                   ("readNameB1", 200),
+                                   ("readNameA1", 300),
+                                   ("readNameA2", 300),
+                                   ("readNameB1", 400)],
+                                  aligns)
+            finally:
+                os.chdir(original_dir)
+
+
 
     def test_rank_tags_sortsByPopularity(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
@@ -262,6 +289,23 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
         self.assertEquals(expected_tags, actual_tags)
+
+    def test_parse_command_line_args(self):
+        namespace = connor._parse_command_line_args(["input.bam",
+                                                     "output.bam"])
+        self.assertEquals("input.bam", namespace.input_bam)
+        self.assertEquals("output.bam", namespace.output_bam)
+
+    def test_parse_command_line_args_throwsConnorUsageError(self):
+        self.assertRaises(connor._ConnorUsageError,
+                          connor._parse_command_line_args,
+                          ["input"])
+        self.assertRaises(connor._ConnorUsageError,
+                          connor._parse_command_line_args,
+                          ["input",
+                           "output",
+                           "something else"])
+
 
     def test_rank_tags_breaksTiesByTag(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
@@ -333,9 +377,9 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
-            self.assertEquals([("readNameA1", 100),
+            self.assertEquals([("readNameA2", 100),
                                ("readNameB1", 200),
-                               ("readNameA1", 300),
+                               ("readNameA2", 300),
                                ("readNameB1", 400)],
                               aligns)
 
