@@ -18,8 +18,10 @@ original reads.'''
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
 from datetime import datetime
+import os
 import sys
 import pysam
+import connor.samtools
 
 DEFAULT_TAG_LENGTH = 6
 
@@ -135,6 +137,15 @@ def _rank_tags(tagged_paired_aligns):
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
+def _sort_and_index_bam(bam_filename):
+    output_dir = os.path.dirname(bam_filename)
+    output_root = os.path.splitext(bam_filename)[0]
+    sorted_bam_filename = os.path.join(output_dir,
+                                       output_root + ".sorted.bam")
+    connor.samtools.sort(bam_filename, sorted_bam_filename)
+    os.rename(sorted_bam_filename, bam_filename)
+    connor.samtools.index(bam_filename)
+
 def main(argv=None):
     '''Connor entry point.  See help for more info'''
 
@@ -161,13 +172,15 @@ def main(argv=None):
             outfile.write(read_pair.left_alignment)
             outfile.write(read_pair.right_alignment)
             consensus_read_count += 2
-
     _log('consensus read count: {}', consensus_read_count)
     _log('consensus/original: {:.4f}',
          consensus_read_count / original_read_count)
-
     outfile.close()
     bamfile.close()
+
+    _log('sorting and indexing bam')
+    _sort_and_index_bam(output_bam)
+
     _log('wrote deduped bam [{}]', output_bam)
     _log('connor complete')
 
