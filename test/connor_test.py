@@ -28,13 +28,14 @@ class MicroMock(object):
         return 1
 
 
-def align_seg(a, b, c, d, e='AAACCC', f='HHHHHH'):
+def align_seg(a, b, c, d, e='AAACCC', f='HHHHHH', cigarstring='6M'):
     return MicroMock(query_name=a,
                      reference_name=b,
                      reference_start=c,
                      next_reference_start=d,
                      query_sequence=e,
-                     query_qualities=f)
+                     query_qualities=f,
+                     cigarstring=cigarstring)
 
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
@@ -174,14 +175,31 @@ class TagFamiliyTest(unittest.TestCase):
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        threshold = 1 / 2
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
-        actual_consensus_seq = actual_tag_family.consensus
+        actual_tag_family = connor.TagFamily(input_umis, alignments, threshold)
+        consensus_pair = actual_tag_family.consensus
 
         self.assertEquals("nnnGTG",
-                          actual_consensus_seq.left_alignment.query_sequence)
+                          consensus_pair.left_alignment.query_sequence)
         self.assertEquals("nnnTCT",
-                          actual_consensus_seq.right_alignment.query_sequence)
+                          consensus_pair.right_alignment.query_sequence)
+
+    def test_consensus_sequence_below_threshold_Ns(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+        threshold = 0.8
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments, threshold)
+        consensus_pair = actual_tag_family.consensus
+
+        self.assertEquals("nnnGNG",
+                          consensus_pair.left_alignment.query_sequence)
+        self.assertEquals("nnnTNT",
+                          consensus_pair.right_alignment.query_sequence)
 
     def test_consensus_qualities_majority_vote(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
@@ -204,6 +222,41 @@ class TagFamiliyTest(unittest.TestCase):
         self.assertEquals("BDBDDD",
                           paired_consensus.right_alignment.query_qualities)
 
+    def test_consensus_uniform_cigars_admitted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1.left_alignment.cigarstring = "3S3M"
+        pair1.right_alignment.cigarstring = "3S3M"
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2.left_alignment.cigarstring = "3S3M"
+        pair2.right_alignment.cigarstring = "3S3M"
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3.left_alignment.cigarstring = "3S3M"
+        pair3.right_alignment.cigarstring = "3S3M"
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments)
+
+        actual_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
+        self.assertEquals(['alignA','alignB','alignC'], actual_names)
+
+    def test_consensus_minority_cigars_rejected(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1.left_alignment.cigarstring = "3S3M"
+        pair1.right_alignment.cigarstring = "3S3M"
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2.left_alignment.cigarstring = "3S3M"
+        pair2.right_alignment.cigarstring = "3S3M"
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3.left_alignment.cigarstring = "3S3I"
+        pair3.right_alignment.cigarstring = "3S3M"
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments)
+
+        actual_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
+        self.assertEquals(['alignA','alignB'], actual_names)
 
 
 class ConnorTest(unittest.TestCase):

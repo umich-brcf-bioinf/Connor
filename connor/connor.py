@@ -29,6 +29,9 @@ import connor.samtools
 
 __version__ = connor.__version__
 
+DEFAULT_TAG_LENGTH = 6
+DEFAULT_CONSENSUS_THRESHOLD=0.6
+
 DESCRIPTION=\
 '''Deduplicates BAM file based on custom inline DNA barcodes.
 Emits a new BAM file reduced to a single consensus read for each family of
@@ -49,8 +52,6 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         '''Suppress default exit behavior'''
         raise _ConnorUsageError(message)
 
-
-DEFAULT_TAG_LENGTH = 6
 
 def _log(msg_format, *args):
     timestamp = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
@@ -110,55 +111,70 @@ class PairedAlignment(object):
 
 
 class TagFamily(object):
-    def __init__(self, umi, list_of_alignments):
+    def __init__(self,
+                 umi,
+                 list_of_alignments,
+                 consensus_threshold=DEFAULT_CONSENSUS_THRESHOLD):
         self.umi = umi
-        self.alignments = list_of_alignments
-        self.consensus = self._build_consensus(umi, list_of_alignments)
+        dominant_cigar = TagFamily._generate_dominant_cigar_pair(list_of_alignments)
+        self.alignments = TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
+                                                                       list_of_alignments)
+        self.consensus_threshold = consensus_threshold
+        self.consensus = self._build_consensus(umi, self.alignments)
 
     @staticmethod
-    def _generate_consensus_sequence(list_of_alignments):
+    def _get_cigarstring_tuple(paired_alignment):
+        return (paired_alignment.left_alignment.cigarstring,
+                paired_alignment.right_alignment.cigarstring)
+
+
+    @staticmethod
+    def _get_alignments_for_dominant_cigar(dominant_cigar,
+                                           list_of_alignments):
+        return [a for a in list_of_alignments if TagFamily._get_cigarstring_tuple(a) == dominant_cigar]
+
+    def _generate_consensus_sequence(self, list_of_alignments):
         consensus = []
         for i in xrange(0, len(list_of_alignments[0].query_sequence)):
             counter = Counter([s.query_sequence[i:i+1] for s in list_of_alignments])
             base = counter.most_common(1)[0][0]
-#            freq = 100 * counter[base]/sum(counter.values())
-            consensus.append(base)
-#             if freq >= consensus_cutoff:
-#                 consensus.append(base)
-#             else:
-#                 consensus.append("N")
+            freq = counter[base] / sum(counter.values())
+            if freq >= self.consensus_threshold:
+                consensus.append(base)
+            else:
+                consensus.append("N")
         return "".join(consensus)
-    
+
     @staticmethod
     def _generate_consensus_qualities(list_of_alignments):
         consensus_quality = []
         for i in xrange(0, len(list_of_alignments[0].query_qualities)):
             counter = Counter([s.query_qualities[i:i+1] for s in list_of_alignments])
             base = counter.most_common(1)[0][0]
-#            freq = 100 * counter[base]/sum(counter.values())
             consensus_quality.append(base)
-#             if freq >= consensus_cutoff:
-#                 consensus.append(base)
-#             else:
-#                 consensus.append("N")
         return "".join(consensus_quality)
+    
+    @staticmethod
+    def _generate_dominant_cigar_pair(list_of_alignments):
+        counter = Counter([TagFamily._get_cigarstring_tuple(s) for s in list_of_alignments])
+        return counter.most_common(1)[0][0]
+
 
     #TODO: (cgates) I don't like that the tags assume umi is a tuple and symmetric between left and right 
-    @staticmethod
-    def _build_consensus(umi, alignments):
+    def _build_consensus(self, umi, alignments):
         left_aligns = []
         right_aligns = []
         for align in alignments:
             left_aligns.append(align.left_alignment)
             right_aligns.append(align.right_alignment)
-        left_consensus_sequence = TagFamily._generate_consensus_sequence(left_aligns)
-        right_consensus_sequence = TagFamily._generate_consensus_sequence(right_aligns)
+        left_consensus_sequence = self._generate_consensus_sequence(left_aligns)
+        right_consensus_sequence = self._generate_consensus_sequence(right_aligns)
         left_consensus_qualities = TagFamily._generate_consensus_qualities(left_aligns)
         right_consensus_qualities = TagFamily._generate_consensus_qualities(right_aligns)
-        left_consensus_align = deepcopy(alignments[0].left_alignment,
-                                        {'query_sequence':left_consensus_sequence})
-        right_consensus_align = deepcopy(alignments[0].right_alignment,
-                                         {'query_sequence':right_consensus_sequence})
+        left_consensus_align = deepcopy(alignments[0].left_alignment, {})
+        right_consensus_align = deepcopy(alignments[0].right_alignment, {})
+        left_consensus_align.query_sequence = left_consensus_sequence
+        right_consensus_align.query_sequence = right_consensus_sequence
         left_consensus_align.query_qualities = left_consensus_qualities
         right_consensus_align.query_qualities = right_consensus_qualities
         consensus_align = PairedAlignment(left_consensus_align,
