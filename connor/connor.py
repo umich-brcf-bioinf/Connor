@@ -109,7 +109,9 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
 
 def _build_consensus_pair(alignment_family):
     '''Aggregate a set of reads into a single consensus read.'''
-    return alignment_family.pop()
+    sorted_reads = sorted(alignment_family,
+                          key=lambda x: x.left_alignment.query_name)
+    return sorted_reads.pop()
 
 
 def _build_tag_families(tagged_paired_aligns, ranked_tags):

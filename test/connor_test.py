@@ -178,7 +178,7 @@ class ConnorTest(unittest.TestCase):
 
         actual_pair = connor._build_consensus_pair(alignments)
 
-        expected_pair = connor.PairedAlignment(align_A0, align_A1)
+        expected_pair = connor.PairedAlignment(align_B0, align_B1)
         self.assertEquals(expected_pair, actual_pair)
 
     def test_build_tag_families(self):
@@ -333,9 +333,9 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
-            self.assertEquals([("readNameA1", 100),
+            self.assertEquals([("readNameA2", 100),
                                ("readNameB1", 200),
-                               ("readNameA1", 300),
+                               ("readNameA2", 300),
                                ("readNameB1", 400)],
                               aligns)
 
