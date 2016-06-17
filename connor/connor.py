@@ -17,10 +17,22 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
+from datetime import datetime
 import sys
 import pysam
 
 DEFAULT_TAG_LENGTH = 6
+
+
+def _log(msg_format, *args):
+    timestamp = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+    try:
+        print("{}|{}".format(timestamp, msg_format).format(*args),
+              file=sys.stderr)
+    except IndexError:
+        print(args)
+    sys.stderr.flush()
+
 
 class LightweightAlignment(object):
     '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
@@ -123,14 +135,24 @@ def _rank_tags(tagged_paired_aligns):
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
-def main(input_bam, output_bam):
+def main(argv=None):
     '''Connor entry point.  See help for more info'''
-    bamfile = pysam.AlignmentFile(input_bam, "rb")
+
+    if not argv:
+        argv = sys.argv
+    (_, input_bam, output_bam) = argv
+
+    _log('connor begins')
+    _log('reading input bam  [{}]', input_bam)
+    bamfile = pysam.AlignmentFile(input_bam, 'rb')
     lw_aligns = [LightweightAlignment(align) for align in bamfile.fetch()]
+    original_read_count = len(lw_aligns)
+    _log('original read count: {}', original_read_count)
     coord_manifest = _build_coordinate_read_name_manifest(lw_aligns)
     bamfile.close()
-    bamfile = pysam.AlignmentFile(input_bam, "rb")
-    outfile = pysam.AlignmentFile(output_bam, "wb", template=bamfile)
+    bamfile = pysam.AlignmentFile(input_bam, 'rb')
+    outfile = pysam.AlignmentFile(output_bam, 'wb', template=bamfile)
+    consensus_read_count = 0
     for coord_family in _build_coordinate_families(bamfile.fetch(),
                                                    coord_manifest):
         ranked_tags = _rank_tags(coord_family)
@@ -138,8 +160,16 @@ def main(input_bam, output_bam):
             read_pair = _build_consensus_pair(tag_family)
             outfile.write(read_pair.left_alignment)
             outfile.write(read_pair.right_alignment)
+            consensus_read_count += 2
+
+    _log('consensus read count: {}', consensus_read_count)
+    _log('consensus/original: {:.4f}',
+         consensus_read_count / original_read_count)
+
     outfile.close()
     bamfile.close()
+    _log('wrote deduped bam [{}]', output_bam)
+    _log('connor complete')
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv)
