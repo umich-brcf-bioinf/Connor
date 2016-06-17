@@ -26,8 +26,21 @@ TBD
 -----------
 Connor help
 -----------
-
-TBD
+::
+  $ connor --help
+  usage: connor input_bam output_bam
+  
+  Deduplicates BAM file based on custom inline DNA barcodes.
+  Emits a new BAM file reduced to a single consensus read for each family of
+  original reads.
+  
+  positional arguments:
+    input_bam      path to input BAM
+    output_bam     path to output BAM
+  
+  optional arguments:
+    -h, --help     show this help message and exit
+    -V, --version  show program's version number and exit
 
 ====
 

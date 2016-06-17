@@ -182,7 +182,7 @@ def _rank_tags(tagged_paired_aligns):
 
 def _sort_and_index_bam(bam_filename):
     output_dir = os.path.dirname(bam_filename)
-    output_root = os.path.splitext(bam_filename)[0]
+    output_root = os.path.splitext(os.path.basename(bam_filename))[0]
     sorted_bam_filename = os.path.join(output_dir,
                                        output_root + ".sorted.bam")
     connor.samtools.sort(bam_filename, sorted_bam_filename)
