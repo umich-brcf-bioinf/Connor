@@ -263,6 +263,23 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
         self.assertEquals(expected_tags, actual_tags)
 
+    def test_parse_command_line_args(self):
+        namespace = connor._parse_command_line_args(["input.bam",
+                                                     "output.bam"])
+        self.assertEquals("input.bam", namespace.input_bam)
+        self.assertEquals("output.bam", namespace.output_bam)
+
+    def test_parse_command_line_args_throwsConnorUsageError(self):
+        self.assertRaises(connor._ConnorUsageError,
+                          connor._parse_command_line_args,
+                          ["input"])
+        self.assertRaises(connor._ConnorUsageError,
+                          connor._parse_command_line_args,
+                          ["input",
+                           "output",
+                           "something else"])
+
+
     def test_rank_tags_breaksTiesByTag(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
         pair1 = align_pair("align1", 'chr1', 100, 200, "AAANNN", "CCCNNN")
