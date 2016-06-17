@@ -1,13 +1,22 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
 from collections import namedtuple
 import os
 import unittest
 import pysam
 from testfixtures.tempdirectory import TempDirectory
 from connor import connor
+from connor import samtools
+
+class MockLogger(object):
+    def __init__(self):
+        self._log_calls = []
+
+    def log(self, msg_format, *args):
+        self._log_calls.append((msg_format, args))
+
 
 MockPysamAlignedSegment = namedtuple('MockPysamAlignedSegment',
                                      ('query_name,'
@@ -35,20 +44,21 @@ def _create_file(path, filename, contents):
         new_file.flush()
     return filename
 
-def _create_bam(path, filename, sam_contents):
+def _create_bam(path, filename, sam_contents, index=True):
     sam_filename = _create_file(path, filename, sam_contents)
     bam_filename = sam_filename.replace(".sam", ".bam")
-    _pysam_bam_from_sam(sam_filename, bam_filename)
+    _pysam_bam_from_sam(sam_filename, bam_filename, index)
     return bam_filename
 
-def _pysam_bam_from_sam(sam_filename, bam_filename):
+def _pysam_bam_from_sam(sam_filename, bam_filename, index=True):
     infile = pysam.AlignmentFile(sam_filename, "r")
     outfile = pysam.AlignmentFile(bam_filename, "wb", template=infile)
     for s in infile:
         outfile.write(s)
     infile.close()
     outfile.close()
-    pysam.index(bam_filename, catch_stdout=False)
+    if index:
+        samtools.index(bam_filename)
 
 def _pysam_alignments_from_bam(bam_filename):
     infile = pysam.AlignmentFile(bam_filename, "rb")
@@ -183,7 +193,7 @@ class ConnorTest(unittest.TestCase):
 
         actual_pair = connor._build_consensus_pair(alignments)
 
-        expected_pair = connor.PairedAlignment(align_A0, align_A1)
+        expected_pair = connor.PairedAlignment(align_B0, align_B1)
         self.assertEquals(expected_pair, actual_pair)
 
     def test_build_tag_families(self):
@@ -225,6 +235,62 @@ class ConnorTest(unittest.TestCase):
                                      expected_tag_family_2])
         self.assertEquals(expected_tag_families, actual_tag_families)
 
+    def test_sort_and_index_bam(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
+readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            bam = _create_bam(tmp_dir.path, 
+                              "input.sam",
+                              sam_contents,
+                              index=False)
+            connor._sort_and_index_bam(bam)
+            alignments = pysam.AlignmentFile(bam, "rb").fetch()
+            aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
+            self.assertEquals(6, len(aligns))
+            self.assertEquals([("readNameA1", 100),
+                               ("readNameA2", 100),
+                               ("readNameB1", 200),
+                               ("readNameA1", 300),
+                               ("readNameA2", 300),
+                               ("readNameB1", 400)],
+                              aligns)
+
+            original_dir = os.getcwd()
+            try:
+                os.chdir(tmp_dir.path)
+                os.mkdir("tmp")
+                bam = _create_bam(os.path.join(tmp_dir.path, "tmp"),
+                                  "input.sam",
+                                  sam_contents,
+                                  index=False)
+                bam_filename = os.path.basename(bam)
+
+                connor._sort_and_index_bam(os.path.join("tmp", bam_filename))
+
+                alignments = pysam.AlignmentFile(bam, "rb").fetch()
+                aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
+                self.assertEquals(6, len(aligns))
+                self.assertEquals([("readNameA1", 100),
+                                   ("readNameA2", 100),
+                                   ("readNameB1", 200),
+                                   ("readNameA1", 300),
+                                   ("readNameA2", 300),
+                                   ("readNameB1", 400)],
+                                  aligns)
+            finally:
+                os.chdir(original_dir)
+
+
+
     def test_rank_tags_sortsByPopularity(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
         pair1 = align_pair("align1", 'chr1', 100, 200, "AAANNN", "CCCNNN")
@@ -238,6 +304,23 @@ class ConnorTest(unittest.TestCase):
 
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
         self.assertEquals(expected_tags, actual_tags)
+
+    def test_parse_command_line_args(self):
+        namespace = connor._parse_command_line_args(["input.bam",
+                                                     "output.bam"])
+        self.assertEquals("input.bam", namespace.input_bam)
+        self.assertEquals("output.bam", namespace.output_bam)
+
+    def test_parse_command_line_args_throwsConnorUsageError(self):
+        self.assertRaises(connor._ConnorUsageError,
+                          connor._parse_command_line_args,
+                          ["input"])
+        self.assertRaises(connor._ConnorUsageError,
+                          connor._parse_command_line_args,
+                          ["input",
+                           "output",
+                           "something else"])
+
 
     def test_rank_tags_breaksTiesByTag(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
@@ -283,7 +366,17 @@ class TestLightweightAlignment(unittest.TestCase):
         self.assertEquals(('chr1', 100, 100), actual_lwa.key)
 
 
-class ConnorFunctionalTestCase(unittest.TestCase):
+class ConnorIntegrationTestCase(unittest.TestCase):
+    def setUp(self):
+        unittest.TestCase.setUp(self)
+        self.original_logger = connor._log
+        self.mock_logger = MockLogger()
+        connor._log = self.mock_logger.log
+
+    def tearDown(self):
+        connor._log = self.original_logger
+        unittest.TestCase.tearDown(self)
+
     def test(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
@@ -299,21 +392,47 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
         with TempDirectory() as tmp_dir:
             input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            connor.main(input_bam, output_bam)
-            alignments = _pysam_alignments_from_bam(output_bam)
-            self.assertEquals(4, len(alignments))
-            self.assertEquals(("readNameA1", 100),
-                              (alignments[0].qname,
-                               alignments[0].reference_start + 1))
-            self.assertEquals(("readNameA1", 300),
-                              (alignments[1].qname,
-                               alignments[1].reference_start + 1))
-            self.assertEquals(("readNameB1", 200),
-                              (alignments[2].qname,
-                               alignments[2].reference_start + 1))
-            self.assertEquals(("readNameB1", 400),
-                              (alignments[3].qname,
-                               alignments[3].reference_start + 1))
+            connor.main(["connor", input_bam, output_bam])
+
+            alignments = pysam.AlignmentFile(output_bam, "rb").fetch()
+
+            aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
+            self.assertEquals(4, len(aligns))
+            self.assertEquals([("readNameA2", 100),
+                               ("readNameB1", 200),
+                               ("readNameA2", 300),
+                               ("readNameB1", 400)],
+                              aligns)
+
+    def test_logging(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = _create_bam(tmp_dir.path, 'input.sam', sam_contents)
+            output_bam = os.path.join(tmp_dir.path, 'output.bam')
+            connor.main(["connor", input_bam, output_bam])
+            log_calls = self.mock_logger._log_calls
+            self.assertEquals("connor begins", log_calls[0][0])
+            self.assertEquals((input_bam,), log_calls[1][1])
+            self.assertRegexpMatches(log_calls[2][0], 'original read count:')
+            self.assertEquals((6,), log_calls[2][1])
+            self.assertRegexpMatches(log_calls[3][0], 'consensus read count:')
+            self.assertEquals((4,), log_calls[3][1])
+            self.assertRegexpMatches(log_calls[4][0],
+                                     'consensus/original:')
+            self.assertEquals((4 / 6,), log_calls[4][1])
+            self.assertEquals("sorting and indexing bam", log_calls[5][0])
+            self.assertEquals((output_bam,), log_calls[6][1])
+            self.assertEquals("connor complete", log_calls[7][0])
 
     def test_distinctPairStartsAreNotCombined(self):
         sam_contents = \
@@ -328,21 +447,17 @@ readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
         with TempDirectory() as tmp_dir:
             input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            connor.main(input_bam, output_bam)
+            connor.main(["connor", input_bam, output_bam])
+            
             alignments = _pysam_alignments_from_bam(output_bam)
-            self.assertEquals(4, len(alignments))
-            self.assertEquals(("readNameA1", 100),
-                              (alignments[0].qname,
-                               alignments[0].reference_start + 1))
-            self.assertEquals(("readNameA1", 300),
-                              (alignments[1].qname,
-                               alignments[1].reference_start + 1))
-            self.assertEquals(("readNameB1", 100),
-                              (alignments[2].qname,
-                               alignments[2].reference_start + 1))
-            self.assertEquals(("readNameB1", 500),
-                              (alignments[3].qname,
-                               alignments[3].reference_start + 1))
+            
+            aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
+            self.assertEquals(4, len(aligns))
+            self.assertEquals([("readNameA1", 100),
+                               ("readNameB1", 100),
+                               ("readNameA1", 300),
+                               ("readNameB1", 500)],
+                              aligns)
 
 
 if __name__ == "__main__":
