@@ -18,6 +18,7 @@ install:
 
 script:
     - nosetests --with-coverage --verbose --cover-package=connor
+    - nosetests examples
 
 notifications:
     email:

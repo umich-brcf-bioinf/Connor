@@ -21,7 +21,21 @@ TBD
 Quick Start
 -----------
 
-TBD
+1. **Install Connor (see INSTALL.rst):**
+::
+  $ pip install git+https://github.com/umich-brcf-bioinf/Connor
+
+2. **Get the examples directory:**
+::
+  $ git clone https://github.com/umich-brcf-bioinf/Connor
+
+3. **Run Connor:**
+::
+  $ connor Connor/examples/PIK3CA-original.bam PIK3CA-deduped.bam
+
+This will read PIK3CA-original.bam and produce PIK3CA-deduped.bam (in your
+working directory). 
+
 
 -----------
 Connor help

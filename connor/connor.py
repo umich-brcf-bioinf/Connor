@@ -150,7 +150,9 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
             if left_umi == best_tag[0] or right_umi == best_tag[1]:
                 tag_aligns[best_tag].add(paired_align)
                 break
-    return tag_aligns.values()
+    #Sorting by tag is not strictly necessary but keeps results deterministic
+    sorted_values = [tag_aligns[key] for key in sorted(tag_aligns)]
+    return sorted_values
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
