@@ -1,13 +1,22 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
 from collections import namedtuple
 import os
 import unittest
 import pysam
 from testfixtures.tempdirectory import TempDirectory
 from connor import connor
+
+
+class MockLogger(object):
+    def __init__(self):
+        self._log_calls = []
+
+    def log(self, msg_format, *args):
+        self._log_calls.append((msg_format, args))
+
 
 MockPysamAlignedSegment = namedtuple('MockPysamAlignedSegment',
                                      ('query_name,'
@@ -263,6 +272,16 @@ class TestLightweightAlignment(unittest.TestCase):
 
 
 class ConnorFunctionalTestCase(unittest.TestCase):
+    def setUp(self):
+        unittest.TestCase.setUp(self)
+        self.original_logger = connor._log
+        self.mock_logger = MockLogger()
+        connor._log = self.mock_logger.log
+
+    def tearDown(self):
+        connor._log = self.original_logger
+        unittest.TestCase.tearDown(self)
+
     def test(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
@@ -278,7 +297,7 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
         with TempDirectory() as tmp_dir:
             input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            connor.main(input_bam, output_bam)
+            connor.main(["connor", input_bam, output_bam])
             alignments = _pysam_alignments_from_bam(output_bam)
             self.assertEquals(4, len(alignments))
             self.assertEquals(("readNameA1", 100),
@@ -294,6 +313,35 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
                               (alignments[3].qname,
                                alignments[3].reference_start + 1))
 
+    def test_logging(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = _create_bam(tmp_dir.path, 'input.sam', sam_contents)
+            output_bam = os.path.join(tmp_dir.path, 'output.bam')
+            connor.main(["connor", input_bam, output_bam])
+            log_calls = self.mock_logger._log_calls
+            self.assertEquals("connor begins", log_calls[0][0])
+            self.assertEquals((input_bam,), log_calls[1][1])
+            self.assertRegexpMatches(log_calls[2][0], 'original read count:')
+            self.assertEquals((6,), log_calls[2][1])
+            self.assertRegexpMatches(log_calls[3][0], 'consensus read count:')
+            self.assertEquals((4,), log_calls[3][1])
+            self.assertRegexpMatches(log_calls[4][0],
+                                     'consensus/original:')
+            self.assertEquals((4 / 6,), log_calls[4][1])
+            self.assertEquals((output_bam,), log_calls[5][1])
+            self.assertEquals("connor complete", log_calls[6][0])
+
     def test_distinctPairStartsAreNotCombined(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
@@ -307,7 +355,7 @@ readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
         with TempDirectory() as tmp_dir:
             input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            connor.main(input_bam, output_bam)
+            connor.main(["connor", input_bam, output_bam])
             alignments = _pysam_alignments_from_bam(output_bam)
             self.assertEquals(4, len(alignments))
             self.assertEquals(("readNameA1", 100),
