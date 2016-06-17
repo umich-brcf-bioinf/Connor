@@ -17,20 +17,24 @@ class MockLogger(object):
     def log(self, msg_format, *args):
         self._log_calls.append((msg_format, args))
 
+class MicroMock(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
 
-MockPysamAlignedSegment = namedtuple('MockPysamAlignedSegment',
-                                     ('query_name,'
-                                      'reference_name,'
-                                      'reference_start,'
-                                      'next_reference_start,'
-                                      'query_sequence'))
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
 
-def align_seg(a, b, c, d, e='AAACCC'):
-    return MockPysamAlignedSegment(query_name=a,
-                                   reference_name=b,
-                                   reference_start=c,
-                                   next_reference_start=d,
-                                   query_sequence=e)
+    def __hash__(self):
+        return 1
+
+
+def align_seg(a, b, c, d, e='AAACCC', f='HHHHHH'):
+    return MicroMock(query_name=a,
+                     reference_name=b,
+                     reference_start=c,
+                     next_reference_start=d,
+                     query_sequence=e,
+                     query_qualities=f)
 
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
@@ -77,7 +81,7 @@ class PairedAlignmentTest(unittest.TestCase):
 
         self.assertIs(alignment1l, actual_paired_alignment.left_alignment)
         self.assertIs(alignment1r, actual_paired_alignment.right_alignment)
-        self.assertEquals(("AAANNN","CCCNNN"), actual_paired_alignment.get_umi())
+        self.assertEquals(("AAANNN","CCCNNN"), actual_paired_alignment.umi)
 
     def test_eq(self):
         left = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
@@ -109,6 +113,18 @@ class PairedAlignmentTest(unittest.TestCase):
         actual_set.add(connor.PairedAlignment(left_B, right_B))
         self.assertEquals(1, len(actual_set))
 
+    def test_replace_umi(self):
+        left_A = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
+        right_A = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        paired_align = connor.PairedAlignment(left_A, right_A, tag_length=4)
+
+        paired_align.replace_umi(('GGGG','TTTT'))
+
+        self.assertEquals('GGGGNNNNNN',
+                          paired_align.left_alignment.query_sequence)
+        self.assertEquals('TTTTNNNNNN',
+                          paired_align.right_alignment.query_sequence)
+
 
 class TagFamiliyTest(unittest.TestCase):
     
@@ -117,12 +133,77 @@ class TagFamiliyTest(unittest.TestCase):
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
         alignments = [pair1, pair2, pair3]
-        
+
         input_umi = "AAANNNCCCNNN"
         actual_tag_family = connor.TagFamily(input_umi, alignments)
-        
+
         self.assertEquals(input_umi, actual_tag_family.umi)
         self.assertEquals(alignments, actual_tag_family.alignments)
+
+
+    def test_consensus_enforce_tag(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGGGG', 'CCCNNN')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'CCCNNN', 'CCCTTT')
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("AAA", "CCC")
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_consensus_seq = actual_tag_family.consensus
+
+        self.assertEquals(input_umis, actual_consensus_seq.umi)
+
+    def test_consensus_sequence_trivial_noop(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_consensus_seq = actual_tag_family.consensus
+
+        self.assertEquals("nnnGGG",
+                          actual_consensus_seq.left_alignment.query_sequence)
+        self.assertEquals("nnnTTT",
+                          actual_consensus_seq.right_alignment.query_sequence)
+
+    def test_consensus_sequence_majority_wins(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_consensus_seq = actual_tag_family.consensus
+
+        self.assertEquals("nnnGTG",
+                          actual_consensus_seq.left_alignment.query_sequence)
+        self.assertEquals("nnnTCT",
+                          actual_consensus_seq.right_alignment.query_sequence)
+
+    def test_consensus_qualities_majority_vote(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1.left_alignment.query_qualities = "AAAAAA"
+        pair1.right_alignment.query_qualities = "BBBBBB"
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2.left_alignment.query_qualities = "ACACCC"
+        pair2.right_alignment.query_qualities = "BDBDDD"
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3.left_alignment.query_qualities = "ECECCC"
+        pair3.right_alignment.query_qualities = "FDFDDD"
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        paired_consensus = actual_tag_family.consensus
+
+        self.assertEquals("ACACCC",
+                          paired_consensus.left_alignment.query_qualities)
+        self.assertEquals("BDBDDD",
+                          paired_consensus.right_alignment.query_qualities)
+
 
 
 class ConnorTest(unittest.TestCase):

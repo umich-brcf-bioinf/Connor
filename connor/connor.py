@@ -17,8 +17,10 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
-from collections import defaultdict
+from collections import defaultdict, Counter
+from copy import deepcopy
 from datetime import datetime
+
 import os
 import sys
 import traceback
@@ -81,6 +83,15 @@ class PairedAlignment(object):
         self.left_alignment = left_alignment
         self.right_alignment = right_alignment
         self._tag_length = tag_length
+        left_tag_id = self.left_alignment.query_sequence[0:self._tag_length]
+        right_tag_id = self.right_alignment.query_sequence[0:self._tag_length]
+        self.umi = (left_tag_id, right_tag_id)
+
+
+    def replace_umi(self, umi):
+        self.left_alignment.query_sequence = umi[0] + self.left_alignment.query_sequence[len(umi[0]):]
+        self.right_alignment.query_sequence = umi[1] + self.right_alignment.query_sequence[len(umi[1]):]
+        self.umi = umi
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
@@ -97,10 +108,64 @@ class PairedAlignment(object):
                                     self.right_alignment.reference_start,
                                     self.right_alignment.query_sequence)
 
-    def get_umi(self):
-        left_tag_id = self.left_alignment.query_sequence[0:self._tag_length]
-        right_tag_id = self.right_alignment.query_sequence[0:self._tag_length]
-        return (left_tag_id, right_tag_id)
+
+class TagFamily(object):
+    def __init__(self, umi, list_of_alignments):
+        self.umi = umi
+        self.alignments = list_of_alignments
+        self.consensus = self._build_consensus(umi, list_of_alignments)
+
+    @staticmethod
+    def _generate_consensus_sequence(list_of_alignments):
+        consensus = []
+        for i in xrange(0, len(list_of_alignments[0].query_sequence)):
+            counter = Counter([s.query_sequence[i:i+1] for s in list_of_alignments])
+            base = counter.most_common(1)[0][0]
+#            freq = 100 * counter[base]/sum(counter.values())
+            consensus.append(base)
+#             if freq >= consensus_cutoff:
+#                 consensus.append(base)
+#             else:
+#                 consensus.append("N")
+        return "".join(consensus)
+    
+    @staticmethod
+    def _generate_consensus_qualities(list_of_alignments):
+        consensus_quality = []
+        for i in xrange(0, len(list_of_alignments[0].query_qualities)):
+            counter = Counter([s.query_qualities[i:i+1] for s in list_of_alignments])
+            base = counter.most_common(1)[0][0]
+#            freq = 100 * counter[base]/sum(counter.values())
+            consensus_quality.append(base)
+#             if freq >= consensus_cutoff:
+#                 consensus.append(base)
+#             else:
+#                 consensus.append("N")
+        return "".join(consensus_quality)
+
+    #TODO: (cgates) I don't like that the tags assume umi is a tuple and symmetric between left and right 
+    @staticmethod
+    def _build_consensus(umi, alignments):
+        left_aligns = []
+        right_aligns = []
+        for align in alignments:
+            left_aligns.append(align.left_alignment)
+            right_aligns.append(align.right_alignment)
+        left_consensus_sequence = TagFamily._generate_consensus_sequence(left_aligns)
+        right_consensus_sequence = TagFamily._generate_consensus_sequence(right_aligns)
+        left_consensus_qualities = TagFamily._generate_consensus_qualities(left_aligns)
+        right_consensus_qualities = TagFamily._generate_consensus_qualities(right_aligns)
+        left_consensus_align = deepcopy(alignments[0].left_alignment,
+                                        {'query_sequence':left_consensus_sequence})
+        right_consensus_align = deepcopy(alignments[0].right_alignment,
+                                         {'query_sequence':right_consensus_sequence})
+        left_consensus_align.query_qualities = left_consensus_qualities
+        right_consensus_align.query_qualities = right_consensus_qualities
+        consensus_align = PairedAlignment(left_consensus_align,
+                                          right_consensus_align,
+                                          tag_length=len(umi[0]))
+        consensus_align.replace_umi(umi)
+        return consensus_align
 
 
 def _build_coordinate_read_name_manifest(lw_aligns):
@@ -145,7 +210,7 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
     partitioned into families.'''
     tag_aligns = defaultdict(set)
     for paired_align in tagged_paired_aligns:
-        (left_umi, right_umi) =  paired_align.get_umi()
+        (left_umi, right_umi) =  paired_align.umi
         for best_tag in ranked_tags:
             if left_umi == best_tag[0] or right_umi == best_tag[1]:
                 tag_aligns[best_tag].add(paired_align)
@@ -175,20 +240,12 @@ def _rank_tags(tagged_paired_aligns):
     '''Return the list of tags ranked from most to least popular.'''
     tag_count = defaultdict(int)
     for paired_align in tagged_paired_aligns:
-        umi =  paired_align.get_umi()
+        umi =  paired_align.umi
         tag_count[umi] += 1
     tags_by_count = sorted(tag_count.items(),
                            key=lambda x: (-1 * x[1], x[0]))
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
-
-
-class TagFamily(object):
-    
-    def __init__(self, umi, list_of_alignments):
-        self.umi = umi
-        self.alignments = list_of_alignments
-
 
 
 def _sort_and_index_bam(bam_filename):
