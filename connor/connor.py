@@ -29,6 +29,11 @@ import connor.samtools
 
 __version__ = connor.__version__
 
+try:
+    xrange
+except NameError:
+    xrange = range
+
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
 
