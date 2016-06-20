@@ -20,7 +20,6 @@ import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
-
 import os
 import sys
 import traceback
@@ -36,6 +35,8 @@ except NameError:
 
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
+MIN_ORIG_READS = 3
+
 
 DESCRIPTION=\
 '''Deduplicates BAM file based on custom inline DNA barcodes.
@@ -75,10 +76,23 @@ class LightweightAlignment(object):
         chrom = aligned_segment.reference_name
         pos1 = aligned_segment.reference_start
         pos2 = aligned_segment.next_reference_start
+        self.reference_end = aligned_segment.reference_end
         if pos1 < pos2:
             self.key = (chrom, pos1, pos2)
+            self.left_pos = pos1
         else:
             self.key = (chrom, pos2, pos1)
+            self.left_pos = pos2
+
+
+class LightweightPair(object):
+    '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
+    def __init__(self, aligned_segment1, aligned_segment2):
+        self.name = aligned_segment1.query_name
+        chrom = aligned_segment1.reference_name
+        left_start = min(aligned_segment1.reference_start, aligned_segment2.reference_start)
+        right_end = max(aligned_segment1.reference_end, aligned_segment2.reference_end)
+        self.key = (chrom, left_start, right_end)
 
 
 class PairedAlignment(object):
@@ -90,8 +104,9 @@ class PairedAlignment(object):
         self.right_alignment = right_alignment
         self._tag_length = tag_length
         left_tag_id = self.left_alignment.query_sequence[0:self._tag_length]
-        right_tag_id = self.right_alignment.query_sequence[0:self._tag_length]
+        right_tag_id = self.right_alignment.query_sequence[-1 * self._tag_length:]
         self.umi = (left_tag_id, right_tag_id)
+
 
 
     def replace_umi(self, umi):
@@ -188,8 +203,25 @@ class TagFamily(object):
                                           right_consensus_align,
                                           tag_length=len(umi[0]))
         consensus_align.replace_umi(umi)
+        self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
+
+    def _add_tags(self, consensus_align, num_alignments):
+        x0 = "{0}|{1}".format(self.umi[0], self.umi[1])
+        x2 = "{0},{1}".format(consensus_align.left_alignment.reference_start + 1,
+                              consensus_align.right_alignment.reference_end)
+        x3 = num_alignments
+        x4 = num_alignments < MIN_ORIG_READS
+        consensus_align.left_alignment.set_tag("X0", x0, "Z")
+        consensus_align.left_alignment.set_tag("X2", x2, "Z")
+        consensus_align.left_alignment.set_tag("X3", x3, "i")
+        consensus_align.left_alignment.set_tag("X4", str(x4), "Z")
+
+        consensus_align.right_alignment.set_tag("X0", x0, "Z")
+        consensus_align.right_alignment.set_tag("X2", x2, "Z")
+        consensus_align.right_alignment.set_tag("X3", x3, "i")
+        consensus_align.right_alignment.set_tag("X4", str(x4), "Z")
 
 def _build_coordinate_read_name_manifest(lw_aligns):
     '''Return a dict mapping coordinates to set of aligned querynames.
@@ -213,7 +245,8 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
         else:
             paired_align = PairedAlignment(pairing_dict.pop(aseg.query_name),
                                            aseg)
-            key = LightweightAlignment(aseg).key
+            key = LightweightPair(paired_align.left_alignment, 
+                                  paired_align.right_alignment).key
             family_dict[key].add(paired_align)
             coord_read_name_manifest[key].remove(aseg.query_name)
             if not coord_read_name_manifest[key]:
@@ -272,6 +305,26 @@ def _sort_and_index_bam(bam_filename):
     os.rename(sorted_bam_filename, bam_filename)
     connor.samtools.index(bam_filename)
 
+def build_lightweight_aligns(aligned_segments):
+    name_pairs = defaultdict(list)
+    for align_segment in aligned_segments:
+        name_pairs[align_segment.query_name].append(LightweightAlignment(align_segment))
+    return name_pairs
+    
+    
+def build_lightweight_pairs(aligned_segments):
+    name_pairs = dict()
+    lightweight_pairs = list()
+    for align_segment in aligned_segments:
+        query_name = align_segment.query_name
+        if not query_name in name_pairs: 
+            name_pairs[align_segment.query_name] = align_segment
+        else:
+            new_pair = LightweightPair(name_pairs.pop(query_name), align_segment)
+            lightweight_pairs.append(new_pair)
+    return lightweight_pairs
+    
+
 #TODO cgates: check that input file exists and output file does not
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
@@ -284,11 +337,12 @@ def main(command_line_args=None):
         _log('connor begins')
         _log('reading input bam  [{}]', args.input_bam)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
-        lw_aligns = [LightweightAlignment(align) for align in bamfile.fetch()]
-        original_read_count = len(lw_aligns)
-        _log('original read count: {}', original_read_count)
-        coord_manifest = _build_coordinate_read_name_manifest(lw_aligns)
+        lightweight_pairs = build_lightweight_pairs(bamfile.fetch())
         bamfile.close()
+
+        original_read_count = len(lightweight_pairs) * 2
+        _log('original read count: {}', original_read_count)
+        coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
         consensus_read_count = 0
@@ -296,11 +350,11 @@ def main(command_line_args=None):
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
             for tag_family in _build_tag_families(coord_family, ranked_tags):
-#                read_pair = _build_consensus_pair(tag_family)
-                consensus_pair = tag_family.consensus
-                outfile.write(consensus_pair.left_alignment)
-                outfile.write(consensus_pair.right_alignment)
-                consensus_read_count += 2
+                if len(tag_family.alignments) >= MIN_ORIG_READS:
+                    consensus_pair = tag_family.consensus
+                    outfile.write(consensus_pair.left_alignment)
+                    outfile.write(consensus_pair.right_alignment)
+                    consensus_read_count += 2
         _log('consensus read count: {}', consensus_read_count)
         _log('consensus/original: {:.4f}',
              consensus_read_count / original_read_count)
