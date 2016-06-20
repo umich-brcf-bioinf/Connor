@@ -203,23 +203,23 @@ class TagFamiliyTest(unittest.TestCase):
 
     def test_consensus_qualities_majority_vote(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left_alignment.query_qualities = "AAAAAA"
-        pair1.right_alignment.query_qualities = "BBBBBB"
+        pair1.left_alignment.query_qualities = [30, 30, 30, 30, 30, 30]
+        pair1.right_alignment.query_qualities = [25, 25, 25, 25, 25, 25]
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left_alignment.query_qualities = "ACACCC"
-        pair2.right_alignment.query_qualities = "BDBDDD"
+        pair2.left_alignment.query_qualities = [30, 20, 30, 30, 30, 30]
+        pair2.right_alignment.query_qualities = [25, 15, 25, 15, 15, 15]
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left_alignment.query_qualities = "ECECCC"
-        pair3.right_alignment.query_qualities = "FDFDDD"
+        pair3.left_alignment.query_qualities = [10, 20, 10, 20, 20 ,20]
+        pair3.right_alignment.query_qualities = [5, 15, 5 , 15, 15, 15]
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
 
         actual_tag_family = connor.TagFamily(input_umis, alignments)
         paired_consensus = actual_tag_family.consensus
 
-        self.assertEquals("ACACCC",
+        self.assertEquals([30, 20, 30, 30, 30, 30],
                           paired_consensus.left_alignment.query_qualities)
-        self.assertEquals("BDBDDD",
+        self.assertEquals([25, 15, 25, 15, 15, 15],
                           paired_consensus.right_alignment.query_qualities)
 
     def test_consensus_uniform_cigars_admitted(self):
@@ -317,35 +317,37 @@ class ConnorTest(unittest.TestCase):
                              set([pair_C])]
         self.assertEquals(expected_families, actual_families)
 
-    def test_build_consensus_pair(self):
-        align_A0 = align_seg("alignA", 'chr1', 10, 100)
-        align_A1 = align_seg("alignA", 'chr1', 100, 10)
-        align_B0 = align_seg("alignB", 'chr1', 10, 100)
-        align_B1 = align_seg("alignB", 'chr1', 100, 10)
-        alignments = set([connor.PairedAlignment(align_A0, align_A1),
-                          connor.PairedAlignment(align_B0, align_B1)])
-
-        actual_pair = connor._build_consensus_pair(alignments)
-
-        expected_pair = connor.PairedAlignment(align_B0, align_B1)
-        self.assertEquals(expected_pair, actual_pair)
+#     def test_build_consensus_pair(self):
+#         align_A0 = align_seg("alignA", 'chr1', 10, 100)
+#         align_A1 = align_seg("alignA", 'chr1', 100, 10)
+#         align_B0 = align_seg("alignB", 'chr1', 10, 100)
+#         align_B1 = align_seg("alignB", 'chr1', 100, 10)
+#         alignments = set([connor.PairedAlignment(align_A0, align_A1),
+#                           connor.PairedAlignment(align_B0, align_B1)])
+# 
+#         actual_pair = connor._build_consensus_pair(alignments)
+# 
+#         expected_pair = connor.PairedAlignment(align_B0, align_B1)
+#         self.assertEquals(expected_pair, actual_pair)
 
     def test_build_tag_families(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        input_pairs = [pair1, pair2, pair3]
-        ranked_tags = [('AAA','CCC'), ('GGG','TTT')]
+        paired_aligns = [pair1, pair2, pair3]
+        tag1 = ('AAA', 'CCC')
+        tag2 = ('GGG', 'TTT')
+        ranked_tags = [tag1, tag2]
 
-        actual_tag_family_list = connor._build_tag_families(input_pairs,
-                                                            ranked_tags)
+        actual_tag_fam_list = connor._build_tag_families(paired_aligns,
+                                                         ranked_tags)
+        actual_tag_fam = {fam.umi:fam for fam in actual_tag_fam_list}
 
-        actual_tag_families = set([frozenset(family) for family in actual_tag_family_list])
-        expected_tag_family_1 = frozenset([pair1, pair3])
-        expected_tag_family_2 = frozenset([pair2])
-        expected_tag_families = set([expected_tag_family_1,
-                                     expected_tag_family_2])
-        self.assertEquals(expected_tag_families, actual_tag_families)
+        self.assertEquals(2, len(actual_tag_fam))
+        self.assertEquals(set([pair1, pair3]),
+                          set(actual_tag_fam[tag1].alignments))
+        self.assertEquals(set([pair2]),
+                          set(actual_tag_fam[tag2].alignments))
 
     def test_build_tag_families_mostPopularTagIsCanonical(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
@@ -359,15 +361,14 @@ class ConnorTest(unittest.TestCase):
                        ('TTT', 'CCC'),
                        ('TTT', 'GGG')]
 
-        actual_tag_family_list = connor._build_tag_families(input_pairs,
-                                                            ranked_tags)
+        actual_tag_fam_list = connor._build_tag_families(input_pairs,
+                                                         ranked_tags)
+        actual_tag_fam = {fam.umi:fam for fam in actual_tag_fam_list}
 
-        actual_tag_families = set([frozenset(family) for family in actual_tag_family_list])
-        expected_tag_family_1 = frozenset([pair1, pair2, pair3, pair4])
-        expected_tag_family_2 = frozenset([pair5])
-        expected_tag_families = set([expected_tag_family_1,
-                                     expected_tag_family_2])
-        self.assertEquals(expected_tag_families, actual_tag_families)
+        self.assertEquals(set([pair1, pair2, pair3, pair4]),
+                          set(actual_tag_fam[('AAA','GGG')].alignments))
+        self.assertEquals(set([pair5]),
+                          set(actual_tag_fam[('AAA','CCC')].alignments))
 
     def test_sort_and_index_bam(self):
         sam_contents = \
@@ -466,13 +467,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 
         expected_tags = [('AAA', 'CCC'), ('AAA', 'GGG'), ('TTT', 'GGG')]
         self.assertEquals(expected_tags, actual_tags)
-        
-#     def test_create_consensus_onepair(self):
-#         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "GGGNNN")
-#         
-#         actual_consensus = connor._get_consensus_pair([pair0])
-#         expected_tag = "TTTNNNGGGNNN"
-        
+
 
 class TestLightweightAlignment(unittest.TestCase):
     def test_lightweight_alignment_forwardRead(self):
@@ -532,9 +527,9 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
-            self.assertEquals([("readNameA2", 100),
+            self.assertEquals([("readNameA1", 100),
                                ("readNameB1", 200),
-                               ("readNameA2", 300),
+                               ("readNameA1", 300),
                                ("readNameB1", 400)],
                               aligns)
 

@@ -150,14 +150,16 @@ class TagFamily(object):
                 consensus.append("N")
         return "".join(consensus)
 
+    #TODO (cgates): consider zipping over alignmnets instead
     @staticmethod
     def _generate_consensus_qualities(list_of_alignments):
         consensus_quality = []
         for i in xrange(0, len(list_of_alignments[0].query_qualities)):
-            counter = Counter([s.query_qualities[i:i+1] for s in list_of_alignments])
-            base = counter.most_common(1)[0][0]
-            consensus_quality.append(base)
-        return "".join(consensus_quality)
+            qualities = tuple([s.query_qualities[i] for s in list_of_alignments])
+            counter = Counter(qualities)
+            qual = counter.most_common(1)[0][0]
+            consensus_quality.append(qual)
+        return consensus_quality
     
     @staticmethod
     def _generate_dominant_cigar_pair(list_of_alignments):
@@ -217,13 +219,6 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
             if not coord_read_name_manifest[key]:
                 yield family_dict.pop(key)
 
-def _build_consensus_pair(alignment_family):
-    '''Aggregate a set of reads into a single consensus read.'''
-    sorted_reads = sorted(alignment_family,
-                          key=lambda x: x.left_alignment.query_name)
-    return sorted_reads.pop()
-
-
 def _build_tag_families(tagged_paired_aligns, ranked_tags):
     '''Return a list of read families; each family is a set of original reads.
 
@@ -236,9 +231,8 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
             if left_umi == best_tag[0] or right_umi == best_tag[1]:
                 tag_aligns[best_tag].add(paired_align)
                 break
-    #Sorting by tag is not strictly necessary but keeps results deterministic
-    sorted_values = [tag_aligns[key] for key in sorted(tag_aligns)]
-    return sorted_values
+    tag_families = [TagFamily(tag, aligns) for tag, aligns in tag_aligns.items()]
+    return tag_families
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
@@ -302,9 +296,10 @@ def main(command_line_args=None):
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
             for tag_family in _build_tag_families(coord_family, ranked_tags):
-                read_pair = _build_consensus_pair(tag_family)
-                outfile.write(read_pair.left_alignment)
-                outfile.write(read_pair.right_alignment)
+#                read_pair = _build_consensus_pair(tag_family)
+                consensus_pair = tag_family.consensus
+                outfile.write(consensus_pair.left_alignment)
+                outfile.write(consensus_pair.right_alignment)
                 consensus_read_count += 2
         _log('consensus read count: {}', consensus_read_count)
         _log('consensus/original: {:.4f}',
