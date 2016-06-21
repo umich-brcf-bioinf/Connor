@@ -200,7 +200,6 @@ class TagFamily(object):
         right_consensus_align = deepcopy(alignments[0].right_alignment, {})
         left_consensus_align.query_sequence = left_consensus_sequence
         right_consensus_align.query_sequence = right_consensus_sequence
-        left_consensus_align.query_qualities = pysam.qualitystring_to_array("<" * len(left_consensus_sequence))
         consensus_align = PairedAlignment(left_consensus_align,
                                           right_consensus_align,
                                           tag_length=len(umi[0]))
