@@ -17,6 +17,7 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
+import array
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
@@ -139,6 +140,8 @@ class TagFamily(object):
         dominant_cigar = TagFamily._generate_dominant_cigar_pair(list_of_alignments)
         self.alignments = TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
                                                                        list_of_alignments)
+        #Necessary to make output deterministic
+        self.alignments.sort(key=lambda x: x.left_alignment.query_name)
         self.consensus_threshold = consensus_threshold
         self.consensus = self._build_consensus(umi, self.alignments)
 
@@ -182,7 +185,7 @@ class TagFamily(object):
         return counter.most_common(1)[0][0]
 
 
-    #TODO: (cgates) I don't like that the tags assume umi is a tuple and symmetric between left and right 
+    #TODO: (cgates) tags should not assume umi is a tuple and symmetric between left and right 
     def _build_consensus(self, umi, alignments):
         left_aligns = []
         right_aligns = []
@@ -197,12 +200,13 @@ class TagFamily(object):
         right_consensus_align = deepcopy(alignments[0].right_alignment, {})
         left_consensus_align.query_sequence = left_consensus_sequence
         right_consensus_align.query_sequence = right_consensus_sequence
-        left_consensus_align.query_qualities = left_consensus_qualities
-        right_consensus_align.query_qualities = right_consensus_qualities
+        left_consensus_align.query_qualities = pysam.qualitystring_to_array("<" * len(left_consensus_sequence))
         consensus_align = PairedAlignment(left_consensus_align,
                                           right_consensus_align,
                                           tag_length=len(umi[0]))
         consensus_align.replace_umi(umi)
+        left_consensus_align.query_qualities = left_consensus_qualities
+        right_consensus_align.query_qualities = right_consensus_qualities
         self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
@@ -265,6 +269,8 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
                 tag_aligns[best_tag].add(paired_align)
                 break
     tag_families = [TagFamily(tag, aligns) for tag, aligns in tag_aligns.items()]
+    #Necessary to make output deterministic
+    tag_families.sort(key=lambda x: x.consensus.left_alignment.query_name)
     return tag_families
 
 def _parse_command_line_args(arguments):
