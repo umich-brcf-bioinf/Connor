@@ -111,8 +111,13 @@ class PairedAlignment(object):
 
 
     def replace_umi(self, umi):
-        self.left_alignment.query_sequence = umi[0] + self.left_alignment.query_sequence[len(umi[0]):]
-        self.right_alignment.query_sequence = umi[1] + self.right_alignment.query_sequence[len(umi[1]):]
+        def byte_array_to_string(sequence):
+            if isinstance(sequence, str):
+                return sequence
+            else:
+                return str(sequence.decode("utf-8"))
+        self.left_alignment.query_sequence = umi[0] + byte_array_to_string(self.left_alignment.query_sequence[len(umi[0]):])
+        self.right_alignment.query_sequence = umi[1] + byte_array_to_string(self.right_alignment.query_sequence[len(umi[1]):])
         self.umi = umi
 
     def __eq__(self, other):
