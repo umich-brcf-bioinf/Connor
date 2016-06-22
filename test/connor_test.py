@@ -165,15 +165,15 @@ class PairedAlignmentTest(unittest.TestCase):
         self.assertEquals(1, len(actual_set))
 
     def test_replace_umi(self):
-        left_A = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
-        right_A = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
+        left_A = align_seg('alignA', 'chr1', 100, 200, 'AAAA' 'NNNN')
+        right_A = align_seg('alignA', 'chr1', 200, 100, 'NNNN' 'CCCC')
         paired_align = connor.PairedAlignment(left_A, right_A, tag_length=4)
 
         paired_align.replace_umi(('GGGG','TTTT'))
 
-        self.assertEquals('GGGGNNNNNN',
+        self.assertEquals('GGGG' 'NNNN',
                           paired_align.left_alignment.query_sequence)
-        self.assertEquals('TTTTNNNNNN',
+        self.assertEquals('NNNN' 'TTTT',
                           paired_align.right_alignment.query_sequence)
 
 
@@ -192,22 +192,23 @@ class TagFamiliyTest(unittest.TestCase):
         self.assertEquals(alignments, actual_tag_family.alignments)
 
 
-    def test_consensus_enforce_tag(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGGGG', 'CCCNNN')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'CCCNNN', 'CCCTTT')
-        alignments = [pair1, pair2, pair3]
+    def test_consensus_rewrites_umi(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
         input_umis = ("AAA", "CCC")
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
-        actual_consensus_seq = actual_tag_family.consensus
+        actual_tag_family = connor.TagFamily(input_umis, [pair1])
+        actual_consensus = actual_tag_family.consensus
 
-        self.assertEquals(input_umis, actual_consensus_seq.umi)
+        self.assertEquals(input_umis, actual_consensus.umi)
+        self.assertEquals('AAANNN',
+                          actual_consensus.left_alignment.query_sequence)
+        self.assertEquals('NNNCCC',
+                          actual_consensus.right_alignment.query_sequence)
 
     def test_consensus_sequence_trivial_noop(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
 
@@ -216,13 +217,13 @@ class TagFamiliyTest(unittest.TestCase):
 
         self.assertEquals("nnnGGG",
                           actual_consensus_seq.left_alignment.query_sequence)
-        self.assertEquals("nnnTTT",
+        self.assertEquals("TTTnnn",
                           actual_consensus_seq.right_alignment.query_sequence)
 
     def test_consensus_sequence_majority_wins(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
         threshold = 1 / 2
@@ -232,13 +233,13 @@ class TagFamiliyTest(unittest.TestCase):
 
         self.assertEquals("nnnGTG",
                           consensus_pair.left_alignment.query_sequence)
-        self.assertEquals("nnnTCT",
+        self.assertEquals("TCTnnn",
                           consensus_pair.right_alignment.query_sequence)
 
     def test_consensus_sequence_below_threshold_Ns(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
         threshold = 0.8
@@ -248,7 +249,7 @@ class TagFamiliyTest(unittest.TestCase):
 
         self.assertEquals("nnnGNG",
                           consensus_pair.left_alignment.query_sequence)
-        self.assertEquals("nnnTNT",
+        self.assertEquals("TNTnnn",
                           consensus_pair.right_alignment.query_sequence)
 
     def test_consensus_qualities_majority_vote(self):
