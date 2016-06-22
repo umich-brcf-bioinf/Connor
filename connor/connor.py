@@ -117,7 +117,7 @@ class PairedAlignment(object):
                 return str(sequence.decode("utf-8"))
         self.left_alignment.query_sequence = umi[0] + byte_array_to_string(self.left_alignment.query_sequence[len(umi[0]):])
         seq = byte_array_to_string(self.right_alignment.query_sequence)
-        self.right_alignment.query_sequence = seq[:len(seq)-len(umi[1])] + umi[1]
+        self.right_alignment.query_sequence = seq[:-1 * len(umi[1])] + umi[1]
         self.umi = umi
 
     def __eq__(self, other):
