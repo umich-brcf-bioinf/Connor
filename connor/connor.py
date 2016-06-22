@@ -17,7 +17,6 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
-import array
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
@@ -117,7 +116,8 @@ class PairedAlignment(object):
             else:
                 return str(sequence.decode("utf-8"))
         self.left_alignment.query_sequence = umi[0] + byte_array_to_string(self.left_alignment.query_sequence[len(umi[0]):])
-        self.right_alignment.query_sequence = umi[1] + byte_array_to_string(self.right_alignment.query_sequence[len(umi[1]):])
+        seq = byte_array_to_string(self.right_alignment.query_sequence)
+        self.right_alignment.query_sequence = seq[:-1 * len(umi[1])] + umi[1]
         self.umi = umi
 
     def __eq__(self, other):
