@@ -20,6 +20,8 @@ import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
+from itertools import imap
+import operator
 import os
 import sys
 import traceback
@@ -36,6 +38,7 @@ except NameError:
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
 MIN_ORIG_READS = 3
+HAMMING_THRESHOLD = 1
 
 
 DESCRIPTION=\
@@ -253,7 +256,7 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
         else:
             paired_align = PairedAlignment(pairing_dict.pop(aseg.query_name),
                                            aseg)
-            key = LightweightPair(paired_align.left_alignment, 
+            key = LightweightPair(paired_align.left_alignment,
                                   paired_align.right_alignment).key
             family_dict[key].add(paired_align)
             coord_read_name_manifest[key].remove(aseg.query_name)
@@ -272,10 +275,18 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
             if left_umi == best_tag[0] or right_umi == best_tag[1]:
                 tag_aligns[best_tag].add(paired_align)
                 break
+            elif (_hamming_dist(left_umi, best_tag[0]) <= HAMMING_THRESHOLD) or \
+                (_hamming_dist(right_umi, best_tag[1]) <= HAMMING_THRESHOLD):
+                tag_aligns[best_tag].add(paired_align)
+                break
     tag_families = [TagFamily(tag, aligns) for tag, aligns in tag_aligns.items()]
     #Necessary to make output deterministic
     tag_families.sort(key=lambda x: x.consensus.left_alignment.query_name)
     return tag_families
+
+def _hamming_dist(str1, str2):
+    assert len(str1) == len(str2)
+    return sum(imap(operator.ne, str1, str2))
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
