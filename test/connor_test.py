@@ -9,6 +9,7 @@ import pysam
 from testfixtures.tempdirectory import TempDirectory
 from connor import connor
 from connor import samtools
+from connor.connor import TagFamilyStatHandler
 
 class MockLogger(object):
     def __init__(self):
@@ -308,6 +309,21 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
         self.assertEquals(['alignA','alignB'], actual_names)
+
+
+
+class TagFamilyStatHandlerTest(unittest.TestCase):
+    def test_end(self):
+        posAfam1 = MicroMock(alignments=[1,2])
+        posAfam2 = MicroMock(alignments=[1,2,3])
+        posBfam1 = MicroMock(alignments=[1,2,3,4,5])
+        stat_handler = TagFamilyStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.handle([posBfam1])
+        stat_handler.end()
+
+        self.assertEqual(2, stat_handler.min)
 
 
 class ConnorTest(unittest.TestCase):
