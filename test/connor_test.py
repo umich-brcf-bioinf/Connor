@@ -311,6 +311,9 @@ class TagFamiliyTest(unittest.TestCase):
 
 
 class ConnorTest(unittest.TestCase):
+    def tearDown(self):
+        connor.noncanonical_tag_count = 0
+        unittest.TestCase.tearDown(self)
 
     def test_build_coordinate_read_name_manifest(self):
         Align = namedtuple('Align', 'name key')
@@ -381,11 +384,14 @@ class ConnorTest(unittest.TestCase):
 #         expected_pair = connor.PairedAlignment(align_B0, align_B1)
 #         self.assertEquals(expected_pair, actual_pair)
 
-    def test_build_tag_families(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        paired_aligns = [pair1, pair2, pair3]
+    def test_build_tag_families_exact_left_or_right(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
+        pair4 = align_pair('alignD', 'chr1', 100, 200, 'TTTNNN', 'NNNCCC')
+        pair5 = align_pair('alignE', 'chr1', 100, 200, 'CCCNNN', 'NNNTTT')
+
+        paired_aligns = [pair1, pair2, pair3, pair4, pair5]
         tag1 = ('AAA', 'CCC')
         tag2 = ('GGG', 'TTT')
         ranked_tags = [tag1, tag2]
@@ -395,9 +401,9 @@ class ConnorTest(unittest.TestCase):
         actual_tag_fam = {fam.umi:fam for fam in actual_tag_fam_list}
 
         self.assertEquals(2, len(actual_tag_fam))
-        self.assertEquals(set([pair1, pair3]),
+        self.assertEquals(set([pair1, pair3, pair4]),
                           set(actual_tag_fam[tag1].alignments))
-        self.assertEquals(set([pair2]),
+        self.assertEquals(set([pair2, pair5]),
                           set(actual_tag_fam[tag2].alignments))
 
     def test_build_tag_families_mostPopularTagIsCanonical(self):
@@ -420,6 +426,114 @@ class ConnorTest(unittest.TestCase):
                           set(actual_tag_fam[('AAA','GGG')].alignments))
         self.assertEquals(set([pair5]),
                           set(actual_tag_fam[('AAA','CCC')].alignments))
+
+    def test_build_tag_families_exact_LR_included(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(1, len(actual_tag_fam_list))
+        self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
+
+    def test_build_tag_families_exact_L_included(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNNNN')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(1, len(actual_tag_fam_list))
+        self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
+
+    def test_build_tag_families_exact_R_included(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'NNNNNN', 'NNNCCC')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(1, len(actual_tag_fam_list))
+        self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
+
+    def test_build_tag_families_hamming_L_included(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNNNN')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(1, len(actual_tag_fam_list))
+        self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
+
+    def test_build_tag_families_hamming_R_included(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'NNNNNN', 'NNNCCG')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(1, len(actual_tag_fam_list))
+        self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
+
+    def test_build_tag_families_hamming_LR_included(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNCCG')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(1, len(actual_tag_fam_list))
+        self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
+
+    def test_build_tag_families_no_match_excluded(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'NNNNNN', 'NNNNNN')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(0, len(actual_tag_fam_list))
+
+    def test_build_tag_families_hamming_dist_excluded(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AGGNNN', 'NNNCGG')
+
+        actual_tag_fam_list = connor._build_tag_families([pair1],
+                                                         [('AAA', 'CCC')])
+
+        self.assertEquals(0, len(actual_tag_fam_list))
+
+    def test_build_tag_families_noncanonical_iterator_fuzzy_counted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNNNN')
+
+        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+
+        self.assertEquals(1, connor.noncanonical_tag_count)
+
+    def test_build_tag_families_noncanonical_iterator_halfmatched_counted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNNNN')
+
+        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+
+        self.assertEquals(1, connor.noncanonical_tag_count)
+
+    def test_build_tag_families_noncanonical_iterator_not_counted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
+
+        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+
+        self.assertEquals(0, connor.noncanonical_tag_count)
+
+
+    def test_hamming_distance_trivial(self):
+        self.assertEqual(1, connor._hamming_dist("ABC", "ABD"))
+
+    def test_hamming_distance_max(self):
+        self.assertEqual(3, connor._hamming_dist("ABC", "XYZ"))
+
+    def test_hamming_distance_0(self):
+        self.assertEqual(0, connor._hamming_dist("ABC", "ABC"))
+
+    def test_hamming_distance_unequal_lengths(self):
+        self.assertRaises(AssertionError,
+                          connor._hamming_dist,
+                          "ABC",
+                          "AB")
+
 
     def test_sort_and_index_bam(self):
         sam_contents = \
@@ -605,17 +719,27 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             connor.main(["connor", input_bam, output_bam])
             log_calls = self.mock_logger._log_calls
             self.assertEquals("connor begins", log_calls[0][0])
+
             self.assertEquals((input_bam,), log_calls[1][1])
+
             self.assertRegexpMatches(log_calls[2][0], 'original read count:')
             self.assertEquals((6,), log_calls[2][1])
+
             self.assertRegexpMatches(log_calls[3][0], 'consensus read count:')
             self.assertEquals((4,), log_calls[3][1])
-            self.assertRegexpMatches(log_calls[4][0],
+
+            self.assertRegexpMatches(log_calls[4][0], 'non-canonical tag count:')
+            self.assertEquals((0,), log_calls[4][1])
+
+            self.assertRegexpMatches(log_calls[5][0],
                                      'consensus/original:')
-            self.assertEquals((4 / 6,), log_calls[4][1])
-            self.assertEquals("sorting and indexing bam", log_calls[5][0])
-            self.assertEquals((output_bam,), log_calls[6][1])
-            self.assertEquals("connor complete", log_calls[7][0])
+            self.assertEquals((4 / 6,), log_calls[5][1])
+
+            self.assertEquals("sorting and indexing bam", log_calls[6][0])
+
+            self.assertEquals((output_bam,), log_calls[7][1])
+
+            self.assertEquals("connor complete", log_calls[8][0])
 
     def test_distinctPairStartsAreNotCombined(self):
         sam_contents = \

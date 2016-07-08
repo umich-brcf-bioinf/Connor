@@ -20,6 +20,8 @@ import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
+from itertools import imap
+import operator
 import os
 import sys
 import traceback
@@ -36,6 +38,7 @@ except NameError:
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
 MIN_ORIG_READS = 3
+HAMMING_THRESHOLD = 1
 
 
 DESCRIPTION=\
@@ -44,6 +47,7 @@ Emits a new BAM file reduced to a single consensus read for each family of
 original reads.
 '''
 
+noncanonical_tag_count = 0
 
 class _ConnorUsageError(Exception):
     """Raised for malformed command or invalid arguments."""
@@ -253,7 +257,7 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
         else:
             paired_align = PairedAlignment(pairing_dict.pop(aseg.query_name),
                                            aseg)
-            key = LightweightPair(paired_align.left_alignment, 
+            key = LightweightPair(paired_align.left_alignment,
                                   paired_align.right_alignment).key
             family_dict[key].add(paired_align)
             coord_read_name_manifest[key].remove(aseg.query_name)
@@ -266,16 +270,30 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
     Each read is considered against each ranked tag until all reads are
     partitioned into families.'''
     tag_aligns = defaultdict(set)
+    global noncanonical_tag_count
     for paired_align in tagged_paired_aligns:
         (left_umi, right_umi) =  paired_align.umi
         for best_tag in ranked_tags:
-            if left_umi == best_tag[0] or right_umi == best_tag[1]:
+            if paired_align.umi == best_tag:
                 tag_aligns[best_tag].add(paired_align)
+                break
+            elif left_umi == best_tag[0] or right_umi == best_tag[1]:
+                tag_aligns[best_tag].add(paired_align)
+                noncanonical_tag_count += 1
+                break
+            elif (_hamming_dist(left_umi, best_tag[0]) <= HAMMING_THRESHOLD) or \
+                (_hamming_dist(right_umi, best_tag[1]) <= HAMMING_THRESHOLD):
+                tag_aligns[best_tag].add(paired_align)
+                noncanonical_tag_count += 1
                 break
     tag_families = [TagFamily(tag, aligns) for tag, aligns in tag_aligns.items()]
     #Necessary to make output deterministic
     tag_families.sort(key=lambda x: x.consensus.left_alignment.query_name)
     return tag_families
+
+def _hamming_dist(str1, str2):
+    assert len(str1) == len(str2)
+    return sum(imap(operator.ne, str1, str2))
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
@@ -366,6 +384,7 @@ def main(command_line_args=None):
                     outfile.write(consensus_pair.right_alignment)
                     consensus_read_count += 2
         _log('consensus read count: {}', consensus_read_count)
+        _log('non-canonical tag count: {}', noncanonical_tag_count)
         _log('consensus/original: {:.4f}',
              consensus_read_count / original_read_count)
         outfile.close()
