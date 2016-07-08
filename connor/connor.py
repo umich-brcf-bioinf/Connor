@@ -47,6 +47,7 @@ Emits a new BAM file reduced to a single consensus read for each family of
 original reads.
 '''
 
+noncanonical_tag_count = 0
 
 class _ConnorUsageError(Exception):
     """Raised for malformed command or invalid arguments."""
@@ -269,15 +270,21 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
     Each read is considered against each ranked tag until all reads are
     partitioned into families.'''
     tag_aligns = defaultdict(set)
+    global noncanonical_tag_count
     for paired_align in tagged_paired_aligns:
         (left_umi, right_umi) =  paired_align.umi
         for best_tag in ranked_tags:
-            if left_umi == best_tag[0] or right_umi == best_tag[1]:
+            if paired_align.umi == best_tag:
                 tag_aligns[best_tag].add(paired_align)
+                break
+            elif left_umi == best_tag[0] or right_umi == best_tag[1]:
+                tag_aligns[best_tag].add(paired_align)
+                noncanonical_tag_count += 1
                 break
             elif (_hamming_dist(left_umi, best_tag[0]) <= HAMMING_THRESHOLD) or \
                 (_hamming_dist(right_umi, best_tag[1]) <= HAMMING_THRESHOLD):
                 tag_aligns[best_tag].add(paired_align)
+                noncanonical_tag_count += 1
                 break
     tag_families = [TagFamily(tag, aligns) for tag, aligns in tag_aligns.items()]
     #Necessary to make output deterministic
@@ -377,6 +384,7 @@ def main(command_line_args=None):
                     outfile.write(consensus_pair.right_alignment)
                     consensus_read_count += 2
         _log('consensus read count: {}', consensus_read_count)
+        _log('non-canonical tag count: {}', noncanonical_tag_count)
         _log('consensus/original: {:.4f}',
              consensus_read_count / original_read_count)
         outfile.close()

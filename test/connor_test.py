@@ -311,6 +311,9 @@ class TagFamiliyTest(unittest.TestCase):
 
 
 class ConnorTest(unittest.TestCase):
+    def tearDown(self):
+        connor.noncanonical_tag_count = 0
+        unittest.TestCase.tearDown(self)
 
     def test_build_coordinate_read_name_manifest(self):
         Align = namedtuple('Align', 'name key')
@@ -494,6 +497,26 @@ class ConnorTest(unittest.TestCase):
 
         self.assertEquals(0, len(actual_tag_fam_list))
 
+    def test_build_tag_families_noncanonical_iterator_fuzzy_counted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNNNN')
+
+        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+
+        self.assertEquals(1, connor.noncanonical_tag_count)
+
+    def test_build_tag_families_noncanonical_iterator_halfmatched_counted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNNNN')
+
+        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+
+        self.assertEquals(1, connor.noncanonical_tag_count)
+
+    def test_build_tag_families_noncanonical_iterator_not_counted(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
+
+        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+
+        self.assertEquals(0, connor.noncanonical_tag_count)
 
 
     def test_hamming_distance_trivial(self):
@@ -696,17 +719,27 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             connor.main(["connor", input_bam, output_bam])
             log_calls = self.mock_logger._log_calls
             self.assertEquals("connor begins", log_calls[0][0])
+
             self.assertEquals((input_bam,), log_calls[1][1])
+
             self.assertRegexpMatches(log_calls[2][0], 'original read count:')
             self.assertEquals((6,), log_calls[2][1])
+
             self.assertRegexpMatches(log_calls[3][0], 'consensus read count:')
             self.assertEquals((4,), log_calls[3][1])
-            self.assertRegexpMatches(log_calls[4][0],
+
+            self.assertRegexpMatches(log_calls[4][0], 'non-canonical tag count:')
+            self.assertEquals((0,), log_calls[4][1])
+
+            self.assertRegexpMatches(log_calls[5][0],
                                      'consensus/original:')
-            self.assertEquals((4 / 6,), log_calls[4][1])
-            self.assertEquals("sorting and indexing bam", log_calls[5][0])
-            self.assertEquals((output_bam,), log_calls[6][1])
-            self.assertEquals("connor complete", log_calls[7][0])
+            self.assertEquals((4 / 6,), log_calls[5][1])
+
+            self.assertEquals("sorting and indexing bam", log_calls[6][0])
+
+            self.assertEquals((output_bam,), log_calls[7][1])
+
+            self.assertEquals("connor complete", log_calls[8][0])
 
     def test_distinctPairStartsAreNotCombined(self):
         sam_contents = \
