@@ -37,7 +37,7 @@ except NameError:
 
 try:
     iter_map = itertools.imap
-except NameError:
+except AttributeError:
     iter_map = map
 
 
