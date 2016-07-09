@@ -20,7 +20,7 @@ import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
-from itertools import imap
+import itertools
 import operator
 import os
 import sys
@@ -34,6 +34,12 @@ try:
     xrange
 except NameError:
     xrange = range
+
+try:
+    iter_map = itertools.imap
+except AttributeError:
+    iter_map = map
+
 
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
@@ -294,7 +300,7 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
 
 def _hamming_dist(str1, str2):
     assert len(str1) == len(str2)
-    return sum(imap(operator.ne, str1, str2))
+    return sum(iter_map(operator.ne, str1, str2))
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
