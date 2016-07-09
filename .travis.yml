@@ -3,6 +3,9 @@ python:
     - "2.7"
     - "3.4"
 env:
+    global:
+        - COVERALLS_PARALLEL=true
+
     matrix:
     - PYSAM_VERSION=0.8.4
     - PYSAM_VERSION=0.9.0
@@ -16,11 +19,19 @@ install:
     - pip install -vvv --use-wheel --find-links=./ pysam==$PYSAM_VERSION
     - pip install -r requirements.txt
 
+before_script:
+    - pip install coverage
+    - pip install coveralls
+
 script:
     - nosetests --with-coverage --verbose --cover-package=connor
 #    - nosetests examples
 
+after_success:
+    - coveralls
+
 notifications:
+    webhooks: https://coveralls.io/webhook?repo_token=BQacsoIZhQWW5Z0zJDxK7h0Dl1VzySRJB
     email:
         - bfx-connor@umich.edu
 
