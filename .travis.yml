@@ -29,6 +29,7 @@ after_success:
     - coveralls
 
 notifications:
+    webhooks: https://coveralls.io/webhook?repo_token=gjCJEFWDp80kULHoFUZph5PQekEtFDCDj
     email:
         - bfx-connor@umich.edu
 
