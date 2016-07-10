@@ -28,10 +28,10 @@ script:
 #    - nosetests examples
 
 after_success:
-    - coveralls
+    coveralls
 
 notifications:
-    webhooks: https://coveralls.io/webhook?repo_token=BQacsoIZhQWW5Z0zJDxK7h0Dl1VzySRJB
+#    webhooks: https://coveralls.io/webhook?repo_token=BQacsoIZhQWW5Z0zJDxK7h0Dl1VzySRJB
     email:
         - bfx-connor@umich.edu
 
