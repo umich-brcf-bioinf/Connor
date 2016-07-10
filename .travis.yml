@@ -18,8 +18,6 @@ install:
     - pip install `grep cython requirements.txt`
     - pip install -vvv --use-wheel --find-links=./ pysam==$PYSAM_VERSION
     - pip install -r requirements.txt
-
-before_script:
     - pip install coverage
     - pip install coveralls
 
@@ -28,10 +26,9 @@ script:
 #    - nosetests examples
 
 after_success:
-    coveralls
+    - coveralls
 
 notifications:
-#    webhooks: https://coveralls.io/webhook?repo_token=BQacsoIZhQWW5Z0zJDxK7h0Dl1VzySRJB
     email:
         - bfx-connor@umich.edu
 
