@@ -155,7 +155,9 @@ class TagFamily(object):
                  list_of_alignments,
                  consensus_threshold=DEFAULT_CONSENSUS_THRESHOLD):
         self.umi = umi
-        dominant_cigar = TagFamily._generate_dominant_cigar_pair(list_of_alignments)
+        self.input_alignment_count = len(list_of_alignments)
+        (self.distinct_cigar_count,
+         dominant_cigar) = TagFamily._generate_dominant_cigar_stats(list_of_alignments)
         self.alignments = TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
                                                                        list_of_alignments)
         #Necessary to make output deterministic
@@ -198,9 +200,11 @@ class TagFamily(object):
         return consensus_quality
     
     @staticmethod
-    def _generate_dominant_cigar_pair(list_of_alignments):
+    def _generate_dominant_cigar_stats(list_of_alignments):
         counter = Counter([TagFamily._get_cigarstring_tuple(s) for s in list_of_alignments])
-        return counter.most_common(1)[0][0]
+        number_distict_cigars = len(counter)
+        dominant_cigar = counter.most_common(1)[0][0]
+        return number_distict_cigars, dominant_cigar
 
 
     #TODO: (cgates) tags should not assume umi is a tuple and symmetric between left and right 
@@ -371,7 +375,7 @@ def _process_tag_families(tag_families, outfile):
             global consensus_read_count
             consensus_read_count += 2
 
-class TagFamilyStatHandler(object):
+class FamilySizeStatHandler(object):
     def __init__(self):
         self.family_original_read_counts = []
         self.min = None
@@ -401,6 +405,36 @@ class TagFamilyStatHandler(object):
         self.quartile_3 = summary['75%']
 
 
+class CigarStatHandler(object):
+    def __init__(self):
+        self.distinct_cigar_counts = []
+        self.min = None
+        self.quartile_1 = None
+        self.median = None
+        self.quartile_3 = None
+        self.max = None
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+            self.distinct_cigar_counts.append(tag_family.distinct_cigar_count)
+
+    @property
+    def summary(self):
+        return (self.min,
+                self.quartile_1,
+                self.median,
+                self.quartile_3,
+                self.max)
+
+    def end(self):
+        summary = pd.Series(self.distinct_cigar_counts).describe()
+        self.min = summary['min']
+        self.max = summary['max']
+        self.median = summary['50%']
+        self.quartile_1 = summary['25%']
+        self.quartile_3 = summary['75%']
+
+
 #TODO cgates: check that input file exists and output file does not
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
@@ -422,7 +456,8 @@ def main(command_line_args=None):
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
 
-        tag_family_stat_handler = TagFamilyStatHandler()
+        family_size_stat_handler = FamilySizeStatHandler()
+        cigar_stat_handler = CigarStatHandler()
 
         global consensus_read_count
         consensus_read_count = 0
@@ -434,18 +469,21 @@ def main(command_line_args=None):
             ranked_tags = _rank_tags(coord_family)
             tag_families = _build_tag_families(coord_family, ranked_tags)
             _process_tag_families(tag_families, outfile)
-            tag_family_stat_handler.handle(tag_families)
+            family_size_stat_handler.handle(tag_families)
+            cigar_stat_handler.handle(tag_families)
 
-        tag_family_stat_handler.end()
+        family_size_stat_handler.end()
+        cigar_stat_handler.end()
         _log('tag family count stats (min, 1Q, median, 3Q, max): {}',
-             ', '.join(map(str, tag_family_stat_handler.summary)))
+             ', '.join(map(str, family_size_stat_handler.summary)))
         _log('consensus read count: {}', consensus_read_count)
         _log('non-canonical tag count: {}', noncanonical_tag_count)
         _log('consensus/original: {:.4f}',
              consensus_read_count / original_read_count)
         outfile.close()
         bamfile.close()
-
+        _log('family cigar stats (min, 1Q, median, 3Q, max): {}',
+             ', '.join(map(str, cigar_stat_handler.summary)))
         _log('sorting and indexing bam')
         _sort_and_index_bam(args.output_bam)
 
