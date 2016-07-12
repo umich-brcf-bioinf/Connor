@@ -8,6 +8,11 @@ Command-line tool to deduplicate reads in bam files based on custom inline barco
     :target: https://travis-ci.com/umich-brcf-bioinf/Connor
     :alt: Build Status
 
+.. image:: https://coveralls.io/repos/github/umich-brcf-bioinf/Connor/badge.svg?branch=develop
+    :target: https://coveralls.io/github/umich-brcf-bioinf/Connor?branch=develop
+    :alt: Coverage Status
+
+
 The official repository is at:
 https://github.com/umich-brcf-bioinf/Connor
 
