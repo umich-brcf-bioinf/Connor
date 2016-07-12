@@ -313,10 +313,10 @@ class TagFamiliyTest(unittest.TestCase):
 
 
 class TagFamilyStatHandlerTest(unittest.TestCase):
-    def test_end(self):
-        posAfam1 = MicroMock(alignments=[1,2])
-        posAfam2 = MicroMock(alignments=[1,2,3])
-        posBfam1 = MicroMock(alignments=[1,2,3,4,5])
+    def test_end_min(self):
+        posAfam1 = MicroMock(alignments=[1,1])
+        posAfam2 = MicroMock(alignments=[1,1,1])
+        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
         stat_handler = TagFamilyStatHandler()
 
         stat_handler.handle([posAfam1, posAfam2])
@@ -324,6 +324,56 @@ class TagFamilyStatHandlerTest(unittest.TestCase):
         stat_handler.end()
 
         self.assertEqual(2, stat_handler.min)
+
+    def test_end_max(self):
+        posAfam1 = MicroMock(alignments=[1,1])
+        posAfam2 = MicroMock(alignments=[1,1,1])
+        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
+        stat_handler = TagFamilyStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.handle([posBfam1])
+        stat_handler.end()
+
+        self.assertEqual(5, stat_handler.max)
+        
+    def test_end_median(self):
+        posAfam1 = MicroMock(alignments=[1,1])
+        posAfam2 = MicroMock(alignments=[1,1,1])
+        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
+        stat_handler = TagFamilyStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.handle([posBfam1])
+        stat_handler.end()
+
+        self.assertEqual(3, stat_handler.median)
+        
+    def test_end_quantiles(self):
+        posAfam1 = MicroMock(alignments=[1,1])
+        posAfam2 = MicroMock(alignments=[1,1,1])
+        posBfam1 = MicroMock(alignments=[1,1,1,1,1,1,1,1,1])
+        posBfam2 = MicroMock(alignments=[1,1,1,1,1,1,1,1,1,1,1,1])
+        posBfam3 = MicroMock(alignments=[1,1,1,1,1,1,1,1])
+        stat_handler = TagFamilyStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.handle([posBfam1, posBfam2, posBfam3])
+        stat_handler.end()
+
+        self.assertEqual(3, stat_handler.quartile_1)
+        self.assertEqual(9, stat_handler.quartile_3)
+
+    def test_summary(self):
+        stat_handler = TagFamilyStatHandler()
+        stat_handler.min = 1
+        stat_handler.quartile_1 = 2
+        stat_handler.median = 3
+        stat_handler.quartile_3 = 4
+        stat_handler.max = 5
+
+        self.assertEquals((1,2,3,4,5), stat_handler.summary)
+
 
 
 class ConnorTest(unittest.TestCase):
@@ -741,21 +791,24 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             self.assertRegexpMatches(log_calls[2][0], 'original read count:')
             self.assertEquals((6,), log_calls[2][1])
 
-            self.assertRegexpMatches(log_calls[3][0], 'consensus read count:')
-            self.assertEquals((4,), log_calls[3][1])
+            self.assertRegexpMatches(log_calls[3][0], 'tag family count stats')
+            self.assertEquals(('1.0, 1.25, 1.5, 1.75, 2.0',), log_calls[3][1])
 
-            self.assertRegexpMatches(log_calls[4][0], 'non-canonical tag count:')
-            self.assertEquals((0,), log_calls[4][1])
+            self.assertRegexpMatches(log_calls[4][0], 'consensus read count:')
+            self.assertEquals((4,), log_calls[4][1])
 
-            self.assertRegexpMatches(log_calls[5][0],
+            self.assertRegexpMatches(log_calls[5][0], 'non-canonical tag count:')
+            self.assertEquals((0,), log_calls[5][1])
+
+            self.assertRegexpMatches(log_calls[6][0],
                                      'consensus/original:')
-            self.assertEquals((4 / 6,), log_calls[5][1])
+            self.assertEquals((4 / 6,), log_calls[6][1])
 
-            self.assertEquals("sorting and indexing bam", log_calls[6][0])
+            self.assertEquals("sorting and indexing bam", log_calls[7][0])
 
-            self.assertEquals((output_bam,), log_calls[7][1])
+            self.assertEquals((output_bam,), log_calls[8][1])
 
-            self.assertEquals("connor complete", log_calls[8][0])
+            self.assertEquals("connor complete", log_calls[9][0])
 
     def test_distinctPairStartsAreNotCombined(self):
         sam_contents = \

@@ -25,6 +25,8 @@ import operator
 import os
 import sys
 import traceback
+
+import pandas as pd
 import pysam
 import connor.samtools
 
@@ -382,11 +384,22 @@ class TagFamilyStatHandler(object):
         for tag_family in tag_families:
             self.family_original_read_counts.append(len(tag_family.alignments))
 
+    @property
+    def summary(self):
+        return (self.min,
+                self.quartile_1,
+                self.median,
+                self.quartile_3,
+                self.max)
+
     def end(self):
-        self.min = min(self.family_original_read_counts)
-        #calc summary stats
-        #_log('tag family (min, 1Q, median, 3Q, max): {}',
-        #     tag_family_stat_handler.summary)
+        summary = pd.Series(self.family_original_read_counts).describe()
+        self.min = summary['min']
+        self.max = summary['max']
+        self.median = summary['50%']
+        self.quartile_1 = summary['25%']
+        self.quartile_3 = summary['75%']
+
 
 #TODO cgates: check that input file exists and output file does not
 def main(command_line_args=None):
@@ -409,7 +422,7 @@ def main(command_line_args=None):
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
 
-        #tag_family_stat_handler = TagFamilyStatHandler()
+        tag_family_stat_handler = TagFamilyStatHandler()
 
         global consensus_read_count
         consensus_read_count = 0
@@ -421,9 +434,11 @@ def main(command_line_args=None):
             ranked_tags = _rank_tags(coord_family)
             tag_families = _build_tag_families(coord_family, ranked_tags)
             _process_tag_families(tag_families, outfile)
-            #tag_family_stat_handler.handle(tag_families)
+            tag_family_stat_handler.handle(tag_families)
 
-        #tag_family_stat_handler.end()
+        tag_family_stat_handler.end()
+        _log('tag family count stats (min, 1Q, median, 3Q, max): {}',
+             ', '.join(map(str, tag_family_stat_handler.summary)))
         _log('consensus read count: {}', consensus_read_count)
         _log('non-canonical tag count: {}', noncanonical_tag_count)
         _log('consensus/original: {:.4f}',
