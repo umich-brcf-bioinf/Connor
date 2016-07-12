@@ -25,6 +25,8 @@ import operator
 import os
 import sys
 import traceback
+
+import pandas as pd
 import pysam
 import connor.samtools
 
@@ -54,6 +56,7 @@ original reads.
 '''
 
 noncanonical_tag_count = 0
+consensus_read_count = 0
 
 class _ConnorUsageError(Exception):
     """Raised for malformed command or invalid arguments."""
@@ -357,7 +360,46 @@ def build_lightweight_pairs(aligned_segments):
             new_pair = LightweightPair(name_pairs.pop(query_name), align_segment)
             lightweight_pairs.append(new_pair)
     return lightweight_pairs
-    
+
+#TODO: cgates: you should add tests for this method
+def _process_tag_families(tag_families, outfile):
+    for tag_family in tag_families:
+        if len(tag_family.alignments) >= MIN_ORIG_READS:
+            consensus_pair = tag_family.consensus
+            outfile.write(consensus_pair.left_alignment)
+            outfile.write(consensus_pair.right_alignment)
+            global consensus_read_count
+            consensus_read_count += 2
+
+class TagFamilyStatHandler(object):
+    def __init__(self):
+        self.family_original_read_counts = []
+        self.min = None
+        self.quartile_1 = None
+        self.median = None
+        self.quartile_3 = None
+        self.max = None
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+            self.family_original_read_counts.append(len(tag_family.alignments))
+
+    @property
+    def summary(self):
+        return (self.min,
+                self.quartile_1,
+                self.median,
+                self.quartile_3,
+                self.max)
+
+    def end(self):
+        summary = pd.Series(self.family_original_read_counts).describe()
+        self.min = summary['min']
+        self.max = summary['max']
+        self.median = summary['50%']
+        self.quartile_1 = summary['25%']
+        self.quartile_3 = summary['75%']
+
 
 #TODO cgates: check that input file exists and output file does not
 def main(command_line_args=None):
@@ -379,26 +421,34 @@ def main(command_line_args=None):
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
+
+        tag_family_stat_handler = TagFamilyStatHandler()
+
+        global consensus_read_count
         consensus_read_count = 0
+        global noncanonical_tag_count
+        noncanonical_tag_count = 0
+
         for coord_family in _build_coordinate_families(bamfile.fetch(),
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
-            for tag_family in _build_tag_families(coord_family, ranked_tags):
-                if len(tag_family.alignments) >= MIN_ORIG_READS:
-                    consensus_pair = tag_family.consensus
-                    outfile.write(consensus_pair.left_alignment)
-                    outfile.write(consensus_pair.right_alignment)
-                    consensus_read_count += 2
+            tag_families = _build_tag_families(coord_family, ranked_tags)
+            _process_tag_families(tag_families, outfile)
+            tag_family_stat_handler.handle(tag_families)
+
+        tag_family_stat_handler.end()
+        _log('tag family count stats (min, 1Q, median, 3Q, max): {}',
+             ', '.join(map(str, tag_family_stat_handler.summary)))
         _log('consensus read count: {}', consensus_read_count)
         _log('non-canonical tag count: {}', noncanonical_tag_count)
         _log('consensus/original: {:.4f}',
              consensus_read_count / original_read_count)
         outfile.close()
         bamfile.close()
-    
+
         _log('sorting and indexing bam')
         _sort_and_index_bam(args.output_bam)
-    
+
         _log('wrote deduped bam [{}]', args.output_bam)
         _log('connor complete')
     except _ConnorUsageError as usage_error:
