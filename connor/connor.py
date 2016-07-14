@@ -230,7 +230,7 @@ class TagFamily(object):
         self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
-
+#TODO: (cgates): make this into a handler
     def _add_tags(self, consensus_align, num_alignments):
         x0 = "{0}|{1}".format(self.umi[0], self.umi[1])
         x2 = "{0},{1}".format(consensus_align.left_alignment.reference_start + 1,
@@ -419,6 +419,8 @@ class CigarStatHandler(object):
         self.total_input_alignment_count = 0
         self.total_alignment_count = 0
         self.total_family_count = 0
+        self.families_with_multiple_cigar_count = 0
+
 
     def handle(self, tag_families):
         for tag_family in tag_families:
@@ -426,6 +428,8 @@ class CigarStatHandler(object):
             self.total_input_alignment_count += tag_family.input_alignment_count
             self.total_alignment_count += len(tag_family.alignments)
             self.total_family_count += 1
+            if tag_family.distinct_cigar_count > 1:
+                self.families_with_multiple_cigar_count += 1
 
     @property
     def percent_deduplication(self):
@@ -515,18 +519,21 @@ def main(command_line_args=None):
         match_stat_handler.end()
         _log('family distribution of original pair counts (min, 1Q, median, 3Q, max): {}',
              ', '.join(map(str, family_size_stat_handler.summary)))
-        _log('{}/{} ({:.2f}%) pairs were excluded by minority CIGAR',
+        _log('{}/{} ({:.2f}%) families had > 1 CIGAR; {}/{} ({:.2f}%) pairs were excluded as minority CIGAR',
+             cigar_stat_handler.families_with_multiple_cigar_count,
+             cigar_stat_handler.total_family_count,
+             100 * cigar_stat_handler.families_with_multiple_cigar_count / cigar_stat_handler.total_family_count,
              cigar_stat_handler.total_excluded_alignments,
              cigar_stat_handler.total_input_alignment_count,
              100 * cigar_stat_handler.percent_excluded_alignments)
-        _log('family distribution of distinct CIGAR counts(min, 1Q, median, 3Q, max): {}',
-             ', '.join(map(str, cigar_stat_handler.summary)))
-        _log(('{} original pairs were deduplicated to {} read families '
+#         _log('family distribution of distinct CIGAR counts(min, 1Q, median, 3Q, max): {}',
+#              ', '.join(map(str, cigar_stat_handler.summary)))
+        _log(('{} original pairs were deduplicated to {} families '
               '(dedup rate {:.2f}%)'),
               cigar_stat_handler.total_alignment_count,
               cigar_stat_handler.total_family_count,
               100 * cigar_stat_handler.percent_deduplication)
-        _log(('{}/{} ({:.2f}%) original reads were included by Hamming '
+        _log(('{}/{} ({:.2f}%) original pairs matched by Hamming '
               'distance threshold (<={}) on left or right UMI '),
              match_stat_handler.total_inexact_match_count,
              match_stat_handler.total_pair_count,

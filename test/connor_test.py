@@ -1039,20 +1039,21 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             self.assertRegexpMatches(log_calls[line][0], 'family distribution of original pair counts')
             self.assertEquals(('1.0, 1.25, 1.5, 1.75, 2.0',), log_calls[line][1])
 
+#TODO: (cgates): Unclear if this is actually a useful stat
+#             line += 1
+#             self.assertRegexpMatches(log_calls[line][0], 'family distribution of distinct CIGAR counts')
+#             self.assertEquals(('1.0, 1.0, 1.0, 1.0, 1.0',), log_calls[line][1])
+
             line += 1
             self.assertRegexpMatches(log_calls[line][0], 'pairs were excluded.*CIGAR')
-            self.assertEquals((0, 3, 0.0), log_calls[line][1])
+            self.assertEquals((0,2, 0.0, 0, 3, 0.0), log_calls[line][1])
 
             line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'family distribution of distinct CIGAR counts')
-            self.assertEquals(('1.0, 1.0, 1.0, 1.0, 1.0',), log_calls[line][1])
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'original pairs were deduplicated to .* read families')
+            self.assertRegexpMatches(log_calls[line][0], 'original pairs were deduplicated to .* families')
             self.assertEquals((3,2, 100/3), log_calls[line][1])
 
             line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'original reads were included by Hamming distance threshold')
+            self.assertRegexpMatches(log_calls[line][0], 'original pairs matched by Hamming distance threshold')
             self.assertEquals((0, 3, 0.0, 1), log_calls[line][1])
 
             line += 1
