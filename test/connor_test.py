@@ -9,8 +9,9 @@ import pysam
 from testfixtures.tempdirectory import TempDirectory
 from connor import connor
 from connor import samtools
-from connor.connor import FamilySizeStatHandler
 from connor.connor import CigarStatHandler
+from connor.connor import FamilySizeStatHandler
+from connor.connor import MatchStatHandler
 
 class MockLogger(object):
     def __init__(self):
@@ -181,24 +182,31 @@ class PairedAlignmentTest(unittest.TestCase):
 
 class TagFamiliyTest(unittest.TestCase):
     
-    def test_build_tag_family(self):
+    def test_init(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
         alignments = [pair1, pair2, pair3]
+        inexact_match_count = 42
 
         input_umi = "AAANNNCCCNNN"
-        actual_tag_family = connor.TagFamily(input_umi, alignments)
+        actual_tag_family = connor.TagFamily(input_umi,
+                                             alignments,
+                                             inexact_match_count)
 
         self.assertEquals(input_umi, actual_tag_family.umi)
         self.assertEquals(alignments, actual_tag_family.alignments)
+        self.assertEquals(42, actual_tag_family.inexact_match_count)
 
 
     def test_consensus_rewrites_umi(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
         input_umis = ("AAA", "CCC")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, [pair1])
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             [pair1], 
+                                             inexact_match_count)
         actual_consensus = actual_tag_family.consensus
 
         self.assertEquals(input_umis, actual_consensus.umi)
@@ -213,8 +221,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count)
         actual_consensus_seq = actual_tag_family.consensus
 
         self.assertEquals("nnnGGG",
@@ -245,8 +256,12 @@ class TagFamiliyTest(unittest.TestCase):
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
         threshold = 0.8
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments, threshold)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count,
+                                             threshold)
         consensus_pair = actual_tag_family.consensus
 
         self.assertEquals("nnnGNG",
@@ -266,8 +281,10 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.query_qualities = [5, 15, 5 , 15, 15, 15]
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+
+        actual_tag_family = connor.TagFamily(input_umis, alignments, inexact_match_count)
         paired_consensus = actual_tag_family.consensus
 
         self.assertEquals([30, 20, 30, 30, 30, 30],
@@ -287,8 +304,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.cigarstring = "3S3M"
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count)
 
         actual_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
         self.assertEquals(['alignA','alignB','alignC'], actual_names)
@@ -305,8 +325,9 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.cigarstring = "3S3M"
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis, alignments, inexact_match_count)
 
         actual_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
         self.assertEquals(['alignA','alignB'], actual_names)
@@ -324,8 +345,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.cigarstring = "3S3I"
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments, 
+                                             inexact_match_count)
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
@@ -341,8 +365,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.cigarstring = "3S3M"
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count)
 
         self.assertEquals(1, actual_tag_family.distinct_cigar_count)
 
@@ -358,8 +385,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.cigarstring = "3S3M"
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count)
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
@@ -375,8 +405,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3.right_alignment.cigarstring = "3S3M"
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
 
-        actual_tag_family = connor.TagFamily(input_umis, alignments)
+        actual_tag_family = connor.TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count)
 
         self.assertEquals(3, actual_tag_family.input_alignment_count)
 
@@ -444,11 +477,86 @@ class FamilySizeStatHandlerTest(unittest.TestCase):
         self.assertEquals((1,2,3,4,5), stat_handler.summary)
 
 
+def mock_tag_family(input_alignment_count=5,
+                    alignments=None,
+                    distinct_cigar_count=1,
+                    inexact_match_count=0):
+    if alignments is None:
+        alignments = [1,2,3,4]
+    return MicroMock(input_alignment_count=input_alignment_count,
+                     alignments=alignments,
+                     distinct_cigar_count=distinct_cigar_count,
+                     inexact_match_count=inexact_match_count)
+
+
+class MatchStatHandlerTest(unittest.TestCase):
+    def test_total_inexact_match_count(self):
+        stat_handler = MatchStatHandler()
+        posAfam1 = mock_tag_family(alignments=[1] * 5,
+                                   inexact_match_count=1)
+        posAfam2 = mock_tag_family(alignments=[1] * 15,
+                                   inexact_match_count=4)
+ 
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.end()
+
+        self.assertEquals(5, stat_handler.total_inexact_match_count)
+        self.assertEquals(20, stat_handler.total_pair_count)
+        self.assertEquals(5/20, stat_handler.percent_inexact_match)
+
+
 class CigarsStatHandlerTest(unittest.TestCase):
+    def test_percent_deduplication(self):
+        posAfam1 = mock_tag_family(input_alignment_count=1,
+                                   alignments = [1] * 1)
+        posAfam2 = mock_tag_family(input_alignment_count=2,
+                                   alignments = [1] * 2)
+        posAfam3 = mock_tag_family(input_alignment_count=2,
+                                   alignments = [1] * 2)
+        stat_handler = CigarStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2, posAfam3])
+        stat_handler.end()
+
+        expected = 1 - (3/5)
+        self.assertEquals(expected, stat_handler.percent_deduplication)
+
+    def test_total_input_alignment_allCounted(self):
+        posAfam1 = mock_tag_family(input_alignment_count=1,
+                                   alignments = [1] * 1)
+        posAfam2 = mock_tag_family(input_alignment_count=2,
+                                   alignments = [1] * 2)
+        stat_handler = CigarStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.end()
+
+        self.assertEquals(3, stat_handler.total_input_alignment_count)
+        self.assertEquals(3, stat_handler.total_alignment_count)
+        self.assertEquals(0, stat_handler.total_excluded_alignments)
+        self.assertEquals(0, stat_handler.percent_excluded_alignments)
+
+    def test_total_input_alignment_someCounted(self):
+        posAfam1 = mock_tag_family(input_alignment_count=3,
+                                   alignments = [1] * 3)
+        posAfam2 = mock_tag_family(input_alignment_count=2,
+                                   alignments = [1] * 1)
+        stat_handler = CigarStatHandler()
+
+        stat_handler.handle([posAfam1, posAfam2])
+        stat_handler.end()
+
+        self.assertEquals(5, stat_handler.total_input_alignment_count)
+        self.assertEquals(4, stat_handler.total_alignment_count)
+        self.assertEquals(1, stat_handler.total_excluded_alignments)
+        self.assertEquals(0.2, stat_handler.percent_excluded_alignments)
+
+
+    
     def test_end_min(self):
-        posAfam1 = MicroMock(distinct_cigar_count=1)
-        posAfam2 = MicroMock(distinct_cigar_count=2)
-        posBfam1 = MicroMock(distinct_cigar_count=4)
+        posAfam1 = mock_tag_family(distinct_cigar_count=1)
+        posAfam2 = mock_tag_family(distinct_cigar_count=2)
+        posBfam1 = mock_tag_family(distinct_cigar_count=4)
         stat_handler = CigarStatHandler()
 
         stat_handler.handle([posAfam1, posAfam2])
@@ -458,9 +566,9 @@ class CigarsStatHandlerTest(unittest.TestCase):
         self.assertEqual(1, stat_handler.min)
 
     def test_end_max(self):
-        posAfam1 = MicroMock(distinct_cigar_count=1)
-        posAfam2 = MicroMock(distinct_cigar_count=2)
-        posBfam1 = MicroMock(distinct_cigar_count=4)
+        posAfam1 = mock_tag_family(distinct_cigar_count=1)
+        posAfam2 = mock_tag_family(distinct_cigar_count=2)
+        posBfam1 = mock_tag_family(distinct_cigar_count=4)
         stat_handler = CigarStatHandler()
 
         stat_handler.handle([posAfam1, posAfam2])
@@ -470,9 +578,9 @@ class CigarsStatHandlerTest(unittest.TestCase):
         self.assertEqual(4, stat_handler.max)
 
     def test_end_median(self):
-        posAfam1 = MicroMock(distinct_cigar_count=1)
-        posAfam2 = MicroMock(distinct_cigar_count=2)
-        posBfam1 = MicroMock(distinct_cigar_count=4)
+        posAfam1 = mock_tag_family(distinct_cigar_count=1)
+        posAfam2 = mock_tag_family(distinct_cigar_count=2)
+        posBfam1 = mock_tag_family(distinct_cigar_count=4)
         stat_handler = CigarStatHandler()
 
         stat_handler.handle([posAfam1, posAfam2])
@@ -482,11 +590,11 @@ class CigarsStatHandlerTest(unittest.TestCase):
         self.assertEqual(2, stat_handler.median)
 
     def test_end_quantiles(self):
-        posAfam1 = MicroMock(distinct_cigar_count=2)
-        posAfam2 = MicroMock(distinct_cigar_count=3)
-        posBfam1 = MicroMock(distinct_cigar_count=9)
-        posBfam2 = MicroMock(distinct_cigar_count=12)
-        posBfam3 = MicroMock(distinct_cigar_count=7)
+        posAfam1 = mock_tag_family(distinct_cigar_count=2)
+        posAfam2 = mock_tag_family(distinct_cigar_count=3)
+        posBfam1 = mock_tag_family(distinct_cigar_count=9)
+        posBfam2 = mock_tag_family(distinct_cigar_count=12)
+        posBfam3 = mock_tag_family(distinct_cigar_count=7)
 
         stat_handler = CigarStatHandler()
 
@@ -695,26 +803,26 @@ class ConnorTest(unittest.TestCase):
 
         self.assertEquals(0, len(actual_tag_fam_list))
 
-    def test_build_tag_families_noncanonical_iterator_fuzzy_counted(self):
+    def test_build_tag_families_inexact_match_fuzzy_counted(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNNNN')
 
-        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+        families = connor._build_tag_families([pair1], [('AAA', 'CCC')])
 
-        self.assertEquals(1, connor.noncanonical_tag_count)
+        self.assertEquals(1, next(iter(families)).inexact_match_count)
 
-    def test_build_tag_families_noncanonical_iterator_halfmatched_counted(self):
+    def test_build_tag_families_inexact_match_halfmatched_counted(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNNNN')
 
-        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+        families = connor._build_tag_families([pair1], [('AAA', 'CCC')])
 
-        self.assertEquals(1, connor.noncanonical_tag_count)
+        self.assertEquals(1, next(iter(families)).inexact_match_count)
 
-    def test_build_tag_families_noncanonical_iterator_not_counted(self):
+    def test_build_tag_families_inexact_match_not_counted(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
 
-        connor._build_tag_families([pair1], [('AAA', 'CCC')])
+        families = connor._build_tag_families([pair1], [('AAA', 'CCC')])
 
-        self.assertEquals(0, connor.noncanonical_tag_count)
+        self.assertEquals(0, next(iter(families)).inexact_match_count)
 
 
     def test_hamming_distance_trivial(self):
@@ -918,35 +1026,34 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             log_calls = self.mock_logger._log_calls
 
             line = 0
-            self.assertEquals("connor begins", log_calls[line][0])
+            self.assertRegexpMatches(log_calls[line][0], "connor begins")
 
             line += 1
             self.assertEquals((input_bam,), log_calls[line][1])
 
             line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'original read count:')
+            self.assertRegexpMatches(log_calls[line][0], 'original reads')
             self.assertEquals((6,), log_calls[line][1])
 
             line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'tag family count stats')
+            self.assertRegexpMatches(log_calls[line][0], 'family distribution of original pair counts')
             self.assertEquals(('1.0, 1.25, 1.5, 1.75, 2.0',), log_calls[line][1])
 
             line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'consensus read count:')
-            self.assertEquals((4,), log_calls[line][1])
+            self.assertRegexpMatches(log_calls[line][0], 'pairs were excluded.*CIGAR')
+            self.assertEquals((0, 3, 0.0), log_calls[line][1])
 
             line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'non-canonical tag count:')
-            self.assertEquals((0,), log_calls[line][1])
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0],
-                                     'consensus/original:')
-            self.assertEquals((4 / 6,), log_calls[line][1])
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'family cigar stats')
+            self.assertRegexpMatches(log_calls[line][0], 'family distribution of distinct CIGAR counts')
             self.assertEquals(('1.0, 1.0, 1.0, 1.0, 1.0',), log_calls[line][1])
+
+            line += 1
+            self.assertRegexpMatches(log_calls[line][0], 'original pairs were deduplicated to .* read families')
+            self.assertEquals((3,2, 100/3), log_calls[line][1])
+
+            line += 1
+            self.assertRegexpMatches(log_calls[line][0], 'original reads were included by Hamming distance threshold')
+            self.assertEquals((0, 3, 0.0, 1), log_calls[line][1])
 
             line += 1
             self.assertEquals("sorting and indexing bam", log_calls[line][0])
