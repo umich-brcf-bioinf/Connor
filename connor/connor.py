@@ -147,11 +147,14 @@ class _PairedAlignment(object):
 
 
 class _TagFamily(object):
+    umi_sequence = 0
     def __init__(self,
                  umi,
                  list_of_alignments,
                  inexact_match_count,
                  consensus_threshold):
+        self.umi_sequence = _TagFamily.umi_sequence
+        _TagFamily.umi_sequence += 1
         self.umi = umi
         self.input_alignment_count = len(list_of_alignments)
         (self.distinct_cigar_count,
@@ -244,22 +247,26 @@ class _TagFamily(object):
         self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
-#TODO: (cgates): make this into a handler
+#TODO: (cgates): please make this into a handler
     def _add_tags(self, consensus_align, num_alignments):
-        x0 = "{0}|{1}".format(self.umi[0], self.umi[1])
+        x0 = self.umi_sequence
+        x1 = "{0}|{1}".format(self.umi[0], self.umi[1])
         x2 = "{0},{1}".format(consensus_align.left_alignment.reference_start + 1,
                               consensus_align.right_alignment.reference_end)
         x3 = num_alignments
-        x4 = num_alignments < DEFAULT_MIN_ORIG_READS
-        consensus_align.left_alignment.set_tag("X0", x0, "Z")
+#TODO: (cgates): until you make this into a handler, the next line is a bug
+        x4 = str(num_alignments >= DEFAULT_MIN_ORIG_READS)
+        consensus_align.left_alignment.set_tag("X0", x0, "i")
+        consensus_align.left_alignment.set_tag("X1", x1, "Z")
         consensus_align.left_alignment.set_tag("X2", x2, "Z")
         consensus_align.left_alignment.set_tag("X3", x3, "i")
-        consensus_align.left_alignment.set_tag("X4", str(x4), "Z")
+        consensus_align.left_alignment.set_tag("X4", x4, "Z")
 
-        consensus_align.right_alignment.set_tag("X0", x0, "Z")
+        consensus_align.right_alignment.set_tag("X0", x0, "i")
+        consensus_align.right_alignment.set_tag("X1", x1, "Z")
         consensus_align.right_alignment.set_tag("X2", x2, "Z")
         consensus_align.right_alignment.set_tag("X3", x3, "i")
-        consensus_align.right_alignment.set_tag("X4", str(x4), "Z")
+        consensus_align.right_alignment.set_tag("X4", x4, "Z")
 
 def _build_coordinate_read_name_manifest(lw_aligns):
     '''Return a dict mapping coordinates to set of aligned querynames.
@@ -412,10 +419,10 @@ def build_lightweight_pairs(aligned_segments):
 class _WriteFamilyHandler(object):
     def __init__(self, output_file,
                  output_filename,
-                 min_original_pairs_theshold):
+                 min_original_pairs_threshold):
         self.output_file = output_file
         self.output_filename = output_filename
-        self.min_original_pairs_theshold = min_original_pairs_theshold
+        self.min_original_pairs_threshold = min_original_pairs_threshold
         self.included_family_count = 0
         self.excluded_family_count = 0
         self.total_alignment_count = 0
@@ -423,7 +430,7 @@ class _WriteFamilyHandler(object):
     def handle(self, tag_families):
         for tag_family in tag_families:
             self.total_alignment_count += len(tag_family.alignments)
-            if len(tag_family.alignments) >= self.min_original_pairs_theshold:
+            if len(tag_family.alignments) >= self.min_original_pairs_threshold:
                 consensus_pair = tag_family.consensus
                 self.output_file.write(consensus_pair.left_alignment)
                 self.output_file.write(consensus_pair.right_alignment)
@@ -439,7 +446,7 @@ class _WriteFamilyHandler(object):
              self.excluded_family_count,
              total_family_count,
              100 * self.excluded_family_count / total_family_count,
-             self.min_original_pairs_theshold)
+             self.min_original_pairs_threshold)
         dedup_percent = 100 * (1 - (self.included_family_count / self.total_alignment_count))
         _log(('INFO|{} original pairs were deduplicated to {} families '
               '(overall dedup rate {:.2f}%)'),
@@ -448,6 +455,59 @@ class _WriteFamilyHandler(object):
              dedup_percent)
         _log('INFO|{} families written to [{}]',
              self.included_family_count,
+             self.output_filename)
+
+
+class _WriteExcludedReadsHandler(object):
+    def __init__(self, output_file,
+                 output_filename,
+                 min_original_pairs_threshold):
+        self.output_file = output_file
+        self.output_filename = output_filename
+        self.total_alignment_count = 0
+        self.min_original_pairs_threshold = min_original_pairs_threshold
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+#             self.total_alignment_count += len(tag_family.alignments)
+            self.total_alignment_count += len(tag_family.excluded_alignments)
+            self.total_alignment_count += 1
+#             for pair in tag_family.alignments:
+#                 self.tag_reads(tag_family, pair, included=1)
+#                 self.output_file.write(pair.left_alignment)
+#                 self.output_file.write(pair.right_alignment)
+            self.tag_reads(tag_family, tag_family.consensus, included=1)
+            self.output_file.write(tag_family.consensus.left_alignment)
+            self.output_file.write(tag_family.consensus.right_alignment)
+            for pair in tag_family.excluded_alignments:
+                self.tag_reads(tag_family, pair, included=0)
+                self.output_file.write(pair.left_alignment)
+                self.output_file.write(pair.right_alignment)
+
+    def tag_reads(self, tag_family, original_pair, included):
+        x0 = tag_family.umi_sequence
+        x1 = "{0}|{1}".format(tag_family.umi[0], tag_family.umi[1])
+        x2 = "{0},{1}".format(original_pair.left_alignment.reference_start + 1,
+                              original_pair.right_alignment.reference_end)
+        x3 = len(tag_family.alignments)
+        x4 = str(x3 >= self.min_original_pairs_threshold)
+        original_pair.left_alignment.set_tag("X0", x0, "i")
+        original_pair.left_alignment.set_tag("X1", x1, "Z")
+        original_pair.left_alignment.set_tag("X2", x2, "Z")
+        original_pair.left_alignment.set_tag("X3", x3, "i")
+        original_pair.left_alignment.set_tag("X4", x4, "Z")
+        original_pair.left_alignment.set_tag("X5", included, "i")
+
+        original_pair.right_alignment.set_tag("X0", x0, "i")
+        original_pair.right_alignment.set_tag("X1", x1, "Z")
+        original_pair.right_alignment.set_tag("X2", x2, "Z")
+        original_pair.right_alignment.set_tag("X3", x3, "i")
+        original_pair.right_alignment.set_tag("X4", x4, "Z")
+        original_pair.right_alignment.set_tag("X5", included, "i")
+
+    def end(self):
+        _log('INFO|{} tagged original pairs written to [{}]',
+             self.total_alignment_count,
              self.output_filename)
 
 
@@ -643,6 +703,10 @@ def main(command_line_args=None):
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
+        original_tagged_filename = args.output_bam + ".excluded.bam"
+        outfile_original = pysam.AlignmentFile(original_tagged_filename,
+                                               'wb',
+                                               template=bamfile)
 
         handlers = [_FamilySizeStatHandler(),
                     _MatchStatHandler(args.umi_distance_threshold),
@@ -650,7 +714,10 @@ def main(command_line_args=None):
                     _CigarStatHandler(),
                     _WriteFamilyHandler(outfile,
                                         args.output_bam,
-                                        args.min_family_size_threshold)]
+                                        args.min_family_size_threshold),
+                    _WriteExcludedReadsHandler(outfile_original,
+                                               original_tagged_filename,
+                                               args.min_family_size_threshold)]
 
 #TODO: (cgates): switch all handlers to family-at-at-time handling
         for coord_family in _build_coordinate_families(bamfile.fetch(),
@@ -667,10 +734,13 @@ def main(command_line_args=None):
             handler.end()
 
         outfile.close()
+        outfile_original.close()
         bamfile.close()
 
-        _log('INFO|sorting and indexing bam')
+        _log('INFO|sorting and indexing [{}]', args.output_bam)
         _sort_and_index_bam(args.output_bam)
+        _log('INFO|sorting and indexing [{}]', original_tagged_filename)
+        _sort_and_index_bam(original_tagged_filename)
 
         _log('INFO|connor complete')
     except _ConnorUsageError as usage_error:

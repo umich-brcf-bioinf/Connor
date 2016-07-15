@@ -1197,7 +1197,14 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             self.assertRegexpMatches(log_calls[line][0], r'families written to')
 
             line += 1
-            self.assertEquals("INFO|sorting and indexing bam", log_calls[line][0])
+            self.assertRegexpMatches(log_calls[line][0], r'tagged original pairs written to')
+
+
+            line += 1
+            self.assertRegexpMatches(log_calls[line][0], r'sorting and indexing')
+
+            line += 1
+            self.assertRegexpMatches(log_calls[line][0], r'sorting and indexing')
 
             line += 1
             self.assertEquals("INFO|connor complete", log_calls[line][0])
