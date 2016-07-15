@@ -204,7 +204,8 @@ class TagFamiliyTest(unittest.TestCase):
         input_umi = "AAANNNCCCNNN"
         actual_tag_family = connor._TagFamily(input_umi,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(input_umi, actual_tag_family.umi)
         self.assertEquals(alignments, actual_tag_family.alignments)
@@ -218,7 +219,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              [pair1], 
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
         actual_consensus = actual_tag_family.consensus
 
         self.assertEquals(input_umis, actual_consensus.umi)
@@ -237,7 +239,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
         actual_consensus_seq = actual_tag_family.consensus
 
         self.assertEquals("nnnGGG",
@@ -251,9 +254,11 @@ class TagFamiliyTest(unittest.TestCase):
         pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
-        threshold = 1 / 2
 
-        actual_tag_family = connor._TagFamily(input_umis, alignments, threshold)
+        actual_tag_family = connor._TagFamily(input_umis,
+                                              alignments,
+                                              inexact_match_count=1,
+                                              consensus_threshold=0.5)
         consensus_pair = actual_tag_family.consensus
 
         self.assertEquals("nnnGTG",
@@ -296,7 +301,10 @@ class TagFamiliyTest(unittest.TestCase):
         inexact_match_count = 0
 
 
-        actual_tag_family = connor._TagFamily(input_umis, alignments, inexact_match_count)
+        actual_tag_family = connor._TagFamily(input_umis,
+                                               alignments,
+                                               inexact_match_count,
+                                               consensus_threshold=0.6)
         paired_consensus = actual_tag_family.consensus
 
         self.assertEquals([30, 20, 30, 30, 30, 30],
@@ -320,7 +328,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         included_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
         self.assertEquals(['alignA','alignB','alignC'], included_names)
@@ -343,7 +352,10 @@ class TagFamiliyTest(unittest.TestCase):
         input_umis = ("nnn", "nnn")
         inexact_match_count = 0
 
-        actual_tag_family = connor._TagFamily(input_umis, alignments, inexact_match_count)
+        actual_tag_family = connor._TagFamily(input_umis,
+                                              alignments,
+                                              inexact_match_count,
+                                              consensus_threshold=0.6)
 
         included_names = [a.left_alignment.query_name for a in actual_tag_family.alignments]
         self.assertEquals(['alignA','alignB'], included_names)
@@ -368,7 +380,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments, 
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
@@ -388,7 +401,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(1, actual_tag_family.distinct_cigar_count)
 
@@ -408,7 +422,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
@@ -428,7 +443,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(0, actual_tag_family.minority_cigar_percentage)
 
@@ -448,7 +464,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments, 
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(1/3, actual_tag_family.minority_cigar_percentage)
 
@@ -469,7 +486,8 @@ class TagFamiliyTest(unittest.TestCase):
 
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
-                                             inexact_match_count)
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
 
         self.assertEquals(3, actual_tag_family.input_alignment_count)
 
@@ -553,7 +571,7 @@ def mock_tag_family(input_alignment_count=5,
 
 class MatchStatHandlerTest(_BaseConnorTestCase):
     def test_total_inexact_match_count(self):
-        stat_handler = _MatchStatHandler()
+        stat_handler = _MatchStatHandler(hamming_threshold=1)
         posAfam1 = mock_tag_family(alignments=[1] * 5,
                                    inexact_match_count=1)
         posAfam2 = mock_tag_family(alignments=[1] * 15,
@@ -782,7 +800,9 @@ class ConnorTest(_BaseConnorTestCase):
         ranked_tags = [tag1, tag2]
 
         actual_tag_fam_list = connor._build_tag_families(paired_aligns,
-                                                         ranked_tags)
+                                                         ranked_tags,
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
         actual_tag_fam = {fam.umi:fam for fam in actual_tag_fam_list}
 
         self.assertEquals(2, len(actual_tag_fam))
@@ -804,7 +824,9 @@ class ConnorTest(_BaseConnorTestCase):
                        ('TTT', 'GGG')]
 
         actual_tag_fam_list = connor._build_tag_families(input_pairs,
-                                                         ranked_tags)
+                                                         ranked_tags,
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
         actual_tag_fam = {fam.umi:fam for fam in actual_tag_fam_list}
 
         self.assertEquals(set([pair1, pair2, pair3, pair4]),
@@ -816,7 +838,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(1, len(actual_tag_fam_list))
         self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
@@ -825,7 +849,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNNNN')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(1, len(actual_tag_fam_list))
         self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
@@ -834,7 +860,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'NNNNNN', 'NNNCCC')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(1, len(actual_tag_fam_list))
         self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
@@ -843,7 +871,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNNNN')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(1, len(actual_tag_fam_list))
         self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
@@ -852,7 +882,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'NNNNNN', 'NNNCCG')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(1, len(actual_tag_fam_list))
         self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
@@ -861,7 +893,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNCCG')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(1, len(actual_tag_fam_list))
         self.assertEquals([pair1], actual_tag_fam_list[0].alignments)
@@ -870,7 +904,9 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'NNNNNN', 'NNNNNN')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(0, len(actual_tag_fam_list))
 
@@ -878,28 +914,39 @@ class ConnorTest(_BaseConnorTestCase):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AGGNNN', 'NNNCGG')
 
         actual_tag_fam_list = connor._build_tag_families([pair1],
-                                                         [('AAA', 'CCC')])
+                                                         [('AAA', 'CCC')],
+                                                         hamming_threshold=1,
+                                                         consensus_threshold=0.6)
 
         self.assertEquals(0, len(actual_tag_fam_list))
 
     def test_build_tag_families_inexact_match_fuzzy_counted(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAGNNN', 'NNNNNN')
 
-        families = connor._build_tag_families([pair1], [('AAA', 'CCC')])
+        families = connor._build_tag_families([pair1],
+                                              [('AAA', 'CCC')],
+                                              hamming_threshold=1,
+                                              consensus_threshold=0.6)
 
         self.assertEquals(1, next(iter(families)).inexact_match_count)
 
     def test_build_tag_families_inexact_match_halfmatched_counted(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNNNN')
 
-        families = connor._build_tag_families([pair1], [('AAA', 'CCC')])
+        families = connor._build_tag_families([pair1],
+                                              [('AAA', 'CCC')],
+                                              hamming_threshold=1,
+                                              consensus_threshold=0.6)
 
         self.assertEquals(1, next(iter(families)).inexact_match_count)
 
     def test_build_tag_families_inexact_match_not_counted(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
 
-        families = connor._build_tag_families([pair1], [('AAA', 'CCC')])
+        families = connor._build_tag_families([pair1],
+                                              [('AAA', 'CCC')],
+                                              hamming_threshold=1,
+                                              consensus_threshold=0.6)
 
         self.assertEquals(0, next(iter(families)).inexact_match_count)
 
@@ -1048,11 +1095,11 @@ class TestLightweightAlignment(unittest.TestCase):
 class ConnorIntegrationTestCase(_BaseConnorTestCase):
     def setUp(self):
         super(ConnorIntegrationTestCase, self).setUp()
-        self.min_orig_reads =  connor.MIN_ORIG_READS
-        connor.MIN_ORIG_READS = 0
+        self.min_orig_reads =  connor.DEFAULT_MIN_ORIG_READS
+        connor.DEFAULT_MIN_ORIG_READS = 0
 
     def tearDown(self):
-        connor.MIN_ORIG_READS = self.min_orig_reads
+        connor.DEFAULT_MIN_ORIG_READS = self.min_orig_reads
         super(ConnorIntegrationTestCase, self).tearDown()
 
     def test(self):
@@ -1104,6 +1151,12 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             self.assertRegexpMatches(log_calls[line][0], "connor begins")
 
             line += 1
+            self.assertRegexpMatches(log_calls[line][0], "command")
+
+            line += 1
+            self.assertRegexpMatches(log_calls[line][0], "command option")
+
+            line += 1
             self.assertEquals((input_bam,), log_calls[line][1])
 
             line += 1
@@ -1112,6 +1165,9 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 
             line += 1
             self.assertRegexpMatches(log_calls[line][0], 'family size distribution')
+
+            line += 1
+            self.assertRegexpMatches(log_calls[line][0], 'original pairs matched UMI exactly')
 
             line += 1
             self.assertRegexpMatches(log_calls[line][0], 'original pairs matched by Hamming distance threshold')
