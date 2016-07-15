@@ -17,13 +17,16 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
-import array
 from collections import defaultdict, Counter
 from copy import deepcopy
 from datetime import datetime
+import itertools
+import operator
 import os
 import sys
 import traceback
+
+import pandas as pd
 import pysam
 import connor.samtools
 
@@ -34,9 +37,16 @@ try:
 except NameError:
     xrange = range
 
+try:
+    iter_map = itertools.imap
+except AttributeError:
+    iter_map = map
+
+
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
-MIN_ORIG_READS = 3
+DEFAULT_MIN_ORIG_READS = 3
+DEFAULT_HAMMING_THRESHOLD = 1
 
 
 DESCRIPTION=\
@@ -44,7 +54,6 @@ DESCRIPTION=\
 Emits a new BAM file reduced to a single consensus read for each family of
 original reads.
 '''
-
 
 class _ConnorUsageError(Exception):
     """Raised for malformed command or invalid arguments."""
@@ -59,7 +68,7 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         '''Suppress default exit behavior'''
         raise _ConnorUsageError(message)
 
-
+#TODO: (cgates): Switch to Logger class w/ info,debug methods and verbose state
 def _log(msg_format, *args):
     timestamp = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
     try:
@@ -70,7 +79,7 @@ def _log(msg_format, *args):
     sys.stderr.flush()
 
 
-class LightweightAlignment(object):
+class _LightweightAlignment(object):
     '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
     def __init__(self, aligned_segment):
         self.name = aligned_segment.query_name
@@ -86,7 +95,7 @@ class LightweightAlignment(object):
             self.left_pos = pos2
 
 
-class LightweightPair(object):
+class _LightweightPair(object):
     '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
     def __init__(self, aligned_segment1, aligned_segment2):
         self.name = aligned_segment1.query_name
@@ -96,7 +105,7 @@ class LightweightPair(object):
         self.key = (chrom, left_start, right_end)
 
 
-class PairedAlignment(object):
+class _PairedAlignment(object):
     '''Represents the left and right align pairs from an single sequence.'''
     def __init__(self, left_alignment,
                  right_alignment,
@@ -117,7 +126,8 @@ class PairedAlignment(object):
             else:
                 return str(sequence.decode("utf-8"))
         self.left_alignment.query_sequence = umi[0] + byte_array_to_string(self.left_alignment.query_sequence[len(umi[0]):])
-        self.right_alignment.query_sequence = umi[1] + byte_array_to_string(self.right_alignment.query_sequence[len(umi[1]):])
+        seq = byte_array_to_string(self.right_alignment.query_sequence)
+        self.right_alignment.query_sequence = seq[:-1 * len(umi[1])] + umi[1]
         self.umi = umi
 
     def __eq__(self, other):
@@ -136,15 +146,24 @@ class PairedAlignment(object):
                                     self.right_alignment.query_sequence)
 
 
-class TagFamily(object):
+class _TagFamily(object):
+    umi_sequence = 0
     def __init__(self,
                  umi,
                  list_of_alignments,
-                 consensus_threshold=DEFAULT_CONSENSUS_THRESHOLD):
+                 inexact_match_count,
+                 consensus_threshold):
+        self.umi_sequence = _TagFamily.umi_sequence
+        _TagFamily.umi_sequence += 1
         self.umi = umi
-        dominant_cigar = TagFamily._generate_dominant_cigar_pair(list_of_alignments)
-        self.alignments = TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
+        self.input_alignment_count = len(list_of_alignments)
+        (self.distinct_cigar_count,
+         self.minority_cigar_percentage,
+         dominant_cigar) = _TagFamily._generate_dominant_cigar_stats(list_of_alignments)
+        (self.alignments,
+         self.excluded_alignments) = _TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
                                                                        list_of_alignments)
+        self.inexact_match_count = inexact_match_count
         #Necessary to make output deterministic
         self.alignments.sort(key=lambda x: x.left_alignment.query_name)
         self.consensus_threshold = consensus_threshold
@@ -159,7 +178,14 @@ class TagFamily(object):
     @staticmethod
     def _get_alignments_for_dominant_cigar(dominant_cigar,
                                            list_of_alignments):
-        return [a for a in list_of_alignments if TagFamily._get_cigarstring_tuple(a) == dominant_cigar]
+        included_alignments = []
+        excluded_alignments = []
+        for pair in list_of_alignments:
+            if _TagFamily._get_cigarstring_tuple(pair) == dominant_cigar:
+                included_alignments.append(pair)
+            else:
+                excluded_alignments.append(pair)
+        return included_alignments, excluded_alignments
 
     def _generate_consensus_sequence(self, list_of_alignments):
         consensus = []
@@ -185,9 +211,16 @@ class TagFamily(object):
         return consensus_quality
     
     @staticmethod
-    def _generate_dominant_cigar_pair(list_of_alignments):
-        counter = Counter([TagFamily._get_cigarstring_tuple(s) for s in list_of_alignments])
-        return counter.most_common(1)[0][0]
+    def _generate_dominant_cigar_stats(list_of_alignments):
+        counter = Counter([_TagFamily._get_cigarstring_tuple(s) for s in list_of_alignments])
+        number_distict_cigars = len(counter)
+        top_two_cigar_count = counter.most_common(2)
+        if len(top_two_cigar_count) == 1:
+            minority_cigar_percentage = 0
+        else:
+            minority_cigar_percentage = top_two_cigar_count[1][1]/len(list_of_alignments)
+        dominant_cigar = top_two_cigar_count[0][0]
+        return number_distict_cigars, minority_cigar_percentage, dominant_cigar
 
 
     #TODO: (cgates) tags should not assume umi is a tuple and symmetric between left and right 
@@ -199,13 +232,13 @@ class TagFamily(object):
             right_aligns.append(align.right_alignment)
         left_consensus_sequence = self._generate_consensus_sequence(left_aligns)
         right_consensus_sequence = self._generate_consensus_sequence(right_aligns)
-        left_consensus_qualities = TagFamily._generate_consensus_qualities(left_aligns)
-        right_consensus_qualities = TagFamily._generate_consensus_qualities(right_aligns)
+        left_consensus_qualities = _TagFamily._generate_consensus_qualities(left_aligns)
+        right_consensus_qualities = _TagFamily._generate_consensus_qualities(right_aligns)
         left_consensus_align = deepcopy(alignments[0].left_alignment, {})
         right_consensus_align = deepcopy(alignments[0].right_alignment, {})
         left_consensus_align.query_sequence = left_consensus_sequence
         right_consensus_align.query_sequence = right_consensus_sequence
-        consensus_align = PairedAlignment(left_consensus_align,
+        consensus_align = _PairedAlignment(left_consensus_align,
                                           right_consensus_align,
                                           tag_length=len(umi[0]))
         consensus_align.replace_umi(umi)
@@ -214,22 +247,26 @@ class TagFamily(object):
         self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
-
+#TODO: (cgates): please make this into a handler
     def _add_tags(self, consensus_align, num_alignments):
-        x0 = "{0}|{1}".format(self.umi[0], self.umi[1])
+        x0 = self.umi_sequence
+        x1 = "{0}|{1}".format(self.umi[0], self.umi[1])
         x2 = "{0},{1}".format(consensus_align.left_alignment.reference_start + 1,
                               consensus_align.right_alignment.reference_end)
         x3 = num_alignments
-        x4 = num_alignments < MIN_ORIG_READS
-        consensus_align.left_alignment.set_tag("X0", x0, "Z")
+#TODO: (cgates): until you make this into a handler, the next line is a bug
+        x4 = str(num_alignments >= DEFAULT_MIN_ORIG_READS)
+        consensus_align.left_alignment.set_tag("X0", x0, "i")
+        consensus_align.left_alignment.set_tag("X1", x1, "Z")
         consensus_align.left_alignment.set_tag("X2", x2, "Z")
         consensus_align.left_alignment.set_tag("X3", x3, "i")
-        consensus_align.left_alignment.set_tag("X4", str(x4), "Z")
+        consensus_align.left_alignment.set_tag("X4", x4, "Z")
 
-        consensus_align.right_alignment.set_tag("X0", x0, "Z")
+        consensus_align.right_alignment.set_tag("X0", x0, "i")
+        consensus_align.right_alignment.set_tag("X1", x1, "Z")
         consensus_align.right_alignment.set_tag("X2", x2, "Z")
         consensus_align.right_alignment.set_tag("X3", x3, "i")
-        consensus_align.right_alignment.set_tag("X4", str(x4), "Z")
+        consensus_align.right_alignment.set_tag("X4", x4, "Z")
 
 def _build_coordinate_read_name_manifest(lw_aligns):
     '''Return a dict mapping coordinates to set of aligned querynames.
@@ -251,37 +288,62 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
         if not aseg.query_name in pairing_dict:
             pairing_dict[aseg.query_name]= aseg
         else:
-            paired_align = PairedAlignment(pairing_dict.pop(aseg.query_name),
+            paired_align = _PairedAlignment(pairing_dict.pop(aseg.query_name),
                                            aseg)
-            key = LightweightPair(paired_align.left_alignment, 
+            key = _LightweightPair(paired_align.left_alignment,
                                   paired_align.right_alignment).key
             family_dict[key].add(paired_align)
             coord_read_name_manifest[key].remove(aseg.query_name)
             if not coord_read_name_manifest[key]:
                 yield family_dict.pop(key)
 
-def _build_tag_families(tagged_paired_aligns, ranked_tags):
-    '''Return a list of read families; each family is a set of original reads.
+def _build_tag_families(tagged_paired_aligns,
+                        ranked_tags,
+                        hamming_threshold,
+                        consensus_threshold):
+    '''Partition paired aligns into families.
 
     Each read is considered against each ranked tag until all reads are
     partitioned into families.'''
     tag_aligns = defaultdict(set)
+    tag_inexact_match_count = defaultdict(int)
+
     for paired_align in tagged_paired_aligns:
         (left_umi, right_umi) =  paired_align.umi
         for best_tag in ranked_tags:
-            if left_umi == best_tag[0] or right_umi == best_tag[1]:
+            if paired_align.umi == best_tag:
                 tag_aligns[best_tag].add(paired_align)
                 break
-    tag_families = [TagFamily(tag, aligns) for tag, aligns in tag_aligns.items()]
+            elif left_umi == best_tag[0] or right_umi == best_tag[1]:
+                tag_aligns[best_tag].add(paired_align)
+                tag_inexact_match_count[best_tag] += 1
+                break
+            elif (_hamming_dist(left_umi, best_tag[0]) <= hamming_threshold) or \
+                (_hamming_dist(right_umi, best_tag[1]) <= hamming_threshold):
+                tag_aligns[best_tag].add(paired_align)
+                tag_inexact_match_count[best_tag] += 1
+                break
+    tag_families = []
+    for tag in tag_aligns:
+        tag_family = _TagFamily(tag,
+                               tag_aligns[tag],
+                               tag_inexact_match_count[tag],
+                               consensus_threshold)
+        tag_families.append(tag_family)
     #Necessary to make output deterministic
     tag_families.sort(key=lambda x: x.consensus.left_alignment.query_name)
     return tag_families
+
+def _hamming_dist(str1, str2):
+    assert len(str1) == len(str2)
+    return sum(iter_map(operator.ne, str1, str2))
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
         formatter_class=argparse.RawTextHelpFormatter,
         usage="connor input_bam output_bam",
-        description=(DESCRIPTION))
+        description=(DESCRIPTION),
+        epilog="v"+__version__)
 
     parser.add_argument("-V",
                         "--version",
@@ -291,6 +353,27 @@ def _parse_command_line_args(arguments):
                         help="path to input BAM")
     parser.add_argument('output_bam',
                         help="path to output BAM")
+    parser.add_argument("-f", "--consensus_freq_threshold",
+                        type=float,
+                        default = DEFAULT_CONSENSUS_THRESHOLD,
+                        help = \
+"""={} (0..1.0): Ambiguous base calls at a specific position in a family are 
+transformed to either majority base call, or N if the majority percentage 
+is below this threshold. (Higher threshold results in more Ns in consensus.)""".format(DEFAULT_CONSENSUS_THRESHOLD))
+    parser.add_argument("-s", "--min_family_size_threshold",
+                        type=int,
+                        default = DEFAULT_MIN_ORIG_READS,
+                        help=\
+"""={} (>=0): families with count of original reads < threshold are excluded
+from the deduplicated output. (Higher threshold is more stringent.)""".format(DEFAULT_MIN_ORIG_READS))
+    parser.add_argument("-d", "--umi_distance_threshold",
+                        type=int,
+                        default = DEFAULT_HAMMING_THRESHOLD,
+                        help=\
+"""={} (>=0); UMIs equal to or closer than this Hamming distance will be 
+combined into a single family. Lower threshold make more families with more 
+consistent UMIs; 0 implies UMI must match exactly.""".format(DEFAULT_HAMMING_THRESHOLD))
+
     args = parser.parse_args(arguments)
     return args
 
@@ -318,7 +401,7 @@ def _sort_and_index_bam(bam_filename):
 def build_lightweight_aligns(aligned_segments):
     name_pairs = defaultdict(list)
     for align_segment in aligned_segments:
-        name_pairs[align_segment.query_name].append(LightweightAlignment(align_segment))
+        name_pairs[align_segment.query_name].append(_LightweightAlignment(align_segment))
     return name_pairs
     
     
@@ -330,10 +413,274 @@ def build_lightweight_pairs(aligned_segments):
         if not query_name in name_pairs: 
             name_pairs[align_segment.query_name] = align_segment
         else:
-            new_pair = LightweightPair(name_pairs.pop(query_name), align_segment)
+            new_pair = _LightweightPair(name_pairs.pop(query_name), align_segment)
             lightweight_pairs.append(new_pair)
     return lightweight_pairs
-    
+
+class _WriteFamilyHandler(object):
+    def __init__(self, output_file,
+                 output_filename,
+                 min_original_pairs_threshold):
+        self.output_file = output_file
+        self.output_filename = output_filename
+        self.min_original_pairs_threshold = min_original_pairs_threshold
+        self.included_family_count = 0
+        self.excluded_family_count = 0
+        self.total_alignment_count = 0
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+            self.total_alignment_count += len(tag_family.alignments)
+            if len(tag_family.alignments) >= self.min_original_pairs_threshold:
+                consensus_pair = tag_family.consensus
+                self.output_file.write(consensus_pair.left_alignment)
+                self.output_file.write(consensus_pair.right_alignment)
+                self.included_family_count += 1
+            else:
+                self.excluded_family_count += 1
+
+    def end(self):
+        total_family_count = self.excluded_family_count + \
+                             self.included_family_count
+        _log(('INFO|{}/{} ({:.2f}%) families were excluded because the '
+              'original read count < {}'),
+             self.excluded_family_count,
+             total_family_count,
+             100 * self.excluded_family_count / total_family_count,
+             self.min_original_pairs_threshold)
+        dedup_percent = 100 * (1 - (self.included_family_count / self.total_alignment_count))
+        _log(('INFO|{} original pairs were deduplicated to {} families '
+              '(overall dedup rate {:.2f}%)'),
+             self.total_alignment_count,
+             self.included_family_count,
+             dedup_percent)
+        _log('INFO|{} families written to [{}]',
+             self.included_family_count,
+             self.output_filename)
+
+
+class _WriteExcludedReadsHandler(object):
+    def __init__(self, output_file,
+                 output_filename,
+                 min_original_pairs_threshold):
+        self.output_file = output_file
+        self.output_filename = output_filename
+        self.total_alignment_count = 0
+        self.min_original_pairs_threshold = min_original_pairs_threshold
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+#             self.total_alignment_count += len(tag_family.alignments)
+            self.total_alignment_count += len(tag_family.excluded_alignments)
+            self.total_alignment_count += 1
+#             for pair in tag_family.alignments:
+#                 self.tag_reads(tag_family, pair, included=1)
+#                 self.output_file.write(pair.left_alignment)
+#                 self.output_file.write(pair.right_alignment)
+            self.tag_reads(tag_family, tag_family.consensus, included=1)
+            self.output_file.write(tag_family.consensus.left_alignment)
+            self.output_file.write(tag_family.consensus.right_alignment)
+            for pair in tag_family.excluded_alignments:
+                self.tag_reads(tag_family, pair, included=0)
+                self.output_file.write(pair.left_alignment)
+                self.output_file.write(pair.right_alignment)
+
+    def tag_reads(self, tag_family, original_pair, included):
+        x0 = tag_family.umi_sequence
+        x1 = "{0}|{1}".format(tag_family.umi[0], tag_family.umi[1])
+        x2 = "{0},{1}".format(original_pair.left_alignment.reference_start + 1,
+                              original_pair.right_alignment.reference_end)
+        x3 = len(tag_family.alignments)
+        x4 = str(x3 >= self.min_original_pairs_threshold)
+        original_pair.left_alignment.set_tag("X0", x0, "i")
+        original_pair.left_alignment.set_tag("X1", x1, "Z")
+        original_pair.left_alignment.set_tag("X2", x2, "Z")
+        original_pair.left_alignment.set_tag("X3", x3, "i")
+        original_pair.left_alignment.set_tag("X4", x4, "Z")
+        original_pair.left_alignment.set_tag("X5", included, "i")
+
+        original_pair.right_alignment.set_tag("X0", x0, "i")
+        original_pair.right_alignment.set_tag("X1", x1, "Z")
+        original_pair.right_alignment.set_tag("X2", x2, "Z")
+        original_pair.right_alignment.set_tag("X3", x3, "i")
+        original_pair.right_alignment.set_tag("X4", x4, "Z")
+        original_pair.right_alignment.set_tag("X5", included, "i")
+
+    def end(self):
+        _log('INFO|{} tagged original pairs written to [{}]',
+             self.total_alignment_count,
+             self.output_filename)
+
+
+class _BaseTukeyStatHandler(object):
+    def __init__(self):
+        self.collection = []
+        self.min = None
+        self.quartile_1 = None
+        self.median = None
+        self.quartile_3 = None
+        self.max = None
+
+    def get_family_statistic(self, tag_family):
+        pass
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+            stat = self.get_family_statistic(tag_family)
+            if stat is not None:
+                self.collection.append(stat)
+
+    @property
+    def summary(self):
+        return (self.min,
+                self.quartile_1,
+                self.median,
+                self.quartile_3,
+                self.max)
+
+    def end(self):
+        summary = pd.Series(self.collection).describe()
+        self.min = summary['min']
+        self.max = summary['max']
+        self.median = summary['50%']
+        self.quartile_1 = summary['25%']
+        self.quartile_3 = summary['75%']
+
+
+class _FamilySizeStatHandler(_BaseTukeyStatHandler):
+    def get_family_statistic(self, tag_family):
+        return len(tag_family.alignments)
+
+    def end(self):
+        super(_FamilySizeStatHandler, self).end()
+        _log('DEBUG|family stat|family size distribution (original pair counts: min, 1Q, median, 3Q, max): {}',
+             ', '.join(map(str, self.summary)))
+
+
+class _CigarMinorityStatHandler(_BaseTukeyStatHandler):
+    def get_family_statistic(self, tag_family):
+        stat = tag_family.minority_cigar_percentage
+        if stat:
+            return stat
+        else:
+            return None
+
+    def end(self):
+        super(_CigarMinorityStatHandler, self).end()
+        _log('DEBUG|family stat|cigar|family distribution of minority CIGAR percentages (min, 1Q, median, 3Q, max): {}',
+              ', '.join(map(lambda x: str(round(x,2)), self.summary)))
+        
+#Split into tukey and other stats
+class _CigarStatHandler(object):
+    def __init__(self):
+        self.distinct_cigar_counts = []
+        self.min = None
+        self.quartile_1 = None
+        self.median = None
+        self.quartile_3 = None
+        self.max = None
+        self.total_input_alignment_count = 0
+        self.total_alignment_count = 0
+        self.total_family_count = 0
+        self.families_cigar_counts = defaultdict(int)
+        self.family_cigar_minority_percentage_counts = defaultdict(list)
+
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+            self.distinct_cigar_counts.append(tag_family.distinct_cigar_count)
+            self.total_input_alignment_count += tag_family.input_alignment_count
+            self.total_alignment_count += len(tag_family.alignments)
+            self.total_family_count += 1
+            self.families_cigar_counts[tag_family.distinct_cigar_count] += 1
+            self.family_cigar_minority_percentage_counts[tag_family.distinct_cigar_count].append(tag_family.minority_cigar_percentage)
+
+
+    @property
+    def percent_deduplication(self):
+        return 1 - (self.total_family_count / self.total_input_alignment_count)
+
+
+    @property
+    def total_excluded_alignments(self):
+        return self.total_input_alignment_count - self.total_alignment_count
+
+    @property
+    def percent_excluded_alignments(self):
+        return self.total_excluded_alignments / self.total_input_alignment_count
+
+    @property
+    def summary(self):
+        return (self.min,
+                self.quartile_1,
+                self.median,
+                self.quartile_3,
+                self.max)
+
+    def end(self):
+        summary = pd.Series(self.distinct_cigar_counts).describe()
+        self.min = summary['min']
+        self.max = summary['max']
+        self.median = summary['50%']
+        self.quartile_1 = summary['25%']
+        self.quartile_3 = summary['75%']
+
+        _log('DEBUG|family stat|cigar|family distribution of distinct CIGAR counts (min, 1Q, median, 3Q, max): {}',
+              ', '.join(map(str, self.summary)))
+        ordered_cigar_counts = sorted(self.families_cigar_counts.items(),
+                                      key = lambda x: -1 * int(x[1]))
+        for num_cigars, freq in ordered_cigar_counts:
+            summary = pd.Series(self.family_cigar_minority_percentage_counts[num_cigars]).describe()
+            _log('DEBUG|family stat|cigar|{}/{} ({:.2f}%) families had {} CIGAR: minor % distrib {:.2f}, {:.2f}, {:.2f}, {:.2f}, {:.2f}',
+                 freq,
+                 self.total_family_count,
+                 100 * freq / self.total_family_count,
+                 num_cigars,
+                 summary['min'],
+                 summary['25%'],
+                 summary['50%'],
+                 summary['75%'],
+                 summary['max'])
+        _log('DEBUG|family stat|cigar|{}/{} ({:.2f}%) pairs were excluded as minority CIGAR',
+             self.total_excluded_alignments,
+             self.total_input_alignment_count,
+             100 * self.percent_excluded_alignments)
+        _log(('DEBUG|family stat|{} original pairs (of majority CIGAR) were deduplicated to {} families '
+              '(majority CIGAR dedup rate {:.2f}%)'),
+              self.total_alignment_count,
+              self.total_family_count,
+              100 * self.percent_deduplication)
+
+
+class _MatchStatHandler(object):
+    def __init__(self, hamming_threshold):
+        self.hamming_threshold = hamming_threshold
+        self.total_inexact_match_count = 0
+        self.total_pair_count = 0
+
+    def handle(self, tag_families):
+        for tag_family in tag_families:
+            self.total_inexact_match_count += tag_family.inexact_match_count
+            self.total_pair_count += len(tag_family.alignments)
+
+    def end(self):
+        exact_match_count = self.total_pair_count - self.total_inexact_match_count
+        _log(('DEBUG|family stat|{}/{} ({:.2f}%) original pairs matched UMI '
+              'exactly'),
+             exact_match_count,
+             self.total_pair_count,
+             100 * (1 - self.percent_inexact_match))
+
+        _log(('DEBUG|family stat|{}/{} ({:.2f}%) original pairs matched by Hamming '
+              'distance threshold (<={}) on left or right UMI '),
+             self.total_inexact_match_count,
+             self.total_pair_count,
+             100 * self.percent_inexact_match,
+             self.hamming_threshold)
+
+    @property
+    def percent_inexact_match(self):
+        return self.total_inexact_match_count/self.total_pair_count
 
 #TODO cgates: check that input file exists and output file does not
 def main(command_line_args=None):
@@ -344,38 +691,59 @@ def main(command_line_args=None):
 
     try:
         args = _parse_command_line_args(command_line_args[1:])
-        _log('connor begins')
-        _log('reading input bam  [{}]', args.input_bam)
+        _log('INFO|connor begins (v{})', __version__)
+        _log('DEBUG|command|{}',' '.join(command_line_args))
+        _log('DEBUG|command options|{}', vars(args))
+        _log('INFO|reading input bam [{}]', args.input_bam)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         lightweight_pairs = build_lightweight_pairs(bamfile.fetch())
         bamfile.close()
 
         original_read_count = len(lightweight_pairs) * 2
-        _log('original read count: {}', original_read_count)
+        _log('INFO|bam stat|{} original reads', original_read_count)
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
-        consensus_read_count = 0
+        original_tagged_filename = args.output_bam + ".excluded.bam"
+        outfile_original = pysam.AlignmentFile(original_tagged_filename,
+                                               'wb',
+                                               template=bamfile)
+
+        handlers = [_FamilySizeStatHandler(),
+                    _MatchStatHandler(args.umi_distance_threshold),
+                    _CigarMinorityStatHandler(),
+                    _CigarStatHandler(),
+                    _WriteFamilyHandler(outfile,
+                                        args.output_bam,
+                                        args.min_family_size_threshold),
+                    _WriteExcludedReadsHandler(outfile_original,
+                                               original_tagged_filename,
+                                               args.min_family_size_threshold)]
+
+#TODO: (cgates): switch all handlers to family-at-at-time handling
         for coord_family in _build_coordinate_families(bamfile.fetch(),
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
-            for tag_family in _build_tag_families(coord_family, ranked_tags):
-                if len(tag_family.alignments) >= MIN_ORIG_READS:
-                    consensus_pair = tag_family.consensus
-                    outfile.write(consensus_pair.left_alignment)
-                    outfile.write(consensus_pair.right_alignment)
-                    consensus_read_count += 2
-        _log('consensus read count: {}', consensus_read_count)
-        _log('consensus/original: {:.4f}',
-             consensus_read_count / original_read_count)
+            tag_families = _build_tag_families(coord_family,
+                                               ranked_tags,
+                                               args.umi_distance_threshold,
+                                               args.consensus_freq_threshold)
+            for handler in handlers:
+                handler.handle(tag_families)
+
+        for handler in handlers:
+            handler.end()
+
         outfile.close()
+        outfile_original.close()
         bamfile.close()
-    
-        _log('sorting and indexing bam')
+
+        _log('INFO|sorting and indexing [{}]', args.output_bam)
         _sort_and_index_bam(args.output_bam)
-    
-        _log('wrote deduped bam [{}]', args.output_bam)
-        _log('connor complete')
+        _log('INFO|sorting and indexing [{}]', original_tagged_filename)
+        _sort_and_index_bam(original_tagged_filename)
+
+        _log('INFO|connor complete')
     except _ConnorUsageError as usage_error:
         message = "connor usage problem: {}".format(str(usage_error))
         print(message, file=sys.stderr)
