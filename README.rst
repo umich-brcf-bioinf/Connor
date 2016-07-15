@@ -22,6 +22,12 @@ Overview
 
 TBD
 
+Consensus output BAM tags:
+  X0: UMI sequence: a numeric identifier assigned to a consensus sequence
+  X1: UMI tag: left|right inline barcodes
+  X2: edge positions: start of the left alignment, end of the right alignment
+  X3: count of original read pairs that were deduplicated into the consensus
+  
 -----------
 Quick Start
 -----------
@@ -60,6 +66,17 @@ Connor help
   optional arguments:
     -h, --help     show this help message and exit
     -V, --version  show program's version number and exit
+    -f CONSENSUS_FREQ_THRESHOLD, --consensus_freq_threshold CONSENSUS_FREQ_THRESHOLD
+                        =0.6 (0..1.0): Ambiguous base calls at a specific position in a family are 
+                        transformed to either majority base call, or N if the majority percentage 
+                        is below this threshold. (Higher threshold results in more Ns in consensus.)
+    -s MIN_FAMILY_SIZE_THRESHOLD, --min_family_size_threshold MIN_FAMILY_SIZE_THRESHOLD
+                        =3 (>=0): families with count of original reads < threshold are excluded
+                        from the deduplicated output. (Higher threshold is more stringent.)
+    -d UMI_DISTANCE_THRESHOLD, --umi_distance_threshold UMI_DISTANCE_THRESHOLD
+                        =1 (>=0); UMIs equal to or closer than this Hamming distance will be 
+                        combined into a single family. Lower threshold make more families with more 
+                        consistent UMIs; 0 implies UMI must match exactly.
 
 ====
 

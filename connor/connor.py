@@ -342,7 +342,8 @@ def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
         formatter_class=argparse.RawTextHelpFormatter,
         usage="connor input_bam output_bam",
-        description=(DESCRIPTION))
+        description=(DESCRIPTION),
+        epilog="v"+__version__)
 
     parser.add_argument("-V",
                         "--version",
