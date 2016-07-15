@@ -45,8 +45,8 @@ except AttributeError:
 
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
-MIN_ORIG_READS = 3
-HAMMING_THRESHOLD = 1
+DEFAULT_MIN_ORIG_READS = 3
+DEFAULT_HAMMING_THRESHOLD = 1
 
 
 DESCRIPTION=\
@@ -151,7 +151,7 @@ class _TagFamily(object):
                  umi,
                  list_of_alignments,
                  inexact_match_count,
-                 consensus_threshold=DEFAULT_CONSENSUS_THRESHOLD):
+                 consensus_threshold):
         self.umi = umi
         self.input_alignment_count = len(list_of_alignments)
         (self.distinct_cigar_count,
@@ -250,7 +250,7 @@ class _TagFamily(object):
         x2 = "{0},{1}".format(consensus_align.left_alignment.reference_start + 1,
                               consensus_align.right_alignment.reference_end)
         x3 = num_alignments
-        x4 = num_alignments < MIN_ORIG_READS
+        x4 = num_alignments < DEFAULT_MIN_ORIG_READS
         consensus_align.left_alignment.set_tag("X0", x0, "Z")
         consensus_align.left_alignment.set_tag("X2", x2, "Z")
         consensus_align.left_alignment.set_tag("X3", x3, "i")
@@ -290,7 +290,10 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
             if not coord_read_name_manifest[key]:
                 yield family_dict.pop(key)
 
-def _build_tag_families(tagged_paired_aligns, ranked_tags):
+def _build_tag_families(tagged_paired_aligns,
+                        ranked_tags,
+                        hamming_threshold,
+                        consensus_threshold):
     '''Partition paired aligns into families.
 
     Each read is considered against each ranked tag until all reads are
@@ -308,8 +311,8 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
                 tag_aligns[best_tag].add(paired_align)
                 tag_inexact_match_count[best_tag] += 1
                 break
-            elif (_hamming_dist(left_umi, best_tag[0]) <= HAMMING_THRESHOLD) or \
-                (_hamming_dist(right_umi, best_tag[1]) <= HAMMING_THRESHOLD):
+            elif (_hamming_dist(left_umi, best_tag[0]) <= hamming_threshold) or \
+                (_hamming_dist(right_umi, best_tag[1]) <= hamming_threshold):
                 tag_aligns[best_tag].add(paired_align)
                 tag_inexact_match_count[best_tag] += 1
                 break
@@ -317,7 +320,8 @@ def _build_tag_families(tagged_paired_aligns, ranked_tags):
     for tag in tag_aligns:
         tag_family = _TagFamily(tag,
                                tag_aligns[tag],
-                               tag_inexact_match_count[tag])
+                               tag_inexact_match_count[tag],
+                               consensus_threshold)
         tag_families.append(tag_family)
     #Necessary to make output deterministic
     tag_families.sort(key=lambda x: x.consensus.left_alignment.query_name)
@@ -341,6 +345,27 @@ def _parse_command_line_args(arguments):
                         help="path to input BAM")
     parser.add_argument('output_bam',
                         help="path to output BAM")
+    parser.add_argument("-f", "--consensus_freq_threshold",
+                        type=float,
+                        default = DEFAULT_CONSENSUS_THRESHOLD,
+                        help = \
+"""={} (0..1.0): Ambiguous base calls at a specific position in a family are 
+transformed to either majority base call, or N if the majority percentage 
+is below this threshold. (Higher threshold results in more Ns in consensus.)""".format(DEFAULT_CONSENSUS_THRESHOLD))
+    parser.add_argument("-s", "--min_family_size_threshold",
+                        type=int,
+                        default = DEFAULT_MIN_ORIG_READS,
+                        help=\
+"""={} (>=0): families with count of original reads < threshold are excluded
+from the deduplicated output. (Higher threshold is more stringent.)""".format(DEFAULT_MIN_ORIG_READS))
+    parser.add_argument("-d", "--umi_distance_threshold",
+                        type=int,
+                        default = DEFAULT_HAMMING_THRESHOLD,
+                        help=\
+"""={} (>=0); UMIs equal to or closer than this Hamming distance will be 
+combined into a single family. Lower threshold make more families with more 
+consistent UMIs; 0 implies UMI must match exactly.""".format(DEFAULT_HAMMING_THRESHOLD))
+
     args = parser.parse_args(arguments)
     return args
 
@@ -567,7 +592,8 @@ class _CigarStatHandler(object):
 
 
 class _MatchStatHandler(object):
-    def __init__(self):
+    def __init__(self, hamming_threshold):
+        self.hamming_threshold = hamming_threshold
         self.total_inexact_match_count = 0
         self.total_pair_count = 0
 
@@ -577,12 +603,19 @@ class _MatchStatHandler(object):
             self.total_pair_count += len(tag_family.alignments)
 
     def end(self):
+        exact_match_count = self.total_pair_count - self.total_inexact_match_count
+        _log(('DEBUG|family stat|{}/{} ({:.2f}%) original pairs matched UMI '
+              'exactly'),
+             exact_match_count,
+             self.total_pair_count,
+             100 * (1 - self.percent_inexact_match))
+
         _log(('DEBUG|family stat|{}/{} ({:.2f}%) original pairs matched by Hamming '
               'distance threshold (<={}) on left or right UMI '),
              self.total_inexact_match_count,
              self.total_pair_count,
              100 * self.percent_inexact_match,
-             HAMMING_THRESHOLD)
+             self.hamming_threshold)
 
     @property
     def percent_inexact_match(self):
@@ -598,6 +631,8 @@ def main(command_line_args=None):
     try:
         args = _parse_command_line_args(command_line_args[1:])
         _log('INFO|connor begins (v{})', __version__)
+        _log('DEBUG|command|{}',' '.join(command_line_args))
+        _log('DEBUG|command options|{}', vars(args))
         _log('INFO|reading input bam [{}]', args.input_bam)
         bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
         lightweight_pairs = build_lightweight_pairs(bamfile.fetch())
@@ -610,18 +645,21 @@ def main(command_line_args=None):
         outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
 
         handlers = [_FamilySizeStatHandler(),
-                    _MatchStatHandler(),
+                    _MatchStatHandler(args.umi_distance_threshold),
                     _CigarMinorityStatHandler(),
                     _CigarStatHandler(),
                     _WriteFamilyHandler(outfile,
                                         args.output_bam,
-                                        MIN_ORIG_READS)]
+                                        args.min_family_size_threshold)]
 
 #TODO: (cgates): switch all handlers to family-at-at-time handling
         for coord_family in _build_coordinate_families(bamfile.fetch(),
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
-            tag_families = _build_tag_families(coord_family, ranked_tags)
+            tag_families = _build_tag_families(coord_family,
+                                               ranked_tags,
+                                               args.umi_distance_threshold,
+                                               args.consensus_freq_threshold)
             for handler in handlers:
                 handler.handle(tag_families)
 
