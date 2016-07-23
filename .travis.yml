@@ -3,8 +3,6 @@ python:
     - "2.7"
     - "3.4"
 env:
-    global:
-        - CODECLIMATE_REPO_TOKEN=5684ebe19ec80ce9b4a8cfeab8c6d4e5a5ecc31e264d43bacee8e5050e07224b
     matrix:
     - PYSAM_VERSION=0.8.4
     - PYSAM_VERSION=0.9.0
@@ -25,6 +23,7 @@ script:
 #    - nosetests examples
 
 after_success:
+# note CODECLIMATE_REPO_TOKEN must be set in travis env vars
     - codeclimate-test-reporter
 
 notifications:
