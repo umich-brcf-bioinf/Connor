@@ -4,8 +4,7 @@ python:
     - "3.4"
 env:
     global:
-        - COVERALLS_PARALLEL=true
-
+        - CODECLIMATE_REPO_TOKEN=5684ebe19ec80ce9b4a8cfeab8c6d4e5a5ecc31e264d43bacee8e5050e07224b
     matrix:
     - PYSAM_VERSION=0.8.4
     - PYSAM_VERSION=0.9.0
@@ -19,17 +18,16 @@ install:
     - pip install -vvv --use-wheel --find-links=./ pysam==$PYSAM_VERSION
     - pip install -r requirements.txt
     - pip install coverage
-    - pip install coveralls
+    - pip install codeclimate-test-reporter
 
 script:
     - nosetests --with-coverage --verbose --cover-package=connor
 #    - nosetests examples
 
 after_success:
-    - coveralls
+    - codeclimate-test-reporter
 
 notifications:
-    webhooks: https://coveralls.io/webhook?repo_token=gjCJEFWDp80kULHoFUZph5PQekEtFDCDj
     email:
-        - bfx-connor@umich.edu
+        - cgates@umich.edu, pulintz@umich.edu
 
