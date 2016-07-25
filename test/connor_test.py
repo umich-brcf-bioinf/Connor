@@ -8,9 +8,10 @@ from argparse import Namespace
 from collections import namedtuple
 import os
 from testfixtures.tempdirectory import TempDirectory
-from connor import connor
-from connor import samtools
-from connor import utils
+import connor.connor as connor
+import connor.samtools as samtools
+import connor.utils as utils
+import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 
 
@@ -78,34 +79,6 @@ def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignR = align_seg(q, rn, rs, nrs, s2)
     return connor._PairedAlignment(alignL, alignR, tag_length)
 
-def _create_file(path, filename, contents):
-    filename = os.path.join(path, filename)
-    with open(filename, 'wt') as new_file:
-        new_file.write(contents)
-        new_file.flush()
-    return filename
-
-def _create_bam(path, filename, sam_contents, index=True):
-    sam_filename = _create_file(path, filename, sam_contents)
-    bam_filename = sam_filename.replace(".sam", ".bam")
-    _pysam_bam_from_sam(sam_filename, bam_filename, index)
-    return bam_filename
-
-def _pysam_bam_from_sam(sam_filename, bam_filename, index=True):
-    infile = samtools.alignment_file(sam_filename, "r")
-    outfile = samtools.alignment_file(bam_filename, "wb", template=infile)
-    for s in infile:
-        outfile.write(s)
-    infile.close()
-    outfile.close()
-    if index:
-        samtools.index(bam_filename)
-
-def _pysam_alignments_from_bam(bam_filename):
-    infile = samtools.alignment_file(bam_filename, "rb")
-    aligned_segments = [s for s in infile]
-    infile.close()
-    return aligned_segments
 
 class PairedAlignmentTest(BaseConnorTestCase):
     def test_init(self):
@@ -527,7 +500,7 @@ class ConnorTest(BaseConnorTestCase):
 #         align_B1 = align_seg("alignB", 'chr1', 100, 10)
 #         alignments = set([connor._PairedAlignment(align_A0, align_A1),
 #                           connor._PairedAlignment(align_B0, align_B1)])
-# 
+#
 #         actual_pair = connor._build_consensus_pair(alignments)
 #
 #         expected_pair = connor._PairedAlignment(align_B0, align_B1)
@@ -713,61 +686,6 @@ class ConnorTest(BaseConnorTestCase):
                           "AB")
 
 
-    def test_sort_and_index_bam(self):
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-'''.replace("|", "\t")
-
-        with TempDirectory() as tmp_dir:
-            bam = _create_bam(tmp_dir.path,
-                              "input.sam",
-                              sam_contents,
-                              index=False)
-            connor._sort_and_index_bam(bam)
-            alignments = samtools.alignment_file(bam, "rb").fetch()
-            aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
-            self.assertEquals(6, len(aligns))
-            self.assertEquals([("readNameA1", 100),
-                               ("readNameA2", 100),
-                               ("readNameB1", 200),
-                               ("readNameA1", 300),
-                               ("readNameA2", 300),
-                               ("readNameB1", 400)],
-                              aligns)
-
-            original_dir = os.getcwd()
-            try:
-                os.chdir(tmp_dir.path)
-                os.mkdir("tmp")
-                bam = _create_bam(os.path.join(tmp_dir.path, "tmp"),
-                                  "input.sam",
-                                  sam_contents,
-                                  index=False)
-                bam_filename = os.path.basename(bam)
-
-                connor._sort_and_index_bam(os.path.join("tmp", bam_filename))
-
-                alignments = samtools.alignment_file(bam, "rb").fetch()
-                aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
-                self.assertEquals(6, len(aligns))
-                self.assertEquals([("readNameA1", 100),
-                                   ("readNameA2", 100),
-                                   ("readNameB1", 200),
-                                   ("readNameA1", 300),
-                                   ("readNameA2", 300),
-                                   ("readNameB1", 400)],
-                                  aligns)
-            finally:
-                os.chdir(original_dir)
-
-
 
     def test_rank_tags_sortsByPopularity(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "NNNGGG")
@@ -841,15 +759,6 @@ class TestLightweightAlignment(BaseConnorTestCase):
 #TODO: cgates: Test main parses args correctly
 #TODO: cgates: Adjust setup/teardown to stop changing default constants
 class ConnorIntegrationTestCase(BaseConnorTestCase):
-    def setUp(self):
-        super(ConnorIntegrationTestCase, self).setUp()
-        self.min_orig_reads =  connor.DEFAULT_MIN_ORIG_READS
-        connor.DEFAULT_MIN_ORIG_READS = 0
-
-    def tearDown(self):
-        connor.DEFAULT_MIN_ORIG_READS = self.min_orig_reads
-        super(ConnorIntegrationTestCase, self).tearDown()
-
     def test_deduplicate_alignnemnts(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
@@ -863,13 +772,14 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path, "input.sam", sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(input_bam=input_bam,
                                          output_bam=output_bam,
                                          consensus_freq_threshold=0.6,
                                          min_family_size_threshold=0,
-                                         umi_distance_threshold=1)
+                                         umi_distance_threshold=1,
+                                         output_excluded_alignments="")
             connor._dedup_alignments(args, self.mock_logger)
 
             alignments = samtools.alignment_file(output_bam, "rb").fetch()
@@ -895,13 +805,16 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, 'input.sam', sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 'input.sam',
+                                                 sam_contents)
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
             args = Namespace(input_bam=input_bam,
-                                         output_bam=output_bam,
-                                         consensus_freq_threshold=0.6,
-                                         min_family_size_threshold=0,
-                                         umi_distance_threshold=1)
+                             output_bam=output_bam,
+                             consensus_freq_threshold=0.6,
+                             min_family_size_threshold=0,
+                             umi_distance_threshold=1,
+                             output_excluded_alignments="")
             connor._dedup_alignments(args, self.mock_logger)
 
             log_calls = self.mock_logger._log_calls['INFO']
@@ -922,17 +835,19 @@ readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 "input.sam",
+                                                 sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(input_bam=input_bam,
                              output_bam=output_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
-                             umi_distance_threshold=1)
-
+                             umi_distance_threshold=1,
+                             output_excluded_alignments="")
             connor._dedup_alignments(args, self.mock_logger)
 
-            alignments = _pysam_alignments_from_bam(output_bam)
+            alignments = samtools_test.pysam_alignments_from_bam(output_bam)
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))

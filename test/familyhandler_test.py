@@ -2,6 +2,7 @@
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments
 from __future__ import print_function, absolute_import, division
+from argparse import Namespace
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 from connor.familyhandler import _CigarStatHandler
@@ -88,8 +89,8 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
 
 class MatchStatHandlerTest(BaseConnorTestCase):
     def test_total_inexact_match_count(self):
-        stat_handler = _MatchStatHandler(hamming_threshold=1,
-                                         logger=self.mock_logger)
+        args = Namespace(umi_distance_threshold=1)
+        stat_handler = _MatchStatHandler(args, self.mock_logger)
         posAfam1 = _mock_tag_family(alignments=[1] * 5,
                                    inexact_match_count=1)
         posAfam2 = _mock_tag_family(alignments=[1] * 15,

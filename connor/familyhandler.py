@@ -1,38 +1,28 @@
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
 import pandas as pd
+import connor.samtools as samtools
 
-
-#TODO: cgates: All handlers should take args, log_method as input
 #TODO: (cgates): switch all handlers to family-at-at-time handling
-def build_family_handlers(args,
-                          outfile,
-                          outfile_original,
-                          original_tagged_filename,
-                          logger):
+def build_family_handlers(args, logger):
     handlers = [_FamilySizeStatHandler(logger),
-            _MatchStatHandler(args.umi_distance_threshold, logger),
+            _MatchStatHandler(args, logger),
             _CigarMinorityStatHandler(logger),
             _CigarStatHandler(logger),
-            _WriteFamilyHandler(outfile,
-                                args.output_bam,
-                                args.min_family_size_threshold,
-                                logger),
-            _WriteExcludedReadsHandler(outfile_original,
-                                       original_tagged_filename,
-                                       args.min_family_size_threshold,
-                                       logger)]
+            _WriteFamilyHandler(args, logger)]
+    if args.output_excluded_alignments:
+        handlers.append(_WriteExcludedReadsHandler(args, logger))
     return handlers
 
-#TODO: cgates: Should use begin() to open file and end to close, index, etc.
 class _WriteFamilyHandler(object):
-    def __init__(self, output_file,
-                 output_filename,
-                 min_original_pairs_threshold,
-                 logger):
-        self._output_file = output_file
-        self._output_filename = output_filename
-        self._min_original_pairs_threshold = min_original_pairs_threshold
+    def __init__(self, args, logger):
+        self._output_filename = args.output_bam
+        input_bamfile = samtools.alignment_file(args.input_bam, 'rb')
+        self._output_bamfile = samtools.alignment_file(self._output_filename,
+                                                       'wb',
+                                                       template=input_bamfile)
+        input_bamfile.close()
+        self._min_family_size_threshold = args.min_family_size_threshold
         self._log = logger
         self.included_family_count = 0
         self.excluded_family_count = 0
@@ -41,10 +31,10 @@ class _WriteFamilyHandler(object):
     def handle(self, tag_families):
         for tag_family in tag_families:
             self.total_alignment_count += len(tag_family.alignments)
-            if len(tag_family.alignments) >= self._min_original_pairs_threshold:
+            if len(tag_family.alignments) >= self._min_family_size_threshold:
                 consensus_pair = tag_family.consensus
-                self._output_file.write(consensus_pair.left_alignment)
-                self._output_file.write(consensus_pair.right_alignment)
+                self._output_bamfile.write(consensus_pair.left_alignment)
+                self._output_bamfile.write(consensus_pair.right_alignment)
                 self.included_family_count += 1
             else:
                 self.excluded_family_count += 1
@@ -57,7 +47,7 @@ class _WriteFamilyHandler(object):
                   self.excluded_family_count,
                   total_family_count,
              100 * self.excluded_family_count / total_family_count,
-             self._min_original_pairs_threshold)
+             self._min_family_size_threshold)
         dedup_percent = 100 * (1 - (self.included_family_count / self.total_alignment_count))
         self._log.info(('{} original pairs were deduplicated to {} families '
                    '(overall dedup rate {:.2f}%)'),
@@ -67,35 +57,34 @@ class _WriteFamilyHandler(object):
         self._log.info('{} families written to [{}]',
                   self.included_family_count,
                   self._output_filename)
+        self._output_bamfile.close()
+        self._log.info('sorting and indexing [{}]', self._output_filename)
+        samtools.sort_and_index_bam(self._output_filename)
 
-#TODO: cgates: Should use begin() to open file and end to close, index, etc.
+
 class _WriteExcludedReadsHandler(object):
-    def __init__(self, output_file,
-                 output_filename,
-                 min_original_pairs_threshold,
-                 logger):
-        self._output_file = output_file
-        self._output_filename = output_filename
-        self._min_original_pairs_threshold = min_original_pairs_threshold
+    def __init__(self, args, logger):
+        self._output_filename = args.output_excluded_alignments
+        input_bamfile = samtools.alignment_file(args.input_bam, 'rb')
+        self._output_bamfile = samtools.alignment_file(self._output_filename,
+                                                       'wb',
+                                                       template=input_bamfile)
+        input_bamfile.close()
+        self._min_family_size_threshold = args.min_family_size_threshold
         self._log = logger
         self.total_alignment_count = 0
 
     def handle(self, tag_families):
         for tag_family in tag_families:
-#             self.total_alignment_count += len(tag_family.alignments)
             self.total_alignment_count += len(tag_family.excluded_alignments)
             self.total_alignment_count += 1
-#             for pair in tag_family.alignments:
-#                 self.tag_reads(tag_family, pair, included=1)
-#                 self._output_file.write(pair.left_alignment)
-#                 self._output_file.write(pair.right_alignment)
             self.tag_reads(tag_family, tag_family.consensus, included=1)
-            self._output_file.write(tag_family.consensus.left_alignment)
-            self._output_file.write(tag_family.consensus.right_alignment)
+            self._output_bamfile.write(tag_family.consensus.left_alignment)
+            self._output_bamfile.write(tag_family.consensus.right_alignment)
             for pair in tag_family.excluded_alignments:
                 self.tag_reads(tag_family, pair, included=0)
-                self._output_file.write(pair.left_alignment)
-                self._output_file.write(pair.right_alignment)
+                self._output_bamfile.write(pair.left_alignment)
+                self._output_bamfile.write(pair.right_alignment)
 
     def tag_reads(self, tag_family, original_pair, included):
         x0 = tag_family.umi_sequence
@@ -103,7 +92,7 @@ class _WriteExcludedReadsHandler(object):
         x2 = "{0},{1}".format(original_pair.left_alignment.reference_start + 1,
                               original_pair.right_alignment.reference_end)
         x3 = len(tag_family.alignments)
-        x4 = str(x3 >= self._min_original_pairs_threshold)
+        x4 = str(x3 >= self._min_family_size_threshold)
         original_pair.left_alignment.set_tag("X0", x0, "i")
         original_pair.left_alignment.set_tag("X1", x1, "Z")
         original_pair.left_alignment.set_tag("X2", x2, "Z")
@@ -122,7 +111,9 @@ class _WriteExcludedReadsHandler(object):
         self._log.info('{} tagged original pairs written to [{}]',
                   self.total_alignment_count,
                   self._output_filename)
-
+        self._output_bamfile.close()
+        self._log.info('sorting and indexing [{}]', self._output_filename)
+        samtools.sort_and_index_bam(self._output_filename)
 
 class _BaseTukeyStatHandler(object):
     def __init__(self):
@@ -163,7 +154,7 @@ class _FamilySizeStatHandler(_BaseTukeyStatHandler):
     def __init__(self, logger):
         super(_FamilySizeStatHandler, self).__init__()
         self._log = logger
-    
+
     def get_family_statistic(self, tag_family):
         return len(tag_family.alignments)
 
@@ -191,7 +182,7 @@ class _CigarMinorityStatHandler(_BaseTukeyStatHandler):
         self._log.debug(('family stat|cigar|family distribution of minority '
                    'CIGAR percentages (min, 1Q, median, 3Q, max): {}'),
                   ', '.join(map(lambda x: str(round(x,2)), self.summary)))
-        
+
 #TODO: (cgates): Split into tukey and other stats
 class _CigarStatHandler(object):
     def __init__(self, logger):
@@ -281,9 +272,9 @@ class _CigarStatHandler(object):
 
 
 class _MatchStatHandler(object):
-    def __init__(self, hamming_threshold, logger):
+    def __init__(self, args, logger):
         self._log = logger
-        self.hamming_threshold = hamming_threshold
+        self.hamming_threshold = args.umi_distance_threshold
         self.total_inexact_match_count = 0
         self.total_pair_count = 0
 

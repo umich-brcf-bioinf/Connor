@@ -47,17 +47,21 @@ def _validate_output_file(log_file):
         raise UsageError(("Connor cannot create specified output file "
                                 "[{}]. Review inputs and try again."), log_file)
 
-
+#TODO: cgates: set default log file in main not here
+#TODO: cgates: logger should INFO where the log file is
+#TODO: cgates: *something* should log pwd after command options
 class Logger(object):
     _DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
-    _FILE_LOG_FORMAT = ('%(asctime)s|%(levelname)s|%(start_time)s|%(host)s|%(user)s'
-                        '|%s|%(message)s')
+    _FILE_LOG_FORMAT = ('%(asctime)s|%(levelname)s|%(start_time)s|%(host)s|'
+                        '%(user)s|%(message)s')
     _CONSOLE_LOG_FORMAT = '%(asctime)s|%(levelname)s|%(message)s'
 
-#TODO: cgates: Should pull verbose and filename from args
     def __init__(self, args):
-        self._verbose = False
-        self._log_file_name = "/tmp/connor.log"
+        self._verbose = args.verbose
+        if args.log_file:
+            self._log_filename = args.log_file
+        else:
+            self._log_filename = args.output_bam + ".log"
         self._warning_occurred = False
         user = getpass.getuser()
         host = socket.gethostname()
@@ -65,12 +69,17 @@ class Logger(object):
         self._logging_dict = {'user': user,
                               'host': host,
                               'start_time' : start_time}
+        logging.basicConfig(format=Logger._FILE_LOG_FORMAT,
+                            level="DEBUG",
+                            datefmt=Logger._DATE_FORMAT,
+                            filename=self._log_filename)
 
     def _print(self, level, message, args):
         now = datetime.now().strftime(Logger._DATE_FORMAT)
         print(Logger._CONSOLE_LOG_FORMAT % {'asctime': now,
-                                     'levelname': level,
-                                     'message': self._format(message, args)},
+                                            'levelname': level,
+                                            'message': self._format(message,
+                                                                    args)},
               file=sys.stderr)
         sys.stderr.flush()
 
@@ -103,4 +112,3 @@ class Logger(object):
         self._print("WARNING", message, args)
         logging.warning(self._format(message, args), extra=self._logging_dict)
         self._warning_occurred = True
-

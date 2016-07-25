@@ -20,7 +20,6 @@ import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
 import operator
-import os
 import sys
 import traceback
 
@@ -198,7 +197,8 @@ class _TagFamily(object):
         return number_distict_cigars, minority_cigar_percentage, dominant_cigar
 
 
-    #TODO: (cgates) tags should not assume umi is a tuple and symmetric between left and right 
+    #TODO: (cgates) tags should not assume umi is a tuple and symmetric
+    #between left and right
     def _build_consensus(self, umi, alignments):
         left_aligns = []
         right_aligns = []
@@ -324,10 +324,21 @@ def _parse_command_line_args(arguments):
                         "--version",
                         action='version',
                         version=__version__)
+    parser.add_argument("-v",
+                        "--verbose",
+                        action="store_true",
+                        default=False,
+                        help="print all log messages to console")
     parser.add_argument('input_bam',
                         help="path to input BAM")
     parser.add_argument('output_bam',
-                        help="path to output BAM")
+                        help="path to deduplcated output BAM")
+    parser.add_argument('--log_file',
+                        type=str,
+                        help="={output_filename}.log. Path to verbose log file")
+    parser.add_argument('--output_excluded_alignments',
+                        type=str,
+                        help="path to BAM containing all excluded aligns")
     parser.add_argument("-f", "--consensus_freq_threshold",
                         type=float,
                         default = DEFAULT_CONSENSUS_THRESHOLD,
@@ -367,15 +378,6 @@ def _rank_tags(tagged_paired_aligns):
     return ranked_tags
 
 
-def _sort_and_index_bam(bam_filename):
-    output_dir = os.path.dirname(bam_filename)
-    output_root = os.path.splitext(os.path.basename(bam_filename))[0]
-    sorted_bam_filename = os.path.join(output_dir,
-                                       output_root + ".sorted.bam")
-    samtools.sort(bam_filename, sorted_bam_filename)
-    os.rename(sorted_bam_filename, bam_filename)
-    samtools.index(bam_filename)
-
 def build_lightweight_aligns(aligned_segments):
     name_pairs = defaultdict(list)
     for align_segment in aligned_segments:
@@ -408,19 +410,8 @@ def _dedup_alignments(args, log):
         log.info('bam stat|{} original alignments', original_read_count)
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
-        outfile = samtools.alignment_file(args.output_bam,
-                                          'wb',
-                                          template=bamfile)
-        original_tagged_filename = args.output_bam + ".excluded.bam"
-        outfile_original = samtools.alignment_file(original_tagged_filename,
-                                               'wb',
-                                               template=bamfile)
 
-        handlers = familyhandler.build_family_handlers(args,
-                                                       outfile,
-                                                       outfile_original,
-                                                       original_tagged_filename,
-                                                       log)
+        handlers = familyhandler.build_family_handlers(args, log)
 
         for coord_family in _build_coordinate_families(bamfile.fetch(),
                                                        coord_manifest):
@@ -435,14 +426,8 @@ def _dedup_alignments(args, log):
         for handler in handlers:
             handler.end()
 
-        outfile.close()
-        outfile_original.close()
         bamfile.close()
 
-        log.info('sorting and indexing [{}]', args.output_bam)
-        _sort_and_index_bam(args.output_bam)
-        log.info('sorting and indexing [{}]', original_tagged_filename)
-        _sort_and_index_bam(original_tagged_filename)
     except Exception: #pylint: disable=broad-except
         log.error("ERROR: An unexpected error occurred")
         log.error(traceback.format_exc())

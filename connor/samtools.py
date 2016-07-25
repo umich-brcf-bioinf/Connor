@@ -1,9 +1,9 @@
 """Simplifies discrepancies in how different versions pysam wrap samtools"""
 from __future__ import print_function, absolute_import, division
 
-import pysam
 import os
 import re
+import pysam
 
 class _Pysam9SamtoolsUtil(object):
     @staticmethod
@@ -46,3 +46,12 @@ def sort(input_bam_filepath, output_bam_filepath):
 
 def index(bam_filepath):
     SAMTOOLS_UTIL.index(bam_filepath)
+
+def sort_and_index_bam(bam_filename):
+    output_dir = os.path.dirname(bam_filename)
+    output_root = os.path.splitext(os.path.basename(bam_filename))[0]
+    sorted_bam_filename = os.path.join(output_dir,
+                                       output_root + ".sorted.bam")
+    sort(bam_filename, sorted_bam_filename)
+    os.rename(sorted_bam_filename, bam_filename)
+    index(bam_filename)
