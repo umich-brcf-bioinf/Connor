@@ -38,6 +38,9 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
+def alignment_file(filename, mode, template=None):
+    return pysam.AlignmentFile(filename, mode, template)
+
 def sort(input_bam_filepath, output_bam_filepath):
     SAMTOOLS_UTIL.sort(input_bam_filepath, output_bam_filepath)
 

@@ -9,19 +9,19 @@ def build_family_handlers(args,
                           outfile,
                           outfile_original,
                           original_tagged_filename,
-                          log_method):
-    handlers = [_FamilySizeStatHandler(log_method),
-            _MatchStatHandler(args.umi_distance_threshold, log_method),
-            _CigarMinorityStatHandler(log_method),
-            _CigarStatHandler(log_method),
+                          logger):
+    handlers = [_FamilySizeStatHandler(logger),
+            _MatchStatHandler(args.umi_distance_threshold, logger),
+            _CigarMinorityStatHandler(logger),
+            _CigarStatHandler(logger),
             _WriteFamilyHandler(outfile,
                                 args.output_bam,
                                 args.min_family_size_threshold,
-                                log_method),
+                                logger),
             _WriteExcludedReadsHandler(outfile_original,
                                        original_tagged_filename,
                                        args.min_family_size_threshold,
-                                       log_method)]
+                                       logger)]
     return handlers
 
 #TODO: cgates: Should use begin() to open file and end to close, index, etc.
@@ -29,11 +29,11 @@ class _WriteFamilyHandler(object):
     def __init__(self, output_file,
                  output_filename,
                  min_original_pairs_threshold,
-                 log_method):
+                 logger):
         self._output_file = output_file
         self._output_filename = output_filename
         self._min_original_pairs_threshold = min_original_pairs_threshold
-        self._log = log_method
+        self._log = logger
         self.included_family_count = 0
         self.excluded_family_count = 0
         self.total_alignment_count = 0
@@ -52,19 +52,19 @@ class _WriteFamilyHandler(object):
     def end(self):
         total_family_count = self.excluded_family_count + \
                              self.included_family_count
-        self._log(('INFO|{}/{} ({:.2f}%) families were excluded because the '
+        self._log.info(('{}/{} ({:.2f}%) families were excluded because the '
                    'original read count < {}'),
                   self.excluded_family_count,
                   total_family_count,
              100 * self.excluded_family_count / total_family_count,
              self._min_original_pairs_threshold)
         dedup_percent = 100 * (1 - (self.included_family_count / self.total_alignment_count))
-        self._log(('INFO|{} original pairs were deduplicated to {} families '
+        self._log.info(('{} original pairs were deduplicated to {} families '
                    '(overall dedup rate {:.2f}%)'),
                   self.total_alignment_count,
                   self.included_family_count,
                   dedup_percent)
-        self._log('INFO|{} families written to [{}]',
+        self._log.info('{} families written to [{}]',
                   self.included_family_count,
                   self._output_filename)
 
@@ -73,11 +73,11 @@ class _WriteExcludedReadsHandler(object):
     def __init__(self, output_file,
                  output_filename,
                  min_original_pairs_threshold,
-                 log_method):
+                 logger):
         self._output_file = output_file
         self._output_filename = output_filename
         self._min_original_pairs_threshold = min_original_pairs_threshold
-        self._log = log_method
+        self._log = logger
         self.total_alignment_count = 0
 
     def handle(self, tag_families):
@@ -119,7 +119,7 @@ class _WriteExcludedReadsHandler(object):
         original_pair.right_alignment.set_tag("X5", included, "i")
 
     def end(self):
-        self._log('INFO|{} tagged original pairs written to [{}]',
+        self._log.info('{} tagged original pairs written to [{}]',
                   self.total_alignment_count,
                   self._output_filename)
 
@@ -160,24 +160,24 @@ class _BaseTukeyStatHandler(object):
 
 
 class _FamilySizeStatHandler(_BaseTukeyStatHandler):
-    def __init__(self, log_method):
+    def __init__(self, logger):
         super(_FamilySizeStatHandler, self).__init__()
-        self._log = log_method
+        self._log = logger
     
     def get_family_statistic(self, tag_family):
         return len(tag_family.alignments)
 
     def end(self):
         super(_FamilySizeStatHandler, self).end()
-        self._log(('DEBUG|family stat|family size distribution (original pair '
+        self._log.debug(('family stat|family size distribution (original pair '
                    'counts: min, 1Q, median, 3Q, max): {}'),
                   ', '.join(map(str, self.summary)))
 
 
 class _CigarMinorityStatHandler(_BaseTukeyStatHandler):
-    def __init__(self, log_method):
+    def __init__(self, logger):
         super(_CigarMinorityStatHandler, self).__init__()
-        self._log = log_method
+        self._log = logger
 
     def get_family_statistic(self, tag_family):
         stat = tag_family.minority_cigar_percentage
@@ -188,14 +188,14 @@ class _CigarMinorityStatHandler(_BaseTukeyStatHandler):
 
     def end(self):
         super(_CigarMinorityStatHandler, self).end()
-        self._log(('DEBUG|family stat|cigar|family distribution of minority '
+        self._log.debug(('family stat|cigar|family distribution of minority '
                    'CIGAR percentages (min, 1Q, median, 3Q, max): {}'),
                   ', '.join(map(lambda x: str(round(x,2)), self.summary)))
         
 #TODO: (cgates): Split into tukey and other stats
 class _CigarStatHandler(object):
-    def __init__(self, log_method):
-        self._log = log_method
+    def __init__(self, logger):
+        self._log = logger
         self.distinct_cigar_counts = []
         self.min = None
         self.quartile_1 = None
@@ -248,41 +248,41 @@ class _CigarStatHandler(object):
         self.quartile_1 = summary['25%']
         self.quartile_3 = summary['75%']
 
-        self._log(('DEBUG|family stat|cigar|family distribution of distinct'
-                   ' CIGAR counts (min, 1Q, median, 3Q, max): {}'),
-                  ', '.join(map(str, self.summary)))
+        self._log.debug(('family stat|cigar|family distribution of distinct'
+                         ' CIGAR counts (min, 1Q, median, 3Q, max): {}'),
+                        ', '.join(map(str, self.summary)))
         ordered_cigar_counts = sorted(self.families_cigar_counts.items(),
                                       key = lambda x: -1 * int(x[1]))
         for num_cigars, freq in ordered_cigar_counts:
             summary = pd.Series(self.family_cigar_minority_percentage_counts[num_cigars]).describe()
-            self._log(('DEBUG|family stat|cigar|{}/{} ({:.2f}%) families had '
-                       '{} CIGAR: minor % distrib '
-                       '{:.2f}, {:.2f}, {:.2f}, {:.2f}, {:.2f}'),
-                      freq,
-                      self.total_family_count,
-                      100 * freq / self.total_family_count,
-                      num_cigars,
-                      summary['min'],
-                      summary['25%'],
-                      summary['50%'],
-                      summary['75%'],
-                      summary['max'])
-        self._log(('DEBUG|family stat|cigar|{}/{} ({:.2f}%) pairs were '
-                   'excluded as minority CIGAR'),
-                  self.total_excluded_alignments,
-                  self.total_input_alignment_count,
-                  100 * self.percent_excluded_alignments)
-        self._log(('DEBUG|family stat|{} original pairs (of majority CIGAR) '
-                   'were deduplicated to {} families '
-                   '(majority CIGAR dedup rate {:.2f}%)'),
-                  self.total_alignment_count,
-                  self.total_family_count,
-                  100 * self.percent_deduplication)
+            self._log.debug(('family stat|cigar|{}/{} ({:.2f}%) families had '
+                             '{} CIGAR: minor % distrib '
+                             '{:.2f}, {:.2f}, {:.2f}, {:.2f}, {:.2f}'),
+                            freq,
+                            self.total_family_count,
+                            100 * freq / self.total_family_count,
+                            num_cigars,
+                            summary['min'],
+                            summary['25%'],
+                            summary['50%'],
+                            summary['75%'],
+                            summary['max'])
+        self._log.debug(('family stat|cigar|{}/{} ({:.2f}%) pairs were '
+                         'excluded as minority CIGAR'),
+                        self.total_excluded_alignments,
+                        self.total_input_alignment_count,
+                        100 * self.percent_excluded_alignments)
+        self._log.debug(('family stat|{} original pairs (of majority CIGAR) '
+                         'were deduplicated to {} families '
+                         '(majority CIGAR dedup rate {:.2f}%)'),
+                        self.total_alignment_count,
+                        self.total_family_count,
+                        100 * self.percent_deduplication)
 
 
 class _MatchStatHandler(object):
-    def __init__(self, hamming_threshold, log_method):
-        self._log = log_method
+    def __init__(self, hamming_threshold, logger):
+        self._log = logger
         self.hamming_threshold = hamming_threshold
         self.total_inexact_match_count = 0
         self.total_pair_count = 0
@@ -294,19 +294,19 @@ class _MatchStatHandler(object):
 
     def end(self):
         exact_match_count = self.total_pair_count - self.total_inexact_match_count
-        self._log(('DEBUG|family stat|{}/{} ({:.2f}%) original pairs matched '
-                   'UMI exactly'),
-                  exact_match_count,
-                  self.total_pair_count,
-                  100 * (1 - self.percent_inexact_match))
+        self._log.debug(('family stat|{}/{} ({:.2f}%) original pairs matched '
+                         'UMI exactly'),
+                        exact_match_count,
+                        self.total_pair_count,
+                        100 * (1 - self.percent_inexact_match))
 
-        self._log(('DEBUG|family stat|{}/{} ({:.2f}%) original pairs matched '
-                   'by Hamming distance threshold (<={}) on '
-                   'left or right UMI '),
-                  self.total_inexact_match_count,
-                  self.total_pair_count,
-                  100 * self.percent_inexact_match,
-                  self.hamming_threshold)
+        self._log.debug(('family stat|{}/{} ({:.2f}%) original pairs matched '
+                      'by Hamming distance threshold (<={}) on '
+                      'left or right UMI '),
+                     self.total_inexact_match_count,
+                     self.total_pair_count,
+                     100 * self.percent_inexact_match,
+                     self.hamming_threshold)
 
     @property
     def percent_inexact_match(self):

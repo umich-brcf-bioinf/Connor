@@ -19,30 +19,17 @@ from __future__ import print_function, absolute_import, division
 import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
-from datetime import datetime
-import itertools
 import operator
 import os
 import sys
 import traceback
 
-import pysam
-import connor.samtools
-from connor.familyhandler import build_family_handlers
+import connor
+import connor.samtools as samtools
+import connor.familyhandler as familyhandler
+import connor.utils as utils
 
 __version__ = connor.__version__
-
-#TODO: cgates: get the red out
-try:
-    xrange
-except NameError:
-    xrange = range
-
-try:
-    iter_map = itertools.imap
-except AttributeError:
-    iter_map = map
-
 
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_THRESHOLD=0.6
@@ -56,28 +43,13 @@ Emits a new BAM file reduced to a single consensus read for each family of
 original reads.
 '''
 
-class _ConnorUsageError(Exception):
-    """Raised for malformed command or invalid arguments."""
-    def __init__(self, msg, *args):
-        super(_ConnorUsageError, self).__init__(msg, *args)
-
 
 class _ConnorArgumentParser(argparse.ArgumentParser):
     """Argument parser that raises UsageError instead of exiting."""
     #pylint: disable=too-few-public-methods
     def error(self, message):
         '''Suppress default exit behavior'''
-        raise _ConnorUsageError(message)
-
-#TODO: (cgates): Switch to Logger class w/ info,debug methods and verbose state
-def _log(msg_format, *args):
-    timestamp = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
-    try:
-        print("{}|{}".format(timestamp, msg_format).format(*args),
-              file=sys.stderr)
-    except IndexError:
-        print(args)
-    sys.stderr.flush()
+        raise utils.UsageError(message)
 
 
 class _LightweightAlignment(object):
@@ -101,8 +73,10 @@ class _LightweightPair(object):
     def __init__(self, aligned_segment1, aligned_segment2):
         self.name = aligned_segment1.query_name
         chrom = aligned_segment1.reference_name
-        left_start = min(aligned_segment1.reference_start, aligned_segment2.reference_start)
-        right_end = max(aligned_segment1.reference_end, aligned_segment2.reference_end)
+        left_start = min(aligned_segment1.reference_start,
+                         aligned_segment2.reference_start)
+        right_end = max(aligned_segment1.reference_end,
+                        aligned_segment2.reference_end)
         self.key = (chrom, left_start, right_end)
 
 
@@ -114,11 +88,9 @@ class _PairedAlignment(object):
         self.left_alignment = left_alignment
         self.right_alignment = right_alignment
         self._tag_length = tag_length
-        left_tag_id = self.left_alignment.query_sequence[0:self._tag_length]
-        right_tag_id = self.right_alignment.query_sequence[-1 * self._tag_length:]
-        self.umi = (left_tag_id, right_tag_id)
-
-
+        left_umi = self.left_alignment.query_sequence[0:self._tag_length]
+        right_umi = self.right_alignment.query_sequence[-1 * self._tag_length:]
+        self.umi = (left_umi, right_umi)
 
     def replace_umi(self, umi):
         def byte_array_to_string(sequence):
@@ -126,7 +98,9 @@ class _PairedAlignment(object):
                 return sequence
             else:
                 return str(sequence.decode("utf-8"))
-        self.left_alignment.query_sequence = umi[0] + byte_array_to_string(self.left_alignment.query_sequence[len(umi[0]):])
+        query_frag = self.left_alignment.query_sequence[len(umi[0]):]
+        query_frag_str = byte_array_to_string(query_frag)
+        self.left_alignment.query_sequence = umi[0] + query_frag_str
         seq = byte_array_to_string(self.right_alignment.query_sequence)
         self.right_alignment.query_sequence = seq[:-1 * len(umi[1])] + umi[1]
         self.umi = umi
@@ -190,7 +164,7 @@ class _TagFamily(object):
 
     def _generate_consensus_sequence(self, list_of_alignments):
         consensus = []
-        for i in xrange(0, len(list_of_alignments[0].query_sequence)):
+        for i in utils.zrange(0, len(list_of_alignments[0].query_sequence)):
             counter = Counter([s.query_sequence[i:i+1] for s in list_of_alignments])
             base = counter.most_common(1)[0][0]
             freq = counter[base] / sum(counter.values())
@@ -204,13 +178,13 @@ class _TagFamily(object):
     @staticmethod
     def _generate_consensus_qualities(list_of_alignments):
         consensus_quality = []
-        for i in xrange(0, len(list_of_alignments[0].query_qualities)):
+        for i in utils.zrange(0, len(list_of_alignments[0].query_qualities)):
             qualities = tuple([s.query_qualities[i] for s in list_of_alignments])
             counter = Counter(qualities)
             qual = counter.most_common(1)[0][0]
             consensus_quality.append(qual)
         return consensus_quality
-    
+
     @staticmethod
     def _generate_dominant_cigar_stats(list_of_alignments):
         counter = Counter([_TagFamily._get_cigarstring_tuple(s) for s in list_of_alignments])
@@ -319,8 +293,8 @@ def _build_tag_families(tagged_paired_aligns,
                 tag_aligns[best_tag].add(paired_align)
                 tag_inexact_match_count[best_tag] += 1
                 break
-            elif (_hamming_dist(left_umi, best_tag[0]) <= hamming_threshold) or \
-                (_hamming_dist(right_umi, best_tag[1]) <= hamming_threshold):
+            elif (_hamming_dist(left_umi, best_tag[0]) <= hamming_threshold) \
+                or (_hamming_dist(right_umi, best_tag[1]) <= hamming_threshold):
                 tag_aligns[best_tag].add(paired_align)
                 tag_inexact_match_count[best_tag] += 1
                 break
@@ -337,7 +311,7 @@ def _build_tag_families(tagged_paired_aligns,
 
 def _hamming_dist(str1, str2):
     assert len(str1) == len(str2)
-    return sum(iter_map(operator.ne, str1, str2))
+    return sum(utils.iter_map(operator.ne, str1, str2))
 
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
@@ -358,22 +332,25 @@ def _parse_command_line_args(arguments):
                         type=float,
                         default = DEFAULT_CONSENSUS_THRESHOLD,
                         help = \
-"""={} (0..1.0): Ambiguous base calls at a specific position in a family are 
-transformed to either majority base call, or N if the majority percentage 
-is below this threshold. (Higher threshold results in more Ns in consensus.)""".format(DEFAULT_CONSENSUS_THRESHOLD))
+"""={} (0..1.0): Ambiguous base calls at a specific position in a family are
+ transformed to either majority base call, or N if the majority percentage
+ is below this threshold. (Higher threshold results in more Ns in
+ consensus.)""".format(DEFAULT_CONSENSUS_THRESHOLD))
     parser.add_argument("-s", "--min_family_size_threshold",
                         type=int,
                         default = DEFAULT_MIN_ORIG_READS,
                         help=\
 """={} (>=0): families with count of original reads < threshold are excluded
-from the deduplicated output. (Higher threshold is more stringent.)""".format(DEFAULT_MIN_ORIG_READS))
+ from the deduplicated output. (Higher threshold is more
+ stringent.)""".format(DEFAULT_MIN_ORIG_READS))
     parser.add_argument("-d", "--umi_distance_threshold",
                         type=int,
                         default = DEFAULT_HAMMING_THRESHOLD,
                         help=\
-"""={} (>=0); UMIs equal to or closer than this Hamming distance will be 
-combined into a single family. Lower threshold make more families with more 
-consistent UMIs; 0 implies UMI must match exactly.""".format(DEFAULT_HAMMING_THRESHOLD))
+"""={} (>=0); UMIs equal to or closer than this Hamming distance will be
+ combined into a single family. Lower threshold make more families with more
+ consistent UMIs; 0 implies UMI must match
+ exactly.""".format(DEFAULT_HAMMING_THRESHOLD))
 
     args = parser.parse_args(arguments)
     return args
@@ -395,62 +372,55 @@ def _sort_and_index_bam(bam_filename):
     output_root = os.path.splitext(os.path.basename(bam_filename))[0]
     sorted_bam_filename = os.path.join(output_dir,
                                        output_root + ".sorted.bam")
-    connor.samtools.sort(bam_filename, sorted_bam_filename)
+    samtools.sort(bam_filename, sorted_bam_filename)
     os.rename(sorted_bam_filename, bam_filename)
-    connor.samtools.index(bam_filename)
+    samtools.index(bam_filename)
 
 def build_lightweight_aligns(aligned_segments):
     name_pairs = defaultdict(list)
     for align_segment in aligned_segments:
         name_pairs[align_segment.query_name].append(_LightweightAlignment(align_segment))
     return name_pairs
-    
-    
+
+
 def build_lightweight_pairs(aligned_segments):
     name_pairs = dict()
     lightweight_pairs = list()
     for align_segment in aligned_segments:
         query_name = align_segment.query_name
-        if not query_name in name_pairs: 
+        if not query_name in name_pairs:
             name_pairs[align_segment.query_name] = align_segment
         else:
-            new_pair = _LightweightPair(name_pairs.pop(query_name), align_segment)
+            new_pair = _LightweightPair(name_pairs.pop(query_name),
+                                        align_segment)
             lightweight_pairs.append(new_pair)
     return lightweight_pairs
 
 
-#TODO cgates: check that input file exists and output file does not
-def main(command_line_args=None):
-    '''Connor entry point.  See help for more info'''
-
-    if not command_line_args:
-        command_line_args = sys.argv
-
+def _dedup_alignments(args, log):
     try:
-        args = _parse_command_line_args(command_line_args[1:])
-        _log('INFO|connor begins (v{})', __version__)
-        _log('DEBUG|command|{}',' '.join(command_line_args))
-        _log('DEBUG|command options|{}', vars(args))
-        _log('INFO|reading input bam [{}]', args.input_bam)
-        bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
+        log.info('reading input bam [{}]', args.input_bam)
+        bamfile = samtools.alignment_file(args.input_bam, 'rb')
         lightweight_pairs = build_lightweight_pairs(bamfile.fetch())
         bamfile.close()
 
         original_read_count = len(lightweight_pairs) * 2
-        _log('INFO|bam stat|{} original reads', original_read_count)
+        log.info('bam stat|{} original alignments', original_read_count)
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
-        bamfile = pysam.AlignmentFile(args.input_bam, 'rb')
-        outfile = pysam.AlignmentFile(args.output_bam, 'wb', template=bamfile)
+        bamfile = samtools.alignment_file(args.input_bam, 'rb')
+        outfile = samtools.alignment_file(args.output_bam,
+                                          'wb',
+                                          template=bamfile)
         original_tagged_filename = args.output_bam + ".excluded.bam"
-        outfile_original = pysam.AlignmentFile(original_tagged_filename,
+        outfile_original = samtools.alignment_file(original_tagged_filename,
                                                'wb',
                                                template=bamfile)
 
-        handlers = build_family_handlers(args,
-                                         outfile,
-                                         outfile_original,
-                                         original_tagged_filename,
-                                         _log)
+        handlers = familyhandler.build_family_handlers(args,
+                                                       outfile,
+                                                       outfile_original,
+                                                       original_tagged_filename,
+                                                       log)
 
         for coord_family in _build_coordinate_families(bamfile.fetch(),
                                                        coord_manifest):
@@ -469,21 +439,34 @@ def main(command_line_args=None):
         outfile_original.close()
         bamfile.close()
 
-        _log('INFO|sorting and indexing [{}]', args.output_bam)
+        log.info('sorting and indexing [{}]', args.output_bam)
         _sort_and_index_bam(args.output_bam)
-        _log('INFO|sorting and indexing [{}]', original_tagged_filename)
+        log.info('sorting and indexing [{}]', original_tagged_filename)
         _sort_and_index_bam(original_tagged_filename)
+    except Exception: #pylint: disable=broad-except
+        log.error("ERROR: An unexpected error occurred")
+        log.error(traceback.format_exc())
+        exit(1)
 
-        _log('INFO|connor complete')
-    except _ConnorUsageError as usage_error:
+#TODO cgates: check that input file exists and output file does not
+def main(command_line_args=None):
+    '''Connor entry point.  See help for more info'''
+    if not command_line_args:
+        command_line_args = sys.argv
+    try:
+        args = _parse_command_line_args(command_line_args[1:])
+        log = utils.Logger(args)
+        log.info('connor begins (v{})', __version__)
+        log.debug('command|{}',' '.join(command_line_args))
+        log.debug('command options|{}', vars(args))
+        _dedup_alignments(args, log)
+        log.info('connor complete')
+
+    except utils.UsageError as usage_error:
         message = "connor usage problem: {}".format(str(usage_error))
         print(message, file=sys.stderr)
         print("See 'connor --help'.", file=sys.stderr)
         sys.exit(1)
-    except Exception: #pylint: disable=broad-except
-        _log("ERROR: An unexpected error occurred")
-        _log(traceback.format_exc())
-        exit(1)
 
 
 if __name__ == '__main__':

@@ -2,8 +2,8 @@
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments
 from __future__ import print_function, absolute_import, division
-from test.util import BaseConnorTestCase
-from test.util import MicroMock
+from test.utils_test import BaseConnorTestCase
+from test.utils_test import MicroMock
 from connor.familyhandler import _CigarStatHandler
 from connor.familyhandler import _CigarMinorityStatHandler
 from connor.familyhandler import _FamilySizeStatHandler
@@ -29,7 +29,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         posAfam1 = MicroMock(alignments=[1,1])
         posAfam2 = MicroMock(alignments=[1,1,1])
         posBfam1 = MicroMock(alignments=[1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler(self.mock_logger._log)
+        stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1])
@@ -41,7 +41,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         posAfam1 = MicroMock(alignments=[1,1])
         posAfam2 = MicroMock(alignments=[1,1,1])
         posBfam1 = MicroMock(alignments=[1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler(self.mock_logger._log)
+        stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1])
@@ -53,7 +53,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         posAfam1 = MicroMock(alignments=[1,1])
         posAfam2 = MicroMock(alignments=[1,1,1])
         posBfam1 = MicroMock(alignments=[1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler(self.mock_logger._log)
+        stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1])
@@ -67,7 +67,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         posBfam1 = MicroMock(alignments=[1,1,1,1,1,1,1,1,1])
         posBfam2 = MicroMock(alignments=[1,1,1,1,1,1,1,1,1,1,1,1])
         posBfam3 = MicroMock(alignments=[1,1,1,1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler(self.mock_logger._log)
+        stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1, posBfam2, posBfam3])
@@ -77,7 +77,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(9, stat_handler.quartile_3)
 
     def test_summary(self):
-        stat_handler = _FamilySizeStatHandler(self.mock_logger._log)
+        stat_handler = _FamilySizeStatHandler(self.mock_logger)
         stat_handler.min = 1
         stat_handler.quartile_1 = 2
         stat_handler.median = 3
@@ -89,7 +89,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
 class MatchStatHandlerTest(BaseConnorTestCase):
     def test_total_inexact_match_count(self):
         stat_handler = _MatchStatHandler(hamming_threshold=1,
-                                         log_method=self.mock_logger._log)
+                                         logger=self.mock_logger)
         posAfam1 = _mock_tag_family(alignments=[1] * 5,
                                    inexact_match_count=1)
         posAfam2 = _mock_tag_family(alignments=[1] * 15,
@@ -111,7 +111,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
                                    alignments = [1] * 2)
         posAfam3 = _mock_tag_family(input_alignment_count=2,
                                    alignments = [1] * 2)
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2, posAfam3])
         stat_handler.end()
@@ -124,7 +124,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
                                    alignments = [1] * 1)
         posAfam2 = _mock_tag_family(input_alignment_count=2,
                                    alignments = [1] * 2)
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.end()
@@ -139,7 +139,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
                                    alignments = [1] * 3)
         posAfam2 = _mock_tag_family(input_alignment_count=2,
                                    alignments = [1] * 1)
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.end()
@@ -155,7 +155,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         posAfam1 = _mock_tag_family(distinct_cigar_count=1)
         posAfam2 = _mock_tag_family(distinct_cigar_count=2)
         posBfam1 = _mock_tag_family(distinct_cigar_count=4)
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1])
@@ -167,7 +167,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         posAfam1 = _mock_tag_family(distinct_cigar_count=1)
         posAfam2 = _mock_tag_family(distinct_cigar_count=2)
         posBfam1 = _mock_tag_family(distinct_cigar_count=4)
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1])
@@ -179,7 +179,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         posAfam1 = _mock_tag_family(distinct_cigar_count=1)
         posAfam2 = _mock_tag_family(distinct_cigar_count=2)
         posBfam1 = _mock_tag_family(distinct_cigar_count=4)
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1])
@@ -194,7 +194,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         posBfam2 = _mock_tag_family(distinct_cigar_count=12)
         posBfam3 = _mock_tag_family(distinct_cigar_count=7)
 
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
 
         stat_handler.handle([posAfam1, posAfam2])
         stat_handler.handle([posBfam1, posBfam2, posBfam3])
@@ -204,7 +204,7 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(9, stat_handler.quartile_3)
 
     def test_summary(self):
-        stat_handler = _CigarStatHandler(self.mock_logger._log)
+        stat_handler = _CigarStatHandler(self.mock_logger)
         stat_handler.min = 1
         stat_handler.quartile_1 = 2
         stat_handler.median = 3
@@ -223,7 +223,7 @@ class CigarMinorityStatHandlerTest(BaseConnorTestCase):
         posAfam4 = _mock_tag_family(minority_cigar_percentage=0.7)
         posAfam5 = _mock_tag_family(minority_cigar_percentage=0.9)
  
-        stat_handler = _CigarMinorityStatHandler(self.mock_logger._log)
+        stat_handler = _CigarMinorityStatHandler(self.mock_logger)
  
         stat_handler.handle([posAfam0,
                              posAfam1,
