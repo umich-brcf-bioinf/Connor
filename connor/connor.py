@@ -20,6 +20,7 @@ import argparse
 from collections import defaultdict, Counter
 from copy import deepcopy
 import operator
+import os
 import sys
 import traceback
 
@@ -31,9 +32,9 @@ import connor.utils as utils
 __version__ = connor.__version__
 
 DEFAULT_TAG_LENGTH = 6
-DEFAULT_CONSENSUS_THRESHOLD=0.6
-DEFAULT_MIN_ORIG_READS = 3
-DEFAULT_HAMMING_THRESHOLD = 1
+DEFAULT_CONSENSUS_FREQ_THRESHOLD=0.6
+DEFAULT_MIN_FAMILY_SIZE_THRESHOLD = 3
+DEFAULT_UMI_DISTANCE_THRESHOLD = 1
 
 
 DESCRIPTION=\
@@ -230,7 +231,7 @@ class _TagFamily(object):
                               consensus_align.right_alignment.reference_end)
         x3 = num_alignments
 #TODO: (cgates): until you make this into a handler, the next line is a bug
-        x4 = str(num_alignments >= DEFAULT_MIN_ORIG_READS)
+        x4 = str(num_alignments >= DEFAULT_MIN_FAMILY_SIZE_THRESHOLD)
         consensus_align.left_alignment.set_tag("X0", x0, "i")
         consensus_align.left_alignment.set_tag("X1", x1, "Z")
         consensus_align.left_alignment.set_tag("X2", x2, "Z")
@@ -341,27 +342,27 @@ def _parse_command_line_args(arguments):
                         help="path to BAM containing all excluded aligns")
     parser.add_argument("-f", "--consensus_freq_threshold",
                         type=float,
-                        default = DEFAULT_CONSENSUS_THRESHOLD,
+                        default = DEFAULT_CONSENSUS_FREQ_THRESHOLD,
                         help = \
 """={} (0..1.0): Ambiguous base calls at a specific position in a family are
  transformed to either majority base call, or N if the majority percentage
  is below this threshold. (Higher threshold results in more Ns in
- consensus.)""".format(DEFAULT_CONSENSUS_THRESHOLD))
+ consensus.)""".format(DEFAULT_CONSENSUS_FREQ_THRESHOLD))
     parser.add_argument("-s", "--min_family_size_threshold",
                         type=int,
-                        default = DEFAULT_MIN_ORIG_READS,
+                        default = DEFAULT_MIN_FAMILY_SIZE_THRESHOLD,
                         help=\
 """={} (>=0): families with count of original reads < threshold are excluded
  from the deduplicated output. (Higher threshold is more
- stringent.)""".format(DEFAULT_MIN_ORIG_READS))
+ stringent.)""".format(DEFAULT_MIN_FAMILY_SIZE_THRESHOLD))
     parser.add_argument("-d", "--umi_distance_threshold",
                         type=int,
-                        default = DEFAULT_HAMMING_THRESHOLD,
+                        default = DEFAULT_UMI_DISTANCE_THRESHOLD,
                         help=\
 """={} (>=0); UMIs equal to or closer than this Hamming distance will be
  combined into a single family. Lower threshold make more families with more
  consistent UMIs; 0 implies UMI must match
- exactly.""".format(DEFAULT_HAMMING_THRESHOLD))
+ exactly.""".format(DEFAULT_UMI_DISTANCE_THRESHOLD))
 
     args = parser.parse_args(arguments)
     return args
@@ -378,14 +379,7 @@ def _rank_tags(tagged_paired_aligns):
     return ranked_tags
 
 
-def build_lightweight_aligns(aligned_segments):
-    name_pairs = defaultdict(list)
-    for align_segment in aligned_segments:
-        name_pairs[align_segment.query_name].append(_LightweightAlignment(align_segment))
-    return name_pairs
-
-
-def build_lightweight_pairs(aligned_segments):
+def _build_lightweight_pairs(aligned_segments):
     name_pairs = dict()
     lightweight_pairs = list()
     for align_segment in aligned_segments:
@@ -403,7 +397,7 @@ def _dedup_alignments(args, log):
     try:
         log.info('reading input bam [{}]', args.input_bam)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
-        lightweight_pairs = build_lightweight_pairs(bamfile.fetch())
+        lightweight_pairs = _build_lightweight_pairs(bamfile.fetch())
         bamfile.close()
 
         original_read_count = len(lightweight_pairs) * 2
@@ -421,7 +415,8 @@ def _dedup_alignments(args, log):
                                                args.umi_distance_threshold,
                                                args.consensus_freq_threshold)
             for handler in handlers:
-                handler.handle(tag_families)
+                for tag_family in tag_families:
+                    handler.handle(tag_family)
 
         for handler in handlers:
             handler.end()
@@ -440,13 +435,17 @@ def main(command_line_args=None):
         command_line_args = sys.argv
     try:
         args = _parse_command_line_args(command_line_args[1:])
+        if not args.log_file:
+            args.log_file = args.output_bam + ".log"
         log = utils.Logger(args)
         log.info('connor begins (v{})', __version__)
+        log.info('logging to []', args.log_file)
         log.debug('command|{}',' '.join(command_line_args))
         log.debug('command options|{}', vars(args))
+        log.debug('pwd|{}', os. getcwd ())
         _dedup_alignments(args, log)
-        log.info('connor complete')
-
+        warning = ' (See warnings above)' if log.warning_occurred else ''
+        log.info('connor complete{}', warning)
     except utils.UsageError as usage_error:
         message = "connor usage problem: {}".format(str(usage_error))
         print(message, file=sys.stderr)

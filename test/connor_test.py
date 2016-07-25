@@ -63,17 +63,6 @@ def align_seg(query_name,
                             cigarstring,
                             reference_end)
 
-#     if not reference_end:
-#         reference_end = reference_start + len(query_sequence)
-#     return MicroMock(query_name=query_name,
-#                      reference_name=reference_name,
-#                      reference_start=reference_start,
-#                      next_reference_start=next_reference_start,
-#                      query_sequence=query_sequence,
-#                      query_qualities=query_qualities,
-#                      cigarstring=cigarstring,
-#                      reference_end=reference_end)
-
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
     alignR = align_seg(q, rn, rs, nrs, s2)
@@ -82,8 +71,10 @@ def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
 
 class PairedAlignmentTest(BaseConnorTestCase):
     def test_init(self):
-        left_align = MockAlignSegment("alignA", 'chr1', 10, 20, "AAATTT" "GGGG", reference_end=14)
-        right_align = MockAlignSegment("alignA", 'chr1', 20, 10, "TTTT" "CCCGGG" ,reference_end=24)
+        left_align = MockAlignSegment("alignA", 'chr1', 10, 20,
+                                      "AAATTT" "GGGG", reference_end=14)
+        right_align = MockAlignSegment("alignA", 'chr1', 20, 10,
+                                       "TTTT" "CCCGGG" ,reference_end=24)
         tag_length = 6
         actual_paired_alignment = connor._PairedAlignment(left_align,
                                                          right_align,
@@ -757,7 +748,6 @@ class TestLightweightAlignment(BaseConnorTestCase):
 
 #TODO: cgates: Test deduplicate_alignment separately
 #TODO: cgates: Test main parses args correctly
-#TODO: cgates: Adjust setup/teardown to stop changing default constants
 class ConnorIntegrationTestCase(BaseConnorTestCase):
     def test_deduplicate_alignnemnts(self):
         sam_contents = \

@@ -3,7 +3,6 @@ from collections import defaultdict
 import pandas as pd
 import connor.samtools as samtools
 
-#TODO: (cgates): switch all handlers to family-at-at-time handling
 def build_family_handlers(args, logger):
     handlers = [_FamilySizeStatHandler(logger),
             _MatchStatHandler(args, logger),
@@ -28,16 +27,15 @@ class _WriteFamilyHandler(object):
         self.excluded_family_count = 0
         self.total_alignment_count = 0
 
-    def handle(self, tag_families):
-        for tag_family in tag_families:
-            self.total_alignment_count += len(tag_family.alignments)
-            if len(tag_family.alignments) >= self._min_family_size_threshold:
-                consensus_pair = tag_family.consensus
-                self._output_bamfile.write(consensus_pair.left_alignment)
-                self._output_bamfile.write(consensus_pair.right_alignment)
-                self.included_family_count += 1
-            else:
-                self.excluded_family_count += 1
+    def handle(self, tag_family):
+        self.total_alignment_count += len(tag_family.alignments)
+        if len(tag_family.alignments) >= self._min_family_size_threshold:
+            consensus_pair = tag_family.consensus
+            self._output_bamfile.write(consensus_pair.left_alignment)
+            self._output_bamfile.write(consensus_pair.right_alignment)
+            self.included_family_count += 1
+        else:
+            self.excluded_family_count += 1
 
     def end(self):
         total_family_count = self.excluded_family_count + \
@@ -48,7 +46,8 @@ class _WriteFamilyHandler(object):
                   total_family_count,
              100 * self.excluded_family_count / total_family_count,
              self._min_family_size_threshold)
-        dedup_percent = 100 * (1 - (self.included_family_count / self.total_alignment_count))
+        dedup_percent = 100 * \
+                (1 - (self.included_family_count / self.total_alignment_count))
         self._log.info(('{} original pairs were deduplicated to {} families '
                    '(overall dedup rate {:.2f}%)'),
                   self.total_alignment_count,
@@ -74,18 +73,18 @@ class _WriteExcludedReadsHandler(object):
         self._log = logger
         self.total_alignment_count = 0
 
-    def handle(self, tag_families):
-        for tag_family in tag_families:
-            self.total_alignment_count += len(tag_family.excluded_alignments)
-            self.total_alignment_count += 1
-            self.tag_reads(tag_family, tag_family.consensus, included=1)
-            self._output_bamfile.write(tag_family.consensus.left_alignment)
-            self._output_bamfile.write(tag_family.consensus.right_alignment)
-            for pair in tag_family.excluded_alignments:
-                self.tag_reads(tag_family, pair, included=0)
-                self._output_bamfile.write(pair.left_alignment)
-                self._output_bamfile.write(pair.right_alignment)
+    def handle(self, tag_family):
+        self.total_alignment_count += len(tag_family.excluded_alignments)
+        self.total_alignment_count += 1
+        self.tag_reads(tag_family, tag_family.consensus, included=1)
+        self._output_bamfile.write(tag_family.consensus.left_alignment)
+        self._output_bamfile.write(tag_family.consensus.right_alignment)
+        for pair in tag_family.excluded_alignments:
+            self.tag_reads(tag_family, pair, included=0)
+            self._output_bamfile.write(pair.left_alignment)
+            self._output_bamfile.write(pair.right_alignment)
 
+    #TODO: cgates: extract this into a separate method?
     def tag_reads(self, tag_family, original_pair, included):
         x0 = tag_family.umi_sequence
         x1 = "{0}|{1}".format(tag_family.umi[0], tag_family.umi[1])
@@ -127,11 +126,10 @@ class _BaseTukeyStatHandler(object):
     def get_family_statistic(self, tag_family):
         pass
 
-    def handle(self, tag_families):
-        for tag_family in tag_families:
-            stat = self.get_family_statistic(tag_family)
-            if stat is not None:
-                self.collection.append(stat)
+    def handle(self, tag_family):
+        stat = self.get_family_statistic(tag_family)
+        if stat is not None:
+            self.collection.append(stat)
 
     @property
     def summary(self):
@@ -200,14 +198,13 @@ class _CigarStatHandler(object):
         self.family_cigar_minority_percentage_counts = defaultdict(list)
 
 
-    def handle(self, tag_families):
-        for tag_family in tag_families:
-            self.distinct_cigar_counts.append(tag_family.distinct_cigar_count)
-            self.total_input_alignment_count += tag_family.input_alignment_count
-            self.total_alignment_count += len(tag_family.alignments)
-            self.total_family_count += 1
-            self.families_cigar_counts[tag_family.distinct_cigar_count] += 1
-            self.family_cigar_minority_percentage_counts[tag_family.distinct_cigar_count].append(tag_family.minority_cigar_percentage)
+    def handle(self, tag_family):
+        self.distinct_cigar_counts.append(tag_family.distinct_cigar_count)
+        self.total_input_alignment_count += tag_family.input_alignment_count
+        self.total_alignment_count += len(tag_family.alignments)
+        self.total_family_count += 1
+        self.families_cigar_counts[tag_family.distinct_cigar_count] += 1
+        self.family_cigar_minority_percentage_counts[tag_family.distinct_cigar_count].append(tag_family.minority_cigar_percentage)
 
 
     @property
@@ -278,16 +275,15 @@ class _MatchStatHandler(object):
         self.total_inexact_match_count = 0
         self.total_pair_count = 0
 
-    def handle(self, tag_families):
-        for tag_family in tag_families:
-            self.total_inexact_match_count += tag_family.inexact_match_count
-            self.total_pair_count += len(tag_family.alignments)
+    def handle(self, tag_family):
+        self.total_inexact_match_count += tag_family.inexact_match_count
+        self.total_pair_count += len(tag_family.alignments)
 
     def end(self):
-        exact_match_count = self.total_pair_count - self.total_inexact_match_count
+        exact_count = self.total_pair_count - self.total_inexact_match_count
         self._log.debug(('family stat|{}/{} ({:.2f}%) original pairs matched '
                          'UMI exactly'),
-                        exact_match_count,
+                        exact_count,
                         self.total_pair_count,
                         100 * (1 - self.percent_inexact_match))
 
