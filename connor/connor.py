@@ -45,7 +45,7 @@ original reads.
 
 
 class _ConnorArgumentParser(argparse.ArgumentParser):
-    """Argument parser that raises UsageError instead of exiting."""
+    '''Argument parser that raises UsageError instead of exiting.'''
     #pylint: disable=too-few-public-methods
     def error(self, message):
         '''Suppress default exit behavior'''
@@ -174,7 +174,7 @@ class _TagFamily(object):
                 consensus.append("N")
         return "".join(consensus)
 
-    #TODO (cgates): consider zipping over alignmnets instead
+    #TODO (cgates): consider zipping over alignments instead
     @staticmethod
     def _generate_consensus_qualities(list_of_alignments):
         consensus_quality = []

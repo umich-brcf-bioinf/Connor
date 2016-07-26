@@ -7,6 +7,25 @@ from testfixtures.tempdirectory import TempDirectory
 
 from test.utils_test import BaseConnorTestCase
 import connor.samtools as samtools
+import pysam
+
+from connor.samtools import BamFlag
+
+def align(**kwargs):
+    a = pysam.AlignedSegment()
+    a.query_name = "align1"
+    a.query_sequence="AGCTTAG"
+    a.flag = 99
+    a.reference_id = 0
+    a.reference_start = 32
+    a.mapping_quality = 20
+    a.cigar = ((0,3), (2,1), (0,1))
+    a.next_reference_id = 0
+    a.next_reference_start=199
+    a.template_length=167
+    for (key, value) in kwargs.items():
+        setattr(a, key, value)
+    return a
 
 def _create_file(path, filename, contents):
     filename = os.path.join(path, filename)
@@ -92,3 +111,64 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
                                   aligns)
             finally:
                 os.chdir(original_dir)
+
+    def test_filter_alignments_passthorughIncludedAligns(self):
+        align1 = align(query_name="align1")
+        base = [align1]
+
+        filtered_aligns = [x for x in samtools.filter_alignments(base)]
+
+        self.assertEqual(base, filtered_aligns)
+
+    def test_filter_alignments_excludesUnpairedAligns(self):
+        flag = 99
+        align1 = align(query_name="align1", flag=flag)
+        align2 = align(query_name="align2", flag=flag ^ BamFlag.PROPER_PAIR)
+        align3 = align(query_name="align3", flag=flag)
+        base = [align1, align2, align3]
+
+        actual_names = [x.query_name for x in samtools.filter_alignments(base)]
+
+        self.assertEqual(["align1", "align3"], actual_names)
+
+    def test_filter_alignments_excludesSecondaryAligns(self):
+        flag = 99
+        align1 = align(query_name="align1", flag=flag)
+        align2 = align(query_name="align2", flag=flag | BamFlag.SECONDARY)
+        align3 = align(query_name="align3", flag=flag)
+        base = [align1, align2, align3]
+
+        actual_names = [x.query_name for x in samtools.filter_alignments(base)]
+
+        self.assertEqual(["align1", "align3"], actual_names)
+
+    def test_filter_alignments_excludesQCFails(self):
+        flag = 99
+        align1 = align(query_name="align1", flag=flag)
+        align2 = align(query_name="align2", flag=flag | BamFlag.QCFAIL)
+        align3 = align(query_name="align3", flag=flag)
+        base = [align1, align2, align3]
+
+        actual_names = [x.query_name for x in samtools.filter_alignments(base)]
+
+        self.assertEqual(["align1", "align3"], actual_names)
+
+    def test_filter_alignments_excludesMapq0(self):
+        align1 = align(query_name="align1", mapping_quality=1)
+        align2 = align(query_name="align2", mapping_quality=0)
+        align3 = align(query_name="align3", mapping_quality=1)
+        base = [align1, align2, align3]
+
+        actual_names = [x.query_name for x in samtools.filter_alignments(base)]
+
+        self.assertEqual(["align1", "align3"], actual_names)
+
+    def test_filter_alignments_excludesCigarUnavailable(self):
+        align1 = align(query_name="align1", cigarstring="6M")
+        align2 = align(query_name="align2", cigarstring="*")
+        align3 = align(query_name="align3", cigarstring="6M")
+        base = [align1, align2, align3]
+
+        actual_names = [x.query_name for x in samtools.filter_alignments(base)]
+
+        self.assertEqual(["align1", "align3"], actual_names)

@@ -1,7 +1,7 @@
-#pylint: disable=too-few-public-methods
+#pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
 import unittest
 from collections import defaultdict
-
+import connor.utils as utils
 
 class MicroMock(object):
     def __init__(self, **kwargs):
@@ -42,3 +42,75 @@ class BaseConnorTestCase(unittest.TestCase):
 
     def tearDown(self):
         unittest.TestCase.tearDown(self)
+
+
+class FilteredGeneratorTest(BaseConnorTestCase):
+    def test_filter_passesAllThroughWhenNoFilters(self):
+        base_collection = [1,2,3,4,5]
+        filters = {}
+
+        generator = utils.FilteredGenerator(filters)
+        actual_collection  = [x for x in generator.filter(base_collection)]
+
+        self.assertEqual(base_collection, actual_collection)
+        self.assertEqual(0, len(generator.filter_stats))
+
+    def test_filter_singleFilter(self):
+        filters = {'div by 2' : lambda x: x % 2 == 0}
+        generator = utils.FilteredGenerator(filters)
+
+        base_collection = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        actual_collection  = [x for x in generator.filter(base_collection)]
+
+        self.assertEqual([1,3,5,7,9], actual_collection)
+        self.assertEqual(5, generator.filter_stats['div by 2'])
+        self.assertEqual(1, len(generator.filter_stats))
+
+    def test_filter_multipleFilters(self):
+        filters = {'div by 2': lambda x: x % 2 == 0,
+                   'div by 5': lambda x: x % 5 == 0}
+        generator = utils.FilteredGenerator(filters)
+
+        base_collection = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        actual_collection  = [x for x in generator.filter(base_collection)]
+
+        self.assertEqual([1,3,7,9], actual_collection)
+        self.assertEqual(4, generator.filter_stats['div by 2'])
+        self.assertEqual(1, generator.filter_stats['div by 5'])
+        self.assertEqual(1, generator.filter_stats['div by 2;div by 5'])
+        self.assertEqual(3, len(generator.filter_stats))
+
+    def test_filter_multipleFilterAreSortedByName(self):
+        filters = {'div by 5': lambda x: x % 5 == 0,
+                   'div by 2': lambda x: x % 2 == 0}
+        generator = utils.FilteredGenerator(filters)
+
+        base_collection = [1, 10]
+        actual_collection  = [x for x in generator.filter(base_collection)]
+
+        self.assertEqual([1], actual_collection)
+        self.assertEqual(1, generator.filter_stats['div by 2;div by 5'])
+
+    def test_filter_stats_immutable(self):
+        generator = utils.FilteredGenerator({})
+        try:
+            generator.filter_stats = {'foo': 42}
+            self.assertEqual(True, False, 'filter_stats should be immutable')
+        except AttributeError:
+            self.assertEqual(True, True, 'filter_stats is immutable')
+
+        generator.filter_stats['foo'] = 42
+        base_collection = [1, 2 ,3]
+        actual_collection  = [x for x in generator.filter(base_collection)]
+
+        self.assertEqual(base_collection, actual_collection)
+        self.assertEqual(0, len(generator.filter_stats))
+
+    def test_filter_returnsEmptyIfBaseEmpty(self):
+        generator = utils.FilteredGenerator({})
+
+        base_collection = []
+        actual_collection  = [x for x in generator.filter(base_collection)]
+
+        self.assertEqual([], actual_collection)
+        self.assertEqual(0, len(generator.filter_stats))

@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+from collections import defaultdict
 from datetime import datetime
 import errno
 import getpass
@@ -8,7 +9,6 @@ import logging
 import os
 import socket
 import sys
-
 
 def zrange(*args):
     try:
@@ -24,11 +24,41 @@ def iter_map(*args):
 
 
 class UsageError(Exception):
-    """Raised for malformed command or invalid arguments."""
+    '''Raised for malformed command or invalid arguments.'''
     def __init__(self, msg, *args):
         super(UsageError, self).__init__(msg, *args)
 
 
+class FilteredGenerator(object):
+    '''Filters a base collection/collection capturing filtered stats'''
+    def __init__(self, filter_dict):
+        '''
+        Args:
+            filter_dict (dict): key = filter name, value = function that
+                that accepts an item and returns true is that item should
+                be excluded. For example: {"div by 2": lambda x: x % 2 == 0}
+        '''
+        self._filters = sorted(filter_dict.items(), key=lambda x: x[0])
+        self._filter_stats = defaultdict(int)
+
+    def filter(self, base_collection):
+        '''Yields subset of base_collection/generator based on filters.'''
+        for item in base_collection:
+            excluded = []
+            for (name, exclude) in self._filters:
+                if exclude(item):
+                    excluded.append(name)
+            if excluded:
+                self._filter_stats[";".join(excluded)] += 1
+            else:
+                yield item
+
+    @property
+    def filter_stats(self):
+        '''Returns an immutable dictionary of filter:counts; when an item
+        would be filtered by multiple filters, all are listed in alpha order.
+        '''
+        return dict(self._filter_stats)
 
 def _makepath(path):
     try:

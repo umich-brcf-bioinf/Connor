@@ -4,6 +4,23 @@ from __future__ import print_function, absolute_import, division
 import os
 import re
 import pysam
+import connor.utils as utils
+
+
+#TODO: cgates: make this into constants?
+class BamFlag(object):
+    PAIRED = 1
+    PROPER_PAIR = 2
+    UNMAP = 4
+    MUNMAP = 8
+    REVERSE = 16
+    MREVERSE = 32
+    READ1 = 64
+    READ2 = 128
+    SECONDARY = 256
+    QCFAIL = 512
+    DUP = 1024
+    SUPPLEMENTARY = 2048
 
 class _Pysam9SamtoolsUtil(object):
     @staticmethod
@@ -37,6 +54,21 @@ def _get_samtools():
         return _Pysam8SamtoolsUtil()
 
 SAMTOOLS_UTIL = _get_samtools()
+
+def filter_alignments(alignments):
+    filters = {'alignment not in proper pair': \
+                    lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
+                'secondary alignment': \
+                    lambda a: a.flag & BamFlag.SECONDARY != 0,
+                'qc failed': \
+                    lambda a: a.flag & BamFlag.QCFAIL != 0,
+                'mapping quality < 1': \
+                    lambda a: a.mapping_quality < 1,
+                'cigar unavailable': \
+                    lambda a: a.cigarstring is None}
+    generator = utils.FilteredGenerator(filters)
+    for alignment in generator.filter(alignments):
+        yield alignment
 
 def alignment_file(filename, mode, template=None):
     return pysam.AlignmentFile(filename, mode, template)
