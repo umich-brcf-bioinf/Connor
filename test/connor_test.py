@@ -1,46 +1,19 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments
+#pylint: disable=deprecated-method
+
 from __future__ import print_function, absolute_import, division
+from argparse import Namespace
 from collections import namedtuple
 import os
-import unittest
-import pysam
 from testfixtures.tempdirectory import TempDirectory
-from connor import connor
-from connor import samtools
-from connor.connor import _CigarStatHandler
-from connor.connor import _CigarMinorityStatHandler
-from connor.connor import _FamilySizeStatHandler
-from connor.connor import _MatchStatHandler
+import connor.connor as connor
+import connor.samtools as samtools
+import connor.utils as utils
+import test.samtools_test as samtools_test
+from test.utils_test import BaseConnorTestCase
 
-class _BaseConnorTestCase(unittest.TestCase):
-    def setUp(self):
-        unittest.TestCase.setUp(self)
-        self.original_logger = connor._log
-        self.mock_logger = MockLogger()
-        connor._log = self.mock_logger.log
-
-    def tearDown(self):
-        connor._log = self.original_logger
-        unittest.TestCase.tearDown(self)
-
-class MockLogger(object):
-    def __init__(self):
-        self._log_calls = []
-
-    def log(self, msg_format, *args):
-        self._log_calls.append((msg_format, args))
-
-class MicroMock(object):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def __hash__(self):
-        return 1
 
 class MockAlignSegment(object):
     def __init__(self,
@@ -89,56 +62,19 @@ def align_seg(query_name,
                             query_qualities,
                             cigarstring,
                             reference_end)
-    
-#     if not reference_end:
-#         reference_end = reference_start + len(query_sequence)
-#     return MicroMock(query_name=query_name,
-#                      reference_name=reference_name,
-#                      reference_start=reference_start,
-#                      next_reference_start=next_reference_start,
-#                      query_sequence=query_sequence,
-#                      query_qualities=query_qualities,
-#                      cigarstring=cigarstring,
-#                      reference_end=reference_end)
 
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
     alignR = align_seg(q, rn, rs, nrs, s2)
     return connor._PairedAlignment(alignL, alignR, tag_length)
 
-def _create_file(path, filename, contents):
-    filename = os.path.join(path, filename)
-    with open(filename, 'wt') as new_file:
-        new_file.write(contents)
-        new_file.flush()
-    return filename
 
-def _create_bam(path, filename, sam_contents, index=True):
-    sam_filename = _create_file(path, filename, sam_contents)
-    bam_filename = sam_filename.replace(".sam", ".bam")
-    _pysam_bam_from_sam(sam_filename, bam_filename, index)
-    return bam_filename
-
-def _pysam_bam_from_sam(sam_filename, bam_filename, index=True):
-    infile = pysam.AlignmentFile(sam_filename, "r")
-    outfile = pysam.AlignmentFile(bam_filename, "wb", template=infile)
-    for s in infile:
-        outfile.write(s)
-    infile.close()
-    outfile.close()
-    if index:
-        samtools.index(bam_filename)
-
-def _pysam_alignments_from_bam(bam_filename):
-    infile = pysam.AlignmentFile(bam_filename, "rb")
-    aligned_segments = [s for s in infile]
-    infile.close()
-    return aligned_segments
-
-class PairedAlignmentTest(unittest.TestCase):
+class PairedAlignmentTest(BaseConnorTestCase):
     def test_init(self):
-        left_align = MockAlignSegment("alignA", 'chr1', 10, 20, "AAATTT" "GGGG", reference_end=14)
-        right_align = MockAlignSegment("alignA", 'chr1', 20, 10, "TTTT" "CCCGGG" ,reference_end=24)
+        left_align = MockAlignSegment("alignA", 'chr1', 10, 20,
+                                      "AAATTT" "GGGG", reference_end=14)
+        right_align = MockAlignSegment("alignA", 'chr1', 20, 10,
+                                       "TTTT" "CCCGGG" ,reference_end=24)
         tag_length = 6
         actual_paired_alignment = connor._PairedAlignment(left_align,
                                                          right_align,
@@ -192,8 +128,7 @@ class PairedAlignmentTest(unittest.TestCase):
                           paired_align.right_alignment.query_sequence)
 
 
-class TagFamiliyTest(unittest.TestCase):
-    
+class TagFamiliyTest(BaseConnorTestCase):
     def test_init(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
@@ -218,7 +153,7 @@ class TagFamiliyTest(unittest.TestCase):
         inexact_match_count = 0
 
         actual_tag_family = connor._TagFamily(input_umis,
-                                             [pair1], 
+                                             [pair1],
                                              inexact_match_count,
                                              consensus_threshold=0.6)
         actual_consensus = actual_tag_family.consensus
@@ -379,7 +314,7 @@ class TagFamiliyTest(unittest.TestCase):
         inexact_match_count = 0
 
         actual_tag_family = connor._TagFamily(input_umis,
-                                             alignments, 
+                                             alignments,
                                              inexact_match_count,
                                              consensus_threshold=0.6)
 
@@ -463,7 +398,7 @@ class TagFamiliyTest(unittest.TestCase):
         inexact_match_count = 0
 
         actual_tag_family = connor._TagFamily(input_umis,
-                                             alignments, 
+                                             alignments,
                                              inexact_match_count,
                                              consensus_threshold=0.6)
 
@@ -492,232 +427,7 @@ class TagFamiliyTest(unittest.TestCase):
         self.assertEquals(3, actual_tag_family.input_alignment_count)
 
 
-class FamilySizeStatHandlerTest(_BaseConnorTestCase):
-    def test_end_min(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1])
-        stat_handler.end()
-
-        self.assertEqual(2, stat_handler.min)
-
-    def test_end_max(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1])
-        stat_handler.end()
-
-        self.assertEqual(5, stat_handler.max)
-        
-    def test_end_median(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1])
-        stat_handler.end()
-
-        self.assertEqual(3, stat_handler.median)
-        
-    def test_end_quantiles(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1,1,1,1,1])
-        posBfam2 = MicroMock(alignments=[1,1,1,1,1,1,1,1,1,1,1,1])
-        posBfam3 = MicroMock(alignments=[1,1,1,1,1,1,1,1])
-        stat_handler = _FamilySizeStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1, posBfam2, posBfam3])
-        stat_handler.end()
-
-        self.assertEqual(3, stat_handler.quartile_1)
-        self.assertEqual(9, stat_handler.quartile_3)
-
-    def test_summary(self):
-        stat_handler = _FamilySizeStatHandler()
-        stat_handler.min = 1
-        stat_handler.quartile_1 = 2
-        stat_handler.median = 3
-        stat_handler.quartile_3 = 4
-        stat_handler.max = 5
-
-        self.assertEquals((1,2,3,4,5), stat_handler.summary)
-
-
-def mock_tag_family(input_alignment_count=5,
-                    alignments=None,
-                    distinct_cigar_count=1,
-                    inexact_match_count=0,
-                    minority_cigar_percentage=0):
-    if alignments is None:
-        alignments = [1,2,3,4]
-    return MicroMock(input_alignment_count=input_alignment_count,
-                     alignments=alignments,
-                     distinct_cigar_count=distinct_cigar_count,
-                     inexact_match_count=inexact_match_count,
-                     minority_cigar_percentage=minority_cigar_percentage)
-
-
-class MatchStatHandlerTest(_BaseConnorTestCase):
-    def test_total_inexact_match_count(self):
-        stat_handler = _MatchStatHandler(hamming_threshold=1)
-        posAfam1 = mock_tag_family(alignments=[1] * 5,
-                                   inexact_match_count=1)
-        posAfam2 = mock_tag_family(alignments=[1] * 15,
-                                   inexact_match_count=4)
- 
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.end()
-
-        self.assertEquals(5, stat_handler.total_inexact_match_count)
-        self.assertEquals(20, stat_handler.total_pair_count)
-        self.assertEquals(5/20, stat_handler.percent_inexact_match)
-
-
-class CigarsStatHandlerTest(_BaseConnorTestCase):
-    def test_percent_deduplication(self):
-        posAfam1 = mock_tag_family(input_alignment_count=1,
-                                   alignments = [1] * 1)
-        posAfam2 = mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 2)
-        posAfam3 = mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 2)
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2, posAfam3])
-        stat_handler.end()
-
-        expected = 1 - (3/5)
-        self.assertEquals(expected, stat_handler.percent_deduplication)
-
-    def test_total_input_alignment_allCounted(self):
-        posAfam1 = mock_tag_family(input_alignment_count=1,
-                                   alignments = [1] * 1)
-        posAfam2 = mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 2)
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.end()
-
-        self.assertEquals(3, stat_handler.total_input_alignment_count)
-        self.assertEquals(3, stat_handler.total_alignment_count)
-        self.assertEquals(0, stat_handler.total_excluded_alignments)
-        self.assertEquals(0, stat_handler.percent_excluded_alignments)
-
-    def test_total_input_alignment_someCounted(self):
-        posAfam1 = mock_tag_family(input_alignment_count=3,
-                                   alignments = [1] * 3)
-        posAfam2 = mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 1)
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.end()
-
-        self.assertEquals(5, stat_handler.total_input_alignment_count)
-        self.assertEquals(4, stat_handler.total_alignment_count)
-        self.assertEquals(1, stat_handler.total_excluded_alignments)
-        self.assertEquals(0.2, stat_handler.percent_excluded_alignments)
-
-
-    
-    def test_end_min(self):
-        posAfam1 = mock_tag_family(distinct_cigar_count=1)
-        posAfam2 = mock_tag_family(distinct_cigar_count=2)
-        posBfam1 = mock_tag_family(distinct_cigar_count=4)
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1])
-        stat_handler.end()
-
-        self.assertEqual(1, stat_handler.min)
-
-    def test_end_max(self):
-        posAfam1 = mock_tag_family(distinct_cigar_count=1)
-        posAfam2 = mock_tag_family(distinct_cigar_count=2)
-        posBfam1 = mock_tag_family(distinct_cigar_count=4)
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1])
-        stat_handler.end()
-
-        self.assertEqual(4, stat_handler.max)
-
-    def test_end_median(self):
-        posAfam1 = mock_tag_family(distinct_cigar_count=1)
-        posAfam2 = mock_tag_family(distinct_cigar_count=2)
-        posBfam1 = mock_tag_family(distinct_cigar_count=4)
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1])
-        stat_handler.end()
-
-        self.assertEqual(2, stat_handler.median)
-
-    def test_end_quantiles(self):
-        posAfam1 = mock_tag_family(distinct_cigar_count=2)
-        posAfam2 = mock_tag_family(distinct_cigar_count=3)
-        posBfam1 = mock_tag_family(distinct_cigar_count=9)
-        posBfam2 = mock_tag_family(distinct_cigar_count=12)
-        posBfam3 = mock_tag_family(distinct_cigar_count=7)
-
-        stat_handler = _CigarStatHandler()
-
-        stat_handler.handle([posAfam1, posAfam2])
-        stat_handler.handle([posBfam1, posBfam2, posBfam3])
-        stat_handler.end()
-
-        self.assertEqual(3, stat_handler.quartile_1)
-        self.assertEqual(9, stat_handler.quartile_3)
-
-    def test_summary(self):
-        stat_handler = _CigarStatHandler()
-        stat_handler.min = 1
-        stat_handler.quartile_1 = 2
-        stat_handler.median = 3
-        stat_handler.quartile_3 = 4
-        stat_handler.max = 5
-
-        self.assertEquals((1,2,3,4,5), stat_handler.summary)
-
-class CigarMinorityStatHandlerTest(_BaseConnorTestCase):
-    def test_minority_cigar_percentage_summary(self):
-        posAfam0 = mock_tag_family(minority_cigar_percentage=0)
-        posAfam1 = mock_tag_family(minority_cigar_percentage=0.01)
-        posAfam2 = mock_tag_family(minority_cigar_percentage=0.1)
-        posAfam3 = mock_tag_family(minority_cigar_percentage=0.3)
-        posAfam4 = mock_tag_family(minority_cigar_percentage=0.7)
-        posAfam5 = mock_tag_family(minority_cigar_percentage=0.9)
- 
-        stat_handler = _CigarMinorityStatHandler()
- 
-        stat_handler.handle([posAfam0,
-                             posAfam1,
-                             posAfam2,
-                             posAfam3,
-                             posAfam4,
-                             posAfam5])
-        stat_handler.end()
- 
-        self.assertEquals((0.01, 0.1, 0.3, 0.7, 0.9), stat_handler.summary)
-
-
-class ConnorTest(_BaseConnorTestCase):
+class ConnorTest(BaseConnorTestCase):
     def test_build_coordinate_read_name_manifest(self):
         Align = namedtuple('Align', 'name key')
         align1 = Align(name='align1', key=3)
@@ -781,9 +491,9 @@ class ConnorTest(_BaseConnorTestCase):
 #         align_B1 = align_seg("alignB", 'chr1', 100, 10)
 #         alignments = set([connor._PairedAlignment(align_A0, align_A1),
 #                           connor._PairedAlignment(align_B0, align_B1)])
-# 
+#
 #         actual_pair = connor._build_consensus_pair(alignments)
-# 
+#
 #         expected_pair = connor._PairedAlignment(align_B0, align_B1)
 #         self.assertEquals(expected_pair, actual_pair)
 
@@ -967,61 +677,6 @@ class ConnorTest(_BaseConnorTestCase):
                           "AB")
 
 
-    def test_sort_and_index_bam(self):
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-'''.replace("|", "\t")
-
-        with TempDirectory() as tmp_dir:
-            bam = _create_bam(tmp_dir.path, 
-                              "input.sam",
-                              sam_contents,
-                              index=False)
-            connor._sort_and_index_bam(bam)
-            alignments = pysam.AlignmentFile(bam, "rb").fetch()
-            aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
-            self.assertEquals(6, len(aligns))
-            self.assertEquals([("readNameA1", 100),
-                               ("readNameA2", 100),
-                               ("readNameB1", 200),
-                               ("readNameA1", 300),
-                               ("readNameA2", 300),
-                               ("readNameB1", 400)],
-                              aligns)
-
-            original_dir = os.getcwd()
-            try:
-                os.chdir(tmp_dir.path)
-                os.mkdir("tmp")
-                bam = _create_bam(os.path.join(tmp_dir.path, "tmp"),
-                                  "input.sam",
-                                  sam_contents,
-                                  index=False)
-                bam_filename = os.path.basename(bam)
-
-                connor._sort_and_index_bam(os.path.join("tmp", bam_filename))
-
-                alignments = pysam.AlignmentFile(bam, "rb").fetch()
-                aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
-                self.assertEquals(6, len(aligns))
-                self.assertEquals([("readNameA1", 100),
-                                   ("readNameA2", 100),
-                                   ("readNameB1", 200),
-                                   ("readNameA1", 300),
-                                   ("readNameA2", 300),
-                                   ("readNameB1", 400)],
-                                  aligns)
-            finally:
-                os.chdir(original_dir)
-
-
 
     def test_rank_tags_sortsByPopularity(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "NNNGGG")
@@ -1044,10 +699,10 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         self.assertEquals("output.bam", namespace.output_bam)
 
     def test_parse_command_line_args_throwsConnorUsageError(self):
-        self.assertRaises(connor._ConnorUsageError,
+        self.assertRaises(utils.UsageError,
                           connor._parse_command_line_args,
                           ["input"])
-        self.assertRaises(connor._ConnorUsageError,
+        self.assertRaises(utils.UsageError,
                           connor._parse_command_line_args,
                           ["input",
                            "output",
@@ -1066,7 +721,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         self.assertEquals(expected_tags, actual_tags)
 
 
-class TestLightweightAlignment(unittest.TestCase):
+class TestLightweightAlignment(BaseConnorTestCase):
     def test_lightweight_alignment_forwardRead(self):
         alignedSegment = align_seg("align1", 'chr1', 10, 100)
 
@@ -1091,35 +746,33 @@ class TestLightweightAlignment(unittest.TestCase):
         self.assertEquals("align1", actual_lwa.name)
         self.assertEquals(('chr1', 100, 100), actual_lwa.key)
 
-
-class ConnorIntegrationTestCase(_BaseConnorTestCase):
-    def setUp(self):
-        super(ConnorIntegrationTestCase, self).setUp()
-        self.min_orig_reads =  connor.DEFAULT_MIN_ORIG_READS
-        connor.DEFAULT_MIN_ORIG_READS = 0
-
-    def tearDown(self):
-        connor.DEFAULT_MIN_ORIG_READS = self.min_orig_reads
-        super(ConnorIntegrationTestCase, self).tearDown()
-
-    def test(self):
+#TODO: cgates: Test deduplicate_alignment separately
+#TODO: cgates: Test main parses args correctly
+class ConnorIntegrationTestCase(BaseConnorTestCase):
+    def test_deduplicate_alignnemnts(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
 @SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|20|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path, "input.sam", sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            connor.main(["connor", input_bam, output_bam])
+            args = Namespace(input_bam=input_bam,
+                                         output_bam=output_bam,
+                                         consensus_freq_threshold=0.6,
+                                         min_family_size_threshold=0,
+                                         umi_distance_threshold=1,
+                                         output_excluded_alignments="")
+            connor._dedup_alignments(args, self.mock_logger)
 
-            alignments = pysam.AlignmentFile(output_bam, "rb").fetch()
+            alignments = samtools.alignment_file(output_bam, "rb").fetch()
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
@@ -1129,103 +782,63 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
                                ("readNameB1", 400)],
                               aligns)
 
-    def test_logging(self):
+    def test_dedup_logging(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
 @SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|20|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, 'input.sam', sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 'input.sam',
+                                                 sam_contents)
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
-            connor.main(["connor", input_bam, output_bam])
-            log_calls = self.mock_logger._log_calls
+            args = Namespace(input_bam=input_bam,
+                             output_bam=output_bam,
+                             consensus_freq_threshold=0.6,
+                             min_family_size_threshold=0,
+                             umi_distance_threshold=1,
+                             output_excluded_alignments="")
+            connor._dedup_alignments(args, self.mock_logger)
 
-            line = 0
-            self.assertRegexpMatches(log_calls[line][0], "connor begins")
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], "command")
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], "command option")
-
-            line += 1
-            self.assertEquals((input_bam,), log_calls[line][1])
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'original reads')
-            self.assertEquals((6,), log_calls[line][1])
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'family size distribution')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'original pairs matched UMI exactly')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'original pairs matched by Hamming distance threshold')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'family distribution of minority CIGAR percentages')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'family distribution of distinct CIGAR counts')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'families had .* CIGAR: minor % distrib')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'pairs were excluded as minority CIGAR')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], r'original pairs \(of majority CIGAR\) were deduplicated to')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], 'families were excluded because the original read count <')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], r'original pairs were deduplicated to .* families \(overall dedup rate .*\)')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], r'families written to')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], r'tagged original pairs written to')
+            log_calls = self.mock_logger._log_calls['INFO']
+            self.assertRegexpMatches(log_calls[0],
+                                     'reading input bam')
+            self.assertRegexpMatches(log_calls[1],
+                                    'families were excluded')
 
 
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], r'sorting and indexing')
-
-            line += 1
-            self.assertRegexpMatches(log_calls[line][0], r'sorting and indexing')
-
-            line += 1
-            self.assertEquals("INFO|connor complete", log_calls[line][0])
-
-    def test_distinctPairStartsAreNotCombined(self):
+    def test_deduplicate_alignments_distinctPairStartsAreNotCombined(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
 @SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|100|0|5M|=|500|200|AAAAA|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|200|AAAAA|>>>>>
-readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|100|20|5M|=|500|200|AAAAA|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|200|AAAAA|>>>>>
+readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = _create_bam(tmp_dir.path, "input.sam", sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 "input.sam",
+                                                 sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            connor.main(["connor", input_bam, output_bam])
-            
-            alignments = _pysam_alignments_from_bam(output_bam)
-            
+            args = Namespace(input_bam=input_bam,
+                             output_bam=output_bam,
+                             consensus_freq_threshold=0.6,
+                             min_family_size_threshold=0,
+                             umi_distance_threshold=1,
+                             output_excluded_alignments="")
+            connor._dedup_alignments(args, self.mock_logger)
+
+            alignments = samtools_test.pysam_alignments_from_bam(output_bam)
+
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
             self.assertEquals([("readNameA1", 100),
@@ -1237,4 +850,5 @@ readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
+    import unittest
     unittest.main()
