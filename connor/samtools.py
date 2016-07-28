@@ -55,7 +55,7 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
-def filter_alignments(alignments):
+def filter_alignments(alignments, log=None):
     filters = {'alignment not in proper pair': \
                     lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
                 'secondary alignment': \
@@ -69,6 +69,17 @@ def filter_alignments(alignments):
     generator = utils.FilteredGenerator(filters)
     for alignment in generator.filter(alignments):
         yield alignment
+    if log:
+        total = generator.total_excluded + generator.total_included
+        log.info(('{}/{} ({:.2f}%) alignments were excluded because they '
+                  'failed one or more filters (see log file for details)'),
+                 generator.total_excluded,
+                 total,
+                 100 * generator.total_excluded / total)
+        for filter_name, count in generator.filter_stats.items():
+            log.debug('bam_stat|{:>7} alignments excluded because: {}',
+                     count,
+                     filter_name)
 
 def alignment_file(filename, mode, template=None):
     return pysam.AlignmentFile(filename, mode, template)

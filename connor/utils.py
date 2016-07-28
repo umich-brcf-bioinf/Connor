@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 from collections import defaultdict
+from collections import OrderedDict
 from datetime import datetime
 import errno
 import getpass
@@ -40,6 +41,8 @@ class FilteredGenerator(object):
         '''
         self._filters = sorted(filter_dict.items(), key=lambda x: x[0])
         self._filter_stats = defaultdict(int)
+        self.total_included = 0
+        self.total_excluded = 0
 
     def filter(self, base_collection):
         '''Yields subset of base_collection/generator based on filters.'''
@@ -50,15 +53,19 @@ class FilteredGenerator(object):
                     excluded.append(name)
             if excluded:
                 self._filter_stats[";".join(excluded)] += 1
+                self.total_excluded += 1
             else:
+                self.total_included += 1
                 yield item
 
     @property
     def filter_stats(self):
-        '''Returns an immutable dictionary of filter:counts; when an item
-        would be filtered by multiple filters, all are listed in alpha order.
+        '''Returns an immutable ordered dict of filter:counts; when an item
+        would be filtered by multiple filters, all are listed in alpha order;
+        the dict itself is ordered by descending count, filter name.
         '''
-        return dict(self._filter_stats)
+        return OrderedDict(sorted(self._filter_stats.items(),
+                                   key=lambda x: (-1 * x[1], x[0])))
 
 def _makepath(path):
     try:

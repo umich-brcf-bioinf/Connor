@@ -1,6 +1,7 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
 import unittest
 from collections import defaultdict
+from collections import OrderedDict
 import connor.utils as utils
 
 class MicroMock(object):
@@ -53,6 +54,8 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         actual_collection  = [x for x in generator.filter(base_collection)]
 
         self.assertEqual(base_collection, actual_collection)
+        self.assertEqual(5, generator.total_included)
+        self.assertEqual(0, generator.total_excluded)
         self.assertEqual(0, len(generator.filter_stats))
 
     def test_filter_singleFilter(self):
@@ -63,6 +66,8 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         actual_collection  = [x for x in generator.filter(base_collection)]
 
         self.assertEqual([1,3,5,7,9], actual_collection)
+        self.assertEqual(5, generator.total_included)
+        self.assertEqual(5, generator.total_excluded)
         self.assertEqual(5, generator.filter_stats['div by 2'])
         self.assertEqual(1, len(generator.filter_stats))
 
@@ -75,6 +80,8 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         actual_collection  = [x for x in generator.filter(base_collection)]
 
         self.assertEqual([1,3,7,9], actual_collection)
+        self.assertEqual(4, generator.total_included)
+        self.assertEqual(6, generator.total_excluded)
         self.assertEqual(4, generator.filter_stats['div by 2'])
         self.assertEqual(1, generator.filter_stats['div by 5'])
         self.assertEqual(1, generator.filter_stats['div by 2;div by 5'])
@@ -106,9 +113,28 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         self.assertEqual(base_collection, actual_collection)
         self.assertEqual(0, len(generator.filter_stats))
 
+    def test_filter_stats_ordersResultsByCountBreakingTiesByName(self):
+        generator = utils.FilteredGenerator({})
+        generator._filter_stats = {'C': 1,
+                                   'B;C':2,
+                                   'B': 2,
+                                   'E': 3,
+                                   'A': 3,
+                                   'D': 4}
+        actual_filter_stats = generator.filter_stats
+        self.assertEqual(6, len(actual_filter_stats))
+        expected_filter_stats = OrderedDict([('D', 4),
+                                             ('A', 3),
+                                             ('E' ,3),
+                                             ('B', 2),
+                                             ('B;C', 2),
+                                             ('C', 1)])
+        self.assertEqual(expected_filter_stats,
+                         actual_filter_stats)
+
+
     def test_filter_returnsEmptyIfBaseEmpty(self):
         generator = utils.FilteredGenerator({})
-
         base_collection = []
         actual_collection  = [x for x in generator.filter(base_collection)]
 

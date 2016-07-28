@@ -158,7 +158,7 @@ class _FamilySizeStatHandler(_BaseTukeyStatHandler):
 
     def end(self):
         super(_FamilySizeStatHandler, self).end()
-        self._log.debug(('family stat|family size distribution (original pair '
+        self._log.debug(('family_stat|family size distribution (original pair '
                    'counts: min, 1Q, median, 3Q, max): {}'),
                   ', '.join(map(str, self.summary)))
 
@@ -177,7 +177,7 @@ class _CigarMinorityStatHandler(_BaseTukeyStatHandler):
 
     def end(self):
         super(_CigarMinorityStatHandler, self).end()
-        self._log.debug(('family stat|cigar|family distribution of minority '
+        self._log.debug(('family_stat|cigar|family distribution of minority '
                    'CIGAR percentages (min, 1Q, median, 3Q, max): {}'),
                   ', '.join(map(lambda x: str(round(x,2)), self.summary)))
 
@@ -236,14 +236,14 @@ class _CigarStatHandler(object):
         self.quartile_1 = summary['25%']
         self.quartile_3 = summary['75%']
 
-        self._log.debug(('family stat|cigar|family distribution of distinct'
+        self._log.debug(('family_stat|cigar|family distribution of distinct'
                          ' CIGAR counts (min, 1Q, median, 3Q, max): {}'),
                         ', '.join(map(str, self.summary)))
         ordered_cigar_counts = sorted(self.families_cigar_counts.items(),
                                       key = lambda x: -1 * int(x[1]))
         for num_cigars, freq in ordered_cigar_counts:
             summary = pd.Series(self.family_cigar_minority_percentage_counts[num_cigars]).describe()
-            self._log.debug(('family stat|cigar|{}/{} ({:.2f}%) families had '
+            self._log.debug(('family_stat|cigar|{}/{} ({:.2f}%) families had '
                              '{} CIGAR: minor % distrib '
                              '{:.2f}, {:.2f}, {:.2f}, {:.2f}, {:.2f}'),
                             freq,
@@ -255,12 +255,12 @@ class _CigarStatHandler(object):
                             summary['50%'],
                             summary['75%'],
                             summary['max'])
-        self._log.debug(('family stat|cigar|{}/{} ({:.2f}%) pairs were '
+        self._log.debug(('family_stat|cigar|{}/{} ({:.2f}%) pairs were '
                          'excluded as minority CIGAR'),
                         self.total_excluded_alignments,
                         self.total_input_alignment_count,
                         100 * self.percent_excluded_alignments)
-        self._log.debug(('family stat|{} original pairs (of majority CIGAR) '
+        self._log.debug(('family_stat|{} original pairs (of majority CIGAR) '
                          'were deduplicated to {} families '
                          '(majority CIGAR dedup rate {:.2f}%)'),
                         self.total_alignment_count,
@@ -281,13 +281,13 @@ class _MatchStatHandler(object):
 
     def end(self):
         exact_count = self.total_pair_count - self.total_inexact_match_count
-        self._log.debug(('family stat|{}/{} ({:.2f}%) original pairs matched '
+        self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
                          'UMI exactly'),
                         exact_count,
                         self.total_pair_count,
                         100 * (1 - self.percent_inexact_match))
 
-        self._log.debug(('family stat|{}/{} ({:.2f}%) original pairs matched '
+        self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
                       'by Hamming distance threshold (<={}) on '
                       'left or right UMI '),
                      self.total_inexact_match_count,

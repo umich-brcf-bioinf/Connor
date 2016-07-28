@@ -3,13 +3,13 @@
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
 import os
+import pysam
 from testfixtures.tempdirectory import TempDirectory
 
-from test.utils_test import BaseConnorTestCase
-import connor.samtools as samtools
-import pysam
-
+import test.utils_test as utils_test
 from connor.samtools import BamFlag
+import connor.samtools as samtools
+
 
 def align(**kwargs):
     a = pysam.AlignedSegment()
@@ -56,7 +56,7 @@ def pysam_alignments_from_bam(bam_filename):
     infile.close()
     return aligned_segments
 
-class SamtoolsTest(BaseConnorTestCase):
+class SamtoolsTest(utils_test.BaseConnorTestCase):
     def test_sort_and_index_bam(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
@@ -172,3 +172,26 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         actual_names = [x.query_name for x in samtools.filter_alignments(base)]
 
         self.assertEqual(["align1", "align3"], actual_names)
+
+    def test_filter_alignments_logsFilterStats(self):
+        align1 = align(query_name="align1", cigarstring="6M")
+        align2 = align(query_name="align2", mapping_quality=0)
+        align3 = align(query_name="align2", cigarstring="*", mapping_quality=0)
+        align4 = align(query_name="align3", cigarstring="6M")
+        base = [align1, align2, align3, align4]
+
+        log = utils_test.MockLogger()
+        for dummy in samtools.filter_alignments(base, log):
+            pass
+
+        self.assertEqual(1, len(log._log_calls['INFO']))
+        self.assertEqual(log._log_calls['INFO'][0],
+                        (r'2/4 (50.00%) alignments were excluded because they '
+                         r'failed one or more filters (see log file for '
+                         r'details)'))
+
+        self.assertEqual(2, len(log._log_calls['DEBUG']))
+        self.assertRegexpMatches(log._log_calls['DEBUG'][0],
+                                 '1 alignment.*mapping quality')
+        self.assertRegexpMatches(log._log_calls['DEBUG'][0],
+                                 '1 alignment.*cigar unavail.*mapping quality')

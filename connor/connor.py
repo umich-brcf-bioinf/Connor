@@ -397,17 +397,19 @@ def _dedup_alignments(args, log):
     try:
         log.info('reading input bam [{}]', args.input_bam)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
-        lightweight_pairs = _build_lightweight_pairs(bamfile.fetch())
+        filtered_aligns = samtools.filter_alignments(bamfile.fetch(), log)
+        lightweight_pairs = _build_lightweight_pairs(filtered_aligns)
         bamfile.close()
 
         original_read_count = len(lightweight_pairs) * 2
-        log.info('bam stat|{} original alignments', original_read_count)
+        log.info('bam_stat|{} original alignments', original_read_count)
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
 
         handlers = familyhandler.build_family_handlers(args, log)
 
-        for coord_family in _build_coordinate_families(bamfile.fetch(),
+        filtered_aligns = samtools.filter_alignments(bamfile.fetch())
+        for coord_family in _build_coordinate_families(filtered_aligns,
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
             tag_families = _build_tag_families(coord_family,
@@ -439,7 +441,7 @@ def main(command_line_args=None):
             args.log_file = args.output_bam + ".log"
         log = utils.Logger(args)
         log.info('connor begins (v{})', __version__)
-        log.info('logging to []', args.log_file)
+        log.info('logging to [{}]', args.log_file)
         log.debug('command|{}',' '.join(command_line_args))
         log.debug('command options|{}', vars(args))
         log.debug('pwd|{}', os. getcwd ())

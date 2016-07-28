@@ -753,12 +753,12 @@ class ConnorIntegrationTestCase(BaseConnorTestCase):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
 @SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|20|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
@@ -786,12 +786,12 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
 @SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|20|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
@@ -811,17 +811,19 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
             self.assertRegexpMatches(log_calls[0],
                                      'reading input bam')
             self.assertRegexpMatches(log_calls[1],
-                                    'bam stat|6 original alignments')
+                                     '.* alignments were excluded .*')
+            self.assertRegexpMatches(log_calls[2],
+                                    'bam_stat|6 original alignments')
 
 
     def test_deduplicate_alignments_distinctPairStartsAreNotCombined(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
 @SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|100|0|5M|=|500|200|AAAAA|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|200|AAAAA|>>>>>
-readNameB1|147|chr10|500|0|5M|=|100|200|AAAAA|>>>>>
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|100|20|5M|=|500|200|AAAAA|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|200|AAAAA|>>>>>
+readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
