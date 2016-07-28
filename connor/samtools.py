@@ -56,7 +56,7 @@ def _get_samtools():
 SAMTOOLS_UTIL = _get_samtools()
 
 def filter_alignments(alignments, log=None):
-    filters = {'alignment not in proper pair': \
+    filters = {'not in proper pair': \
                     lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
                 'secondary alignment': \
                     lambda a: a.flag & BamFlag.SECONDARY != 0,
@@ -71,13 +71,17 @@ def filter_alignments(alignments, log=None):
         yield alignment
     if log:
         total = generator.total_excluded + generator.total_included
-        log.info(('{}/{} ({:.2f}%) alignments were excluded because they '
-                  'failed one or more filters (see log file for details)'),
+        log.debug(('filter_align|{}/{} ({:.2f}%) alignments passed filtering'),
+                 generator.total_included,
+                 total,
+                 100 * generator.total_included / total)
+        log.debug(('filter_align|{}/{} ({:.2f}%) alignments failed filtering '
+                  'and will be excluded (see log file)'),
                  generator.total_excluded,
                  total,
                  100 * generator.total_excluded / total)
         for filter_name, count in generator.filter_stats.items():
-            log.debug('bam_stat|{:>7} alignments excluded because: {}',
+            log.debug('filter_align|{:>7} alignments excluded because: {}',
                      count,
                      filter_name)
 

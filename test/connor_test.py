@@ -811,9 +811,7 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
             self.assertRegexpMatches(log_calls[0],
                                      'reading input bam')
             self.assertRegexpMatches(log_calls[1],
-                                     '.* alignments were excluded .*')
-            self.assertRegexpMatches(log_calls[2],
-                                    'bam_stat|6 original alignments')
+                                    'families were excluded')
 
 
     def test_deduplicate_alignments_distinctPairStartsAreNotCombined(self):

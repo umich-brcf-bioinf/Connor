@@ -184,14 +184,14 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         for dummy in samtools.filter_alignments(base, log):
             pass
 
-        self.assertEqual(1, len(log._log_calls['INFO']))
-        self.assertEqual(log._log_calls['INFO'][0],
-                        (r'2/4 (50.00%) alignments were excluded because they '
-                         r'failed one or more filters (see log file for '
-                         r'details)'))
-
-        self.assertEqual(2, len(log._log_calls['DEBUG']))
-        self.assertRegexpMatches(log._log_calls['DEBUG'][0],
-                                 '1 alignment.*mapping quality')
-        self.assertRegexpMatches(log._log_calls['DEBUG'][0],
+        self.assertEqual(log._log_calls['DEBUG'][0],
+                         r'filter_align|2/4 (50.00%) alignments passed '
+                         r'filtering')
+        self.assertEqual(log._log_calls['DEBUG'][1],
+                        (r'filter_align|2/4 (50.00%) alignments failed '
+                         r'filtering and will be excluded (see log file)'))
+        self.assertRegexpMatches(log._log_calls['DEBUG'][2],
                                  '1 alignment.*cigar unavail.*mapping quality')
+        self.assertRegexpMatches(log._log_calls['DEBUG'][3],
+                                 '1 alignment.*mapping quality')
+        self.assertEqual(4, len(log._log_calls['DEBUG']))

@@ -379,10 +379,12 @@ def _rank_tags(tagged_paired_aligns):
     return ranked_tags
 
 
-def _build_lightweight_pairs(aligned_segments):
+def _build_lightweight_pairs(aligned_segments, log):
     name_pairs = dict()
     lightweight_pairs = list()
+    total_align_count = 0
     for align_segment in aligned_segments:
+        total_align_count += 1
         query_name = align_segment.query_name
         if not query_name in name_pairs:
             name_pairs[align_segment.query_name] = align_segment
@@ -390,6 +392,14 @@ def _build_lightweight_pairs(aligned_segments):
             new_pair = _LightweightPair(name_pairs.pop(query_name),
                                         align_segment)
             lightweight_pairs.append(new_pair)
+    log.debug('filter_unpaired|{}/{} ({:.2f}%) alignments had mate present',
+             len(lightweight_pairs) * 2,
+             total_align_count,
+             100 * len(lightweight_pairs) * 2 / total_align_count)
+    log.debug('filter_unpaired|{}/{} ({:.2f}%) alignments missing their mate',
+             len(name_pairs),
+             total_align_count,
+             100 * len(name_pairs) / total_align_count)
     return lightweight_pairs
 
 
@@ -398,11 +408,9 @@ def _dedup_alignments(args, log):
         log.info('reading input bam [{}]', args.input_bam)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
         filtered_aligns = samtools.filter_alignments(bamfile.fetch(), log)
-        lightweight_pairs = _build_lightweight_pairs(filtered_aligns)
+        lightweight_pairs = _build_lightweight_pairs(filtered_aligns, log)
         bamfile.close()
 
-        original_read_count = len(lightweight_pairs) * 2
-        log.info('bam_stat|{} original alignments', original_read_count)
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
 
