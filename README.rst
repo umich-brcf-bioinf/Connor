@@ -8,9 +8,13 @@ Command-line tool to deduplicate reads in bam files based on custom inline barco
     :target: https://travis-ci.com/umich-brcf-bioinf/Connor
     :alt: Build Status
 
-.. image:: https://coveralls.io/repos/github/umich-brcf-bioinf/Connor/badge.svg?branch=develop
-    :target: https://coveralls.io/github/umich-brcf-bioinf/Connor?branch=develop
-    :alt: Coverage Status
+.. image:: https://codeclimate.com/repos/5793a84516ba097bda009574/badges/28ae96f1f3179a08413e/coverage.svg
+   :target: https://codeclimate.com/repos/5793a84516ba097bda009574/coverage
+   :alt: Test Coverage
+
+.. image:: https://codeclimate.com/repos/5793a84516ba097bda009574/badges/28ae96f1f3179a08413e/gpa.svg
+   :target: https://codeclimate.com/repos/5793a84516ba097bda009574/feed
+   :alt: Code Climate
 
 
 The official repository is at:
@@ -24,8 +28,11 @@ TBD
 
 Consensus output BAM tags:
   X0: UMI sequence: a numeric identifier assigned to a consensus sequence
+
   X1: UMI tag: left|right inline barcodes
+
   X2: edge positions: start of the left alignment, end of the right alignment
+
   X3: count of original read pairs that were deduplicated into the consensus
   
 -----------
