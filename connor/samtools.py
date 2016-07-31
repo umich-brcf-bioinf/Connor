@@ -55,6 +55,22 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
+#TODO: cgates: This delegation pattern seems unclear
+class ConnorAlign(object):
+    def __init__(self, pysam_align_segment):
+        self.__dict__['pysam_align_segment'] = pysam_align_segment
+        self.__dict__['filter'] = None
+
+    def __getattr__(self, name):
+        return getattr(self.pysam_align_segment, name)
+
+    def __setattr__(self, name, value):
+        if name in self.__dict__:
+            self.__dict__[name] = value
+        else:
+            delegator = self.__dict__['pysam_align_segment']
+            delegator.__setattr__(name, value)
+
 def filter_alignments(alignments, log=None):
     filters = {'not in proper pair': \
                     lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
@@ -102,3 +118,24 @@ def sort_and_index_bam(bam_filename):
     sort(bam_filename, sorted_bam_filename)
     os.rename(sorted_bam_filename, bam_filename)
     index(bam_filename)
+
+
+class AlignWriter(object):
+    def __init__(self, header, bam_path, tags=None):
+        self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=header)
+        if tags is None:
+            self._tags = {}
+        else:
+            self._tags = tags
+
+    def _add_bam_tags(self, family, connor_align):
+        for tag_name, (tag_type, get_value, descrition) in self._tags.items():
+            value = get_value(family, connor_align)
+            connor_align.set_tag(tag_name, value, tag_type)
+
+    def write(self, family, connor_align):
+        self._add_bam_tags(family, connor_align)
+        self._bam_file.write(connor_align.pysam_align_segment)
+
+    def close(self):
+        self._bam_file.close()

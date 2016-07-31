@@ -21,6 +21,8 @@ from collections import defaultdict, Counter
 from copy import deepcopy
 import operator
 import os
+import platform
+import pysam
 import sys
 import traceback
 
@@ -438,21 +440,27 @@ def _dedup_alignments(args, log):
         log.error(traceback.format_exc())
         exit(1)
 
-#TODO cgates: check that input file exists and output file does not
+def log_environment_info(log, args):
+    log.debug('original_command_line|{}',' '.join(args.original_command_line))
+    log.debug('command_options|{}', vars(args))
+    log.debug('command_cwd|{}', os.getcwd ())
+    log.debug('platform_uname|{}', platform.uname())
+    log.debug('platform_python_version|{}', platform.python_version())
+    log.debug('pysam_version|{}', pysam.__version__)
+
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
     if not command_line_args:
         command_line_args = sys.argv
     try:
         args = _parse_command_line_args(command_line_args[1:])
+        args.original_command_line = command_line_args
         if not args.log_file:
             args.log_file = args.output_bam + ".log"
         log = utils.Logger(args)
+        log_environment_info(log, args)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
-        log.debug('command|{}',' '.join(command_line_args))
-        log.debug('command options|{}', vars(args))
-        log.debug('pwd|{}', os. getcwd ())
         _dedup_alignments(args, log)
         warning = ' (See warnings above)' if log.warning_occurred else ''
         log.info('connor complete{}', warning)

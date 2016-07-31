@@ -61,6 +61,18 @@ class _WriteFamilyHandler(object):
         samtools.sort_and_index_bam(self._output_filename)
 
 
+class _WriteAnnotatedAlignsHandler(object):
+    def __init__(self, writer):
+        self._writer = writer
+
+    def handle(self, family):
+        for align_pair in family.alignments:
+            self._writer.write(family, align_pair.left_alignment)
+            self._writer.write(family, align_pair.right_alignment)
+        for align_pair in family.excluded_alignments:
+            self._writer.write(family, align_pair.left_alignment)
+            self._writer.write(family, align_pair.right_alignment)
+
 class _WriteExcludedReadsHandler(object):
     def __init__(self, args, logger):
         self._output_filename = args.output_excluded_alignments
