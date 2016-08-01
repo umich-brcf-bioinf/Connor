@@ -1,6 +1,6 @@
 """Simplifies discrepancies in how different versions pysam wrap samtools"""
 from __future__ import print_function, absolute_import, division
-
+from copy import deepcopy
 import os
 import re
 import pysam
@@ -121,17 +121,27 @@ def sort_and_index_bam(bam_filename):
 
 
 class AlignWriter(object):
+    BAM_TAG_FORMAT = 'connor|BAM tag|{}:{}'.replace('|', '\t')
+
     def __init__(self, header, bam_path, tags=None):
-        self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=header)
         if tags is None:
-            self._tags = {}
+            self._tags = []
         else:
-            self._tags = tags
+            self._tags = sorted(tags)
+        new_header = self._add_header_lines(header, self._tags)
+        self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=new_header)
+
+    @staticmethod
+    def _add_header_lines(original_header, tags):
+        new_header =  deepcopy(original_header)
+        if 'CO' not in new_header:
+            new_header['CO'] = []
+        new_header['CO'].extend([tag.header_comment for tag in tags])
+        return new_header
 
     def _add_bam_tags(self, family, connor_align):
-        for tag_name, (tag_type, get_value, descrition) in self._tags.items():
-            value = get_value(family, connor_align)
-            connor_align.set_tag(tag_name, value, tag_type)
+        for tag in self._tags:
+            tag.set_tag(family, connor_align)
 
     def write(self, family, connor_align):
         self._add_bam_tags(family, connor_align)
@@ -139,3 +149,22 @@ class AlignWriter(object):
 
     def close(self):
         self._bam_file.close()
+
+class BamTag(object):
+    HEADER_FORMAT = 'connor|BAM tag|{}: {}'.replace('|', '\t')
+
+    def __init__(self, tag_name, tag_type, description, get_value):
+        self._tag_name = tag_name
+        self._tag_type = tag_type
+        self._get_value = get_value
+        self._description = description
+        self.header_comment = BamTag.HEADER_FORMAT.format(tag_name,
+                                                          description)
+
+    def __lt__(self, other):
+        return (self._tag_name,
+                self._description) < (other._tag_name, other._description)
+
+    def set_tag(self, family, connor_align):
+        value = self._get_value(family, connor_align)
+        connor_align.set_tag(self._tag_name, value, self._tag_type)

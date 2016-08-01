@@ -2,12 +2,14 @@
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
+from copy import deepcopy
 import os
 import pysam
 from testfixtures.tempdirectory import TempDirectory
 
 import test.utils_test as utils_test
 from connor.samtools import BamFlag
+from connor.samtools import BamTag
 from connor.samtools import ConnorAlign
 import connor.samtools as samtools
 
@@ -297,7 +299,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
                              {'LN': 1584, 'SN': 'chr2'}] }
             writer = samtools.AlignWriter(header, bam_path)
             writer.close()
-        self.assertEqual({}, writer._tags)
+        self.assertEqual([], writer._tags)
 
     def test_write(self):
         with TempDirectory() as tmp_dir:
@@ -333,9 +335,12 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             align2 = ConnorAlign(mock_align(query_name='align2'))
             align3 = ConnorAlign(mock_align(query_name='align3'))
 
-            tags = {'X1' : ('Z', lambda family, align: family, ''),
-                    'X2' : ('Z', lambda family, align: align.query_name, '')}
-            writer = samtools.AlignWriter(header, bam_path, tags)
+            tag1 = BamTag('X1','Z', 'desc',
+                          get_value=lambda family, align: family)
+            tag2 = BamTag('X2','Z', 'desc',
+                          get_value=lambda family, align: align.query_name)
+
+            writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
 
             writer.write('familyA', align1)
             writer.write('familyB', align2)
@@ -366,14 +371,48 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             bam_path = os.path.join(tmp_dir.path, 'destination.bam')
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
-                             {'LN': 1584, 'SN': 'chr2'}] }
-            tags = {'X1' : ('Z', lambda family, align: family, 'annotates family'),
-                    'X2' : ('Z', lambda family, align: align.query_name, 'annotates query name')}
-            writer = samtools.AlignWriter(header, bam_path, tags)
+                             {'LN': 1584, 'SN': 'chr2'}],
+                      'CO': ['comment1', 'comment2']}
+            tag1 = BamTag('X1','Z', 'annotates family', get_value=None)
+            tag2 = BamTag('X2','Z', 'annotates alignment', get_value=None)
+            writer = samtools.AlignWriter(header, bam_path, [tag2, tag1])
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
             actual_header = dict(bamfile.header)
             bamfile.close()
 
-        self.assertEqual(header, actual_header)
+        expected_header = deepcopy(header)
+        expected_header.pop('CO')
+        actual_comments = actual_header.pop('CO')
+        expected_comments = ['comment1',
+                             'comment2',
+                             'connor\tBAM tag\tX1: annotates family',
+                             'connor\tBAM tag\tX2: annotates alignment']
+        self.assertEqual(expected_comments, actual_comments)
+
+class BamTagTest(utils_test.BaseConnorTestCase):
+    def test_init_setsHeaderComment(self):
+        tag = BamTag('foo', 'Z', 'foo description', lambda fam, align: None)
+        self.assertEqual('connor\tBAM tag\tfoo: foo description',
+                         tag.header_comment)
+
+    def test_set_tag(self):
+        get_value = lambda family, align: family + ":" + align.query_name
+        tag = BamTag('X9', 'Z', 'foo description', get_value)
+        connor_align = ConnorAlign(mock_align())
+
+        tag.set_tag('family1', connor_align)
+
+        self.assertEqual([('X9', 'family1:align1')], connor_align.get_tags())
+
+    def test_lt_sortsByNameThenDescription(self):
+        base = BamTag('X2', 'i', 'Desc B', None)
+        self.assertEqual(False, base.__lt__(base))
+        self.assertEqual(False, base.__lt__(BamTag('X2','i', 'Desc B', None)))
+
+        self.assertEqual(True, base.__lt__(BamTag('X2','i', 'Desc C', None)))
+        self.assertEqual(True, base.__lt__(BamTag('X3','i', 'Desc B', None)))
+
+        self.assertEqual(False, base.__lt__(BamTag('X1','i', 'Desc B', None)))
+        self.assertEqual(False, base.__lt__(BamTag('X2','i', 'Desc A', None)))
