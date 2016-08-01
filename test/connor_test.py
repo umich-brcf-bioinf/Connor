@@ -13,6 +13,7 @@ import connor.samtools as samtools
 import connor.utils as utils
 import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
+from connor import samtools
 
 
 class MockAlignSegment(object):
@@ -428,6 +429,41 @@ class TagFamiliyTest(BaseConnorTestCase):
 
 
 class ConnorTest(BaseConnorTestCase):
+    def test_build_annotated_aligns_writer(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 'input.sam',
+                                                 sam_contents)
+            output_bam = os.path.join(tmp_dir.path, 'output.bam')
+            annotated_output_bam = os.path.join(tmp_dir.path, 'annotated.bam')
+            args = Namespace(input_bam=input_bam,
+                             output_bam=output_bam,
+                             annotated_output_bam = annotated_output_bam)
+            tags = []
+            actual_writer = connor._build_annotated_aligns_writer(args, tags)
+            actual_writer.close()
+
+            actual_output = samtools.alignment_file(annotated_output_bam, 'rb',)
+            expected_header = {'HD': {'GO': 'none',
+                                      'SO': 'coordinate',
+                                      'VN': '1.4'},
+                               'SQ': [{'SN': 'chr10', 'LN': 135534747}]}
+            self.assertEqual(expected_header, actual_output.header)
+
+    def test_build_annotated_aligns_writer_nullIfNotSpecified(self):
+        args = Namespace(input_bam='input_bam',
+                         output_bam='output_bam',
+                         annotated_output_bam='')
+        tags = []
+        actual_writer = connor._build_annotated_aligns_writer(args, tags)
+        self.assertEqual(samtools.AlignWriter.NULL, actual_writer)
+
     def test_build_coordinate_read_name_manifest(self):
         Align = namedtuple('Align', 'name key')
         align1 = Align(name='align1', key=3)

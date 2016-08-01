@@ -121,6 +121,14 @@ def sort_and_index_bam(bam_filename):
 
 
 class AlignWriter(object):
+    class _NullWriter(object):
+        def write(self, *args):
+            pass
+
+        def close(self):
+            pass
+
+    NULL= _NullWriter()
     BAM_TAG_FORMAT = 'connor|BAM tag|{}:{}'.replace('|', '\t')
 
     def __init__(self, header, bam_path, tags=None):
@@ -129,6 +137,7 @@ class AlignWriter(object):
         else:
             self._tags = sorted(tags)
         new_header = self._add_header_lines(header, self._tags)
+        self._bam_path = bam_path
         self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=new_header)
 
     @staticmethod

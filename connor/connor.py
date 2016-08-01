@@ -335,13 +335,14 @@ def _parse_command_line_args(arguments):
     parser.add_argument('input_bam',
                         help="path to input BAM")
     parser.add_argument('output_bam',
-                        help="path to deduplcated output BAM")
+                        help="path to deduplicated output BAM")
     parser.add_argument('--log_file',
                         type=str,
                         help="={output_filename}.log. Path to verbose log file")
-    parser.add_argument('--output_excluded_alignments',
+    parser.add_argument('--annotated_output_bam',
                         type=str,
-                        help="path to BAM containing all excluded aligns")
+                        help=("path to output BAM containing all original "
+                              "aligns annotated with BAM tags"))
     parser.add_argument("-f", "--consensus_freq_threshold",
                         type=float,
                         default = DEFAULT_CONSENSUS_FREQ_THRESHOLD,
@@ -440,13 +441,51 @@ def _dedup_alignments(args, log):
         log.error(traceback.format_exc())
         exit(1)
 
-def log_environment_info(log, args):
+def _log_environment_info(log, args):
     log.debug('original_command_line|{}',' '.join(args.original_command_line))
     log.debug('command_options|{}', vars(args))
     log.debug('command_cwd|{}', os.getcwd ())
     log.debug('platform_uname|{}', platform.uname())
     log.debug('platform_python_version|{}', platform.python_version())
     log.debug('pysam_version|{}', pysam.__version__)
+
+def _build_annotated_aligns_writer(args, tags):
+    if not args.annotated_output_bam:
+        return samtools.AlignWriter.NULL
+    else:
+        input_bam = samtools.alignment_file(args.input_bam, "rb")
+        header = input_bam.header
+        input_bam.close()
+        return samtools.AlignWriter(header, args.annotated_output_bam, tags)
+
+def _build_bam_tags(args):
+    tags = [
+        samtools.BamTag("X0", "Z",
+                        ("filter; rationale explaining why the align was "
+                         "excluded"),
+                        lambda fam, align: align.filter),
+        samtools.BamTag("X1", "i",
+                        "unique identifier for this alignment family",
+                        lambda fam, align: fam.umi_sequence),
+        samtools.BamTag("X2", "Z",
+                        ("L~R UMI sequence for this alignment family; because "
+                         "of fuzzy matching the family UMI may be distinct "
+                         "from the UMI of the original alignment"),
+                        lambda fam, align: "{0}~{1}".format(fam.umi[0],
+                                                            fam.umi[1])),
+        samtools.BamTag("X3", "i",
+                        ("family size (number of original align pairs in this "
+                         "family)"),
+                        lambda fam, align: len(fam.alignments))]
+#         samtools.BamTag("X4", "Z",
+#                         "left align start, right align end",
+#                         lambda fam, align: align.left_alignment.reference_start + 1, align.right_alignment.reference_end),
+#         samtools.BamTag("X5", "i",
+#                         ("family CIGAR"),
+#                         lambda fam, align: fam.paired_cigar)]
+
+
+    return tags
 
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
@@ -458,7 +497,7 @@ def main(command_line_args=None):
         if not args.log_file:
             args.log_file = args.output_bam + ".log"
         log = utils.Logger(args)
-        log_environment_info(log, args)
+        _log_environment_info(log, args)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
         _dedup_alignments(args, log)

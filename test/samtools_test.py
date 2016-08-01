@@ -308,6 +308,16 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             pass
         return t_type
 
+    def test_init_saves_file_path(self):
+        with TempDirectory() as tmp_dir:
+            bam_path = os.path.join(tmp_dir.path, "destination.bam")
+            header = { 'HD': {'VN': '1.0'},
+                      'SQ': [{'LN': 1575, 'SN': 'chr1'},
+                             {'LN': 1584, 'SN': 'chr2'}] }
+            writer = samtools.AlignWriter(header, bam_path)
+            writer.close()
+        self.assertEqual(bam_path, writer._bam_path)
+
     def test_init_defaultToNoTags(self):
         with TempDirectory() as tmp_dir:
             bam_path = os.path.join(tmp_dir.path, "destination.bam")
@@ -384,6 +394,76 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual("X2:Z:align2", align_tags[('align2', 'X2')])
         self.assertEqual("X2:Z:align3", align_tags[('align3', 'X2')])
 
+    def test_write_skipsTagsWhenValueIsNone(self):
+        with TempDirectory() as tmp_dir:
+            bam_path = os.path.join(tmp_dir.path, 'destination.bam')
+            header = { 'HD': {'VN': '1.0'},
+                      'SQ': [{'LN': 1575, 'SN': 'chr1'},
+                             {'LN': 1584, 'SN': 'chr2'}] }
+            align1 = ConnorAlign(mock_align(query_name='align1'))
+            align2 = ConnorAlign(mock_align(query_name='align2'))
+            align3 = ConnorAlign(mock_align(query_name='align3'))
+
+            get_value = lambda family, align: 'Yes' if align.query_name == 'align2' else None
+            tag1 = BamTag('X1','Z', 'desc', get_value=get_value)
+
+            writer = samtools.AlignWriter(header, bam_path, [tag1])
+
+            writer.write('familyA', align1)
+            writer.write('familyB', align2)
+            writer.write('familyC', align3)
+            writer.close()
+            samtools.index(bam_path)
+
+            bamfile = samtools.alignment_file(bam_path, 'rb')
+            actual_aligns = [a for a in bamfile.fetch()]
+            bamfile.close()
+
+        align_tags = {}
+        for actual_align in actual_aligns:
+            for t_name, t_val, t_type  in actual_align.get_tags(with_value_type=True):
+                key = (actual_align.query_name, t_name)
+                t_type = AlignWriterTest.fix_pysam_inconsistent_tag_type(t_type)
+                align_tags[key] = "{}:{}:{}".format(t_name, t_type, t_val)
+
+        self.assertEqual(3, len(actual_aligns))
+        self.assertEqual(1, len(align_tags))
+        self.assertEqual("X1:Z:Yes", align_tags[('align2', 'X1')])
+
+
+    def test_write_removesTagsWhenValueIsNone(self):
+        with TempDirectory() as tmp_dir:
+            bam_path = os.path.join(tmp_dir.path, 'destination.bam')
+            header = { 'HD': {'VN': '1.0'},
+                      'SQ': [{'LN': 1575, 'SN': 'chr1'},
+                             {'LN': 1584, 'SN': 'chr2'}] }
+            align1 = ConnorAlign(mock_align(query_name='align1'))
+            align1.set_tag("X1", "No")
+
+            tag1 = BamTag('X1','Z', 'desc',
+                          get_value = lambda family, align: None)
+
+            writer = samtools.AlignWriter(header, bam_path, [tag1])
+
+            writer.write('familyA', align1)
+            writer.close()
+            samtools.index(bam_path)
+
+            bamfile = samtools.alignment_file(bam_path, 'rb')
+            actual_aligns = [a for a in bamfile.fetch()]
+            bamfile.close()
+
+        align_tags = {}
+        for actual_align in actual_aligns:
+            for t_name, t_val, t_type  in actual_align.get_tags(with_value_type=True):
+                key = (actual_align.query_name, t_name)
+                t_type = AlignWriterTest.fix_pysam_inconsistent_tag_type(t_type)
+                align_tags[key] = "{}:{}:{}".format(t_name, t_type, t_val)
+
+        self.assertEqual(1, len(actual_aligns))
+        self.assertEqual(0, len(align_tags))
+
+
     def test_write_addsHeaderTags(self):
         with TempDirectory() as tmp_dir:
             bam_path = os.path.join(tmp_dir.path, 'destination.bam')
@@ -408,6 +488,11 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
                              'connor\tBAM tag\tX1: annotates family',
                              'connor\tBAM tag\tX2: annotates alignment']
         self.assertEqual(expected_comments, actual_comments)
+
+    def test_null_writer_methods(self):
+        samtools.AlignWriter.NULL.write('foo')
+        samtools.AlignWriter.NULL.close()
+        self.assertEqual(1, 1)
 
 class BamTagTest(utils_test.BaseConnorTestCase):
     def test_init_setsHeaderComment(self):
