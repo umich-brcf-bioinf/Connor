@@ -62,6 +62,13 @@ def pysam_alignments_from_bam(bam_filename):
 
 
 class ConnorAlignTest(utils_test.BaseConnorTestCase):
+    @staticmethod
+    def byte_array_to_string(sequence):
+        if isinstance(sequence, str):
+            return sequence
+        else:
+            return str(sequence.decode("utf-8"))
+
     def test_gettersPassthroughToPysamAlignSegment(self):
         pysam_align = mock_align(query_name="queryname_1",
                             flag=99,
@@ -85,7 +92,8 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         self.assertEqual('8M', connor_align.cigarstring)
         self.assertEqual(242, connor_align.next_reference_start)
         self.assertEqual(100, connor_align.template_length)
-        self.assertEqual(b'ACGTACGT', connor_align.query_sequence)
+        self.assertEqual('ACGTACGT',
+                         ConnorAlignTest.byte_array_to_string(connor_align.query_sequence))
         self.assertEqual([20] * 8, connor_align.query_qualities)
         self.assertEqual(150, connor_align.reference_end)
 
@@ -125,7 +133,8 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         self.assertEqual('2S8M', pysam_align.cigarstring)
         self.assertEqual(1242, pysam_align.next_reference_start)
         self.assertEqual(1100, pysam_align.template_length)
-        self.assertEqual(b'TTACGTACGT', pysam_align.query_sequence)
+        self.assertEqual('TTACGTACGT',
+                         ConnorAlignTest.byte_array_to_string(pysam_align.query_sequence))
         self.assertEqual([20] * 10, pysam_align.query_qualities)
         self.assertEqual(1150, pysam_align.reference_end)
 
