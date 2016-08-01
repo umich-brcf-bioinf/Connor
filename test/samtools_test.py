@@ -291,6 +291,14 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 
 
 class AlignWriterTest(utils_test.BaseConnorTestCase):
+    @staticmethod
+    def fix_pysam_inconsistent_tag_type(t_type):
+        try:
+            t_type = chr(t_type)
+        except TypeError:
+            pass
+        return t_type
+
     def test_init_defaultToNoTags(self):
         with TempDirectory() as tmp_dir:
             bam_path = os.path.join(tmp_dir.path, "destination.bam")
@@ -356,7 +364,8 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         for actual_align in actual_aligns:
             for t_name, t_val, t_type  in actual_align.get_tags(with_value_type=True):
                 key = (actual_align.query_name, t_name)
-                align_tags[key] = "{}:{}:{}".format(t_name, chr(t_type), t_val)
+                t_type = AlignWriterTest.fix_pysam_inconsistent_tag_type(t_type)
+                align_tags[key] = "{}:{}:{}".format(t_name, t_type, t_val)
 
         self.assertEqual(3, len(actual_aligns))
         self.assertEqual("X1:Z:familyA", align_tags[('align1', 'X1')])
