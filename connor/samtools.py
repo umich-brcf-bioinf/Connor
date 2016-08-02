@@ -55,28 +55,107 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
-#TODO: cgates: This delegation pattern seems unclear
+
 class ConnorAlign(object):
+    # cgates: FYI, you can use dynamic delegation via __setattr__ and 
+    # __getattr__ but it's awkward and about twice as slow
     def __init__(self, pysam_align_segment):
-        self.__dict__['pysam_align_segment'] = pysam_align_segment
-        self.__dict__['filter'] = None
+        self.pysam_align_segment = pysam_align_segment
+        self.filter = None
 
     def __eq__(self, other):
         return other.__dict__ == self.__dict__
 
     def __hash__(self):
-        return hash(self.__dict__['filter']) \
-            + hash(self.__dict__['pysam_align_segment'])
+        return hash(self.filter) + hash(self.pysam_align_segment)
 
-    def __getattr__(self, name):
-        return getattr(self.pysam_align_segment, name)
+    @property
+    def cigarstring(self):
+        return self.pysam_align_segment.cigarstring
+    @cigarstring.setter
+    def cigarstring(self, value):
+        self.pysam_align_segment.cigarstring = value
 
-    def __setattr__(self, name, value):
-        if name in self.__dict__:
-            self.__dict__[name] = value
-        else:
-            delegator = self.__dict__['pysam_align_segment']
-            delegator.__setattr__(name, value)
+    @property
+    def flag(self):
+        return self.pysam_align_segment.flag
+    @flag.setter
+    def flag(self, value):
+        self.pysam_align_segment.flag = value
+
+    def get_tag(self, name, with_value_type=False):
+        return self.pysam_align_segment.get_tag(name, with_value_type)
+
+    def get_tags(self, with_value_type=False):
+        return self.pysam_align_segment.get_tags(with_value_type)
+
+    @property
+    def mapping_quality(self):
+        return self.pysam_align_segment.mapping_quality
+    @mapping_quality.setter
+    def mapping_quality(self, value):
+        self.pysam_align_segment.mapping_quality = value
+
+    @property
+    def next_reference_start(self):
+        return self.pysam_align_segment.next_reference_start
+    @next_reference_start.setter
+    def next_reference_start(self, value):
+        self.pysam_align_segment.next_reference_start = value
+
+    @property
+    def query_name(self):
+        return self.pysam_align_segment.query_name
+    @query_name.setter
+    def query_name(self, value):
+        self.pysam_align_segment.query_name = value
+
+    @property
+    def query_sequence(self):
+        return self.pysam_align_segment.query_sequence
+    @query_sequence.setter
+    def query_sequence(self, value):
+        self.pysam_align_segment.query_sequence = value
+
+    @property
+    def query_qualities(self):
+        return self.pysam_align_segment.query_qualities
+    @query_qualities.setter
+    def query_qualities(self, value):
+        self.pysam_align_segment.query_qualities = value
+
+    @property
+    def reference_end(self):
+        return self.pysam_align_segment.reference_end
+
+    @property
+    def reference_id(self):
+        return self.pysam_align_segment.reference_id
+    @reference_id.setter
+    def reference_id(self, value):
+        self.pysam_align_segment.reference_id = value
+
+    @property
+    def reference_name(self):
+        return self.pysam_align_segment.reference_name
+
+    @property
+    def reference_start(self):
+        return self.pysam_align_segment.reference_start
+    @reference_start.setter
+    def reference_start(self, value):
+        self.pysam_align_segment.reference_start = value
+
+    def set_tag(self, tag_name, tag_value, value_type):
+        self.pysam_align_segment.set_tag(tag_name, tag_value, value_type)
+
+    @property
+    def template_length(self):
+        return self.pysam_align_segment.template_length
+    @template_length.setter
+    def template_length(self, value):
+        self.pysam_align_segment.template_length = value
+
 
 def filter_alignments(alignments, log=None):
     filters = {'not in proper pair': \

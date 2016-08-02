@@ -89,8 +89,6 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         different_filter.filter = "foo; bar"
         self.assertNotEqual(base, different_filter)
 
-
-        
     def test_gettersPassthroughToPysamAlignSegment(self):
         pysam_align = mock_align(query_name="queryname_1",
                             flag=99,
@@ -104,6 +102,7 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
                             query_sequence="ACGTACGT",
                             query_qualities=[20]*8,
                             )
+        pysam_align.set_tag('X1', 'foo')
         connor_align = ConnorAlign(pysam_align)
 
         self.assertEqual('queryname_1', connor_align.query_name)
@@ -118,6 +117,9 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
                          ConnorAlignTest.byte_array_to_string(connor_align.query_sequence))
         self.assertEqual([20] * 8, connor_align.query_qualities)
         self.assertEqual(150, connor_align.reference_end)
+        self.assertEqual('foo', connor_align.get_tag('X1'))
+        self.assertEqual([('X1', 'foo')], connor_align.get_tags())
+
 
     def test_settersPassthroughToPysamAlignSegment(self):
         pysam_align = mock_align(query_name="queryname_1",
@@ -146,6 +148,7 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         connor_align.template_length = 1100
         connor_align.query_sequence = "TTACGTACGT"
         connor_align.query_qualities = [20]*10
+        connor_align.set_tag('X1', 'foo', 'Z')
 
         self.assertEqual('queryname_11', pysam_align.query_name)
         self.assertEqual(147, pysam_align.flag)
@@ -159,6 +162,8 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
                          ConnorAlignTest.byte_array_to_string(pysam_align.query_sequence))
         self.assertEqual([20] * 10, pysam_align.query_qualities)
         self.assertEqual(1150, pysam_align.reference_end)
+        self.assertEqual(('foo', 'Z'),
+                         pysam_align.get_tag('X1', with_value_type=True))
 
     def test_filter(self):
         pysam_align = mock_align(query_name="queryname_1",
@@ -460,7 +465,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
             align1 = ConnorAlign(mock_align(query_name='align1'))
-            align1.set_tag("X1", "No")
+            align1.set_tag('X1', 'No', 'Z')
 
             tag1 = BamTag('X1','Z', 'desc',
                           get_value = lambda family, align: None)
