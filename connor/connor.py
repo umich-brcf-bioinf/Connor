@@ -406,7 +406,7 @@ def _build_lightweight_pairs(aligned_segments, log):
     return lightweight_pairs
 
 
-def _dedup_alignments(args, log):
+def _dedup_alignments(args, aligns_writer, log):
     try:
         log.info('reading input bam [{}]', args.input_bam)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
@@ -417,7 +417,9 @@ def _dedup_alignments(args, log):
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
 
-        handlers = familyhandler.build_family_handlers(args, log)
+        handlers = familyhandler.build_family_handlers(args,
+                                                       aligns_writer,
+                                                       log)
 
         filtered_aligns = samtools.filter_alignments(bamfile.fetch())
         for coord_family in _build_coordinate_families(filtered_aligns,
@@ -498,7 +500,9 @@ def main(command_line_args=None):
         _log_environment_info(log, args)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
-        _dedup_alignments(args, log)
+        bam_tags = _build_bam_tags()
+        annotated_aligns_writer = _build_annotated_aligns_writer(args, bam_tags)
+        _dedup_alignments(args, annotated_aligns_writer, log)
         warning = ' (See warnings above)' if log.warning_occurred else ''
         log.info('connor complete{}', warning)
     except utils.UsageError as usage_error:

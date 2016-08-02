@@ -3,14 +3,19 @@
 #pylint: disable=too-many-arguments
 from __future__ import print_function, absolute_import, division
 from argparse import Namespace
+import os
+
+from testfixtures.tempdirectory import TempDirectory
+
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 from test.samtools_test import mock_align
-from connor.familyhandler import _CigarStatHandler
+from connor.familyhandler import _CigarStatHandler, build_family_handlers
 from connor.familyhandler import _CigarMinorityStatHandler
 from connor.familyhandler import _FamilySizeStatHandler
 from connor.familyhandler import _MatchStatHandler
 from connor.familyhandler import _WriteAnnotatedAlignsHandler
+import test.samtools_test as samtools_test
 
 def _mock_tag_family(input_alignment_count=5,
                     alignments=None,
@@ -29,6 +34,68 @@ def _mock_tag_family(input_alignment_count=5,
                      inexact_match_count=inexact_match_count,
                      minority_cigar_percentage=minority_cigar_percentage)
 
+
+class FamilyHandlerTest(BaseConnorTestCase):
+    def test_build_family_handlers(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 'input.sam',
+                                                 sam_contents)
+            output_bam = os.path.join(tmp_dir.path, 'output.bam')
+
+            args = Namespace(input_bam=input_bam,
+                             output_bam=output_bam,
+                             umi_distance_threshold=1,
+                             min_family_size_threshold=3,
+                             annotated_output_bam=None)
+            handlers = build_family_handlers(args,
+                                             samtools_test.MockAlignWriter(),
+                                             self.mock_logger)
+            actual_handler_names = [x.__class__.__name__ for x in handlers]
+
+        expected_handler_names = ['_FamilySizeStatHandler',
+                                  '_MatchStatHandler',
+                                  '_CigarMinorityStatHandler',
+                                  '_CigarStatHandler',
+                                  '_WriteFamilyHandler']
+        self.assertEqual(expected_handler_names, actual_handler_names)
+
+    def test_build_family_handlers_withAnnotatedAlign(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 'input.sam',
+                                                 sam_contents)
+            output_bam = os.path.join(tmp_dir.path, 'output.bam')
+
+            args = Namespace(input_bam=input_bam,
+                             output_bam=output_bam,
+                             umi_distance_threshold=1,
+                             min_family_size_threshold=3,
+                             annotated_output_bam='annotated_output.bam')
+            handlers = build_family_handlers(args,
+                                             samtools_test.MockAlignWriter(),
+                                             self.mock_logger)
+            actual_handler_names = [x.__class__.__name__ for x in handlers]
+
+        expected_handler_names = ['_FamilySizeStatHandler',
+                                  '_MatchStatHandler',
+                                  '_CigarMinorityStatHandler',
+                                  '_CigarStatHandler',
+                                  '_WriteFamilyHandler',
+                                  '_WriteAnnotatedAlignsHandler']
+        self.assertEqual(expected_handler_names, actual_handler_names)
 
 
 class FamilySizeStatHandlerTest(BaseConnorTestCase):
@@ -115,14 +182,6 @@ class MatchStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(20, stat_handler.total_pair_count)
         self.assertEqual(5/20, stat_handler.percent_inexact_match)
 
-
-class MockAlignWriter(object):
-    def __init__(self):
-        self._write_calls = []
-
-    def write(self, family, connor_align):
-        self._write_calls.append((family, connor_align))
-
 def align_pairs(num_pairs, query_prefix):
     pairs = []
     query_name_format = "{}_{}"
@@ -140,7 +199,7 @@ class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
         family_2 = _mock_tag_family(alignments=align_pairs(1, "B"),
                                     excluded_alignments=align_pairs(2, "b"))
         families = [family_1, family_2]
-        writer = MockAlignWriter()
+        writer = samtools_test.MockAlignWriter()
 
         handler = _WriteAnnotatedAlignsHandler(writer)
         for family in families:

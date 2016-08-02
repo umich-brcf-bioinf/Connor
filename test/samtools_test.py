@@ -14,6 +14,14 @@ from connor.samtools import ConnorAlign
 import connor.samtools as samtools
 
 
+class MockAlignWriter(object):
+    def __init__(self):
+        self._write_calls = []
+
+    def write(self, family, connor_align):
+        self._write_calls.append((family, connor_align))
+
+
 def mock_align(**kwargs):
     a = pysam.AlignedSegment()
     a.query_name = "align1"
@@ -69,6 +77,20 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         else:
             return str(sequence.decode("utf-8"))
 
+    def test_eq(self):
+        pysam_align = mock_align(query_name="align1")
+        base =  ConnorAlign(pysam_align)
+        self.assertEqual(base, base)
+        self.assertEqual(base, ConnorAlign(pysam_align))
+        self.assertEqual(base, ConnorAlign(mock_align(query_name = "align1")))
+        different_pysam_align = ConnorAlign(mock_align(query_name = "align2"))
+        self.assertNotEqual(base, different_pysam_align)
+        different_filter = ConnorAlign(pysam_align)
+        different_filter.filter = "foo; bar"
+        self.assertNotEqual(base, different_filter)
+
+
+        
     def test_gettersPassthroughToPysamAlignSegment(self):
         pysam_align = mock_align(query_name="queryname_1",
                             flag=99,
@@ -220,7 +242,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 
         filtered_aligns = [x for x in samtools.filter_alignments(base)]
 
-        self.assertEqual(base, filtered_aligns)
+        self.assertEqual([ConnorAlign(align1)], filtered_aligns)
 
     def test_filter_alignments_excludesUnpairedAligns(self):
         flag = 99

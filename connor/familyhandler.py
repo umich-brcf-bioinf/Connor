@@ -3,14 +3,14 @@ from collections import defaultdict
 import pandas as pd
 import connor.samtools as samtools
 
-def build_family_handlers(args, logger):
+def build_family_handlers(args, aligns_writer, logger):
     handlers = [_FamilySizeStatHandler(logger),
-            _MatchStatHandler(args, logger),
-            _CigarMinorityStatHandler(logger),
-            _CigarStatHandler(logger),
-            _WriteFamilyHandler(args, logger)]
-    if args.output_excluded_alignments:
-        handlers.append(_WriteExcludedReadsHandler(args, logger))
+                _MatchStatHandler(args, logger),
+                _CigarMinorityStatHandler(logger),
+                _CigarStatHandler(logger),
+                _WriteFamilyHandler(args, logger)]
+    if args.annotated_output_bam:
+        handlers.append(_WriteAnnotatedAlignsHandler(aligns_writer))
     return handlers
 
 class _WriteFamilyHandler(object):
@@ -72,6 +72,10 @@ class _WriteAnnotatedAlignsHandler(object):
         for align_pair in family.excluded_alignments:
             self._writer.write(family, align_pair.left_alignment)
             self._writer.write(family, align_pair.right_alignment)
+
+    def end(self):
+        pass
+
 
 class _WriteExcludedReadsHandler(object):
     def __init__(self, args, logger):

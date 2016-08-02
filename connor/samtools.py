@@ -61,6 +61,13 @@ class ConnorAlign(object):
         self.__dict__['pysam_align_segment'] = pysam_align_segment
         self.__dict__['filter'] = None
 
+    def __eq__(self, other):
+        return other.__dict__ == self.__dict__
+
+    def __hash__(self):
+        return hash(self.__dict__['filter']) \
+            + hash(self.__dict__['pysam_align_segment'])
+
     def __getattr__(self, name):
         return getattr(self.pysam_align_segment, name)
 
@@ -84,7 +91,7 @@ def filter_alignments(alignments, log=None):
                     lambda a: a.cigarstring is None}
     generator = utils.FilteredGenerator(filters)
     for alignment in generator.filter(alignments):
-        yield alignment
+        yield ConnorAlign(alignment)
     if log:
         total = generator.total_excluded + generator.total_included
         log.debug(('filter_align|{}/{} ({:.2f}%) alignments passed filtering'),

@@ -14,6 +14,7 @@ import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 from connor import samtools
+from test.samtools_test import MockAlignWriter
 
 
 class MockAlignSegment(object):
@@ -849,8 +850,10 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                                          consensus_freq_threshold=0.6,
                                          min_family_size_threshold=0,
                                          umi_distance_threshold=1,
-                                         output_excluded_alignments="")
-            connor._dedup_alignments(args, self.mock_logger)
+                                         annotated_output_bam=None)
+            connor._dedup_alignments(args,
+                                     samtools_test.MockAlignWriter(),
+                                     self.mock_logger)
 
             alignments = samtools.alignment_file(output_bam, "rb").fetch()
 
@@ -884,8 +887,10 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
                              umi_distance_threshold=1,
-                             output_excluded_alignments="")
-            connor._dedup_alignments(args, self.mock_logger)
+                             annotated_output_bam=None)
+            connor._dedup_alignments(args,
+                                     samtools_test.MockAlignWriter(),
+                                     self.mock_logger)
 
             log_calls = self.mock_logger._log_calls['INFO']
             self.assertRegexpMatches(log_calls[0],
@@ -914,8 +919,10 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
                              umi_distance_threshold=1,
-                             output_excluded_alignments="")
-            connor._dedup_alignments(args, self.mock_logger)
+                             annotated_output_bam=None)
+            connor._dedup_alignments(args,
+                                     samtools_test.MockAlignWriter(),
+                                     self.mock_logger)
 
             alignments = samtools_test.pysam_alignments_from_bam(output_bam)
 
