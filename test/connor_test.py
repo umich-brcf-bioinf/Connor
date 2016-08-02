@@ -9,10 +9,10 @@ from collections import namedtuple
 import os
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
-import connor.samtools as samtools
 import connor.utils as utils
 import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
+from test.utils_test import MicroMock
 from connor import samtools
 
 
@@ -429,6 +429,50 @@ class TagFamiliyTest(BaseConnorTestCase):
 
 
 class ConnorTest(BaseConnorTestCase):
+    @staticmethod
+    def get_tag(tags, name):
+        for tag in tags:
+            if tag._tag_name == name:
+                return tag
+        return None
+
+
+    def test_build_bam_tags(self):
+        actual_tags = connor._build_bam_tags()
+        self.assertEqual(4, len(actual_tags))
+
+    def test_build_bam_tags_x0_filter(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X0')
+        self.assertEqual('X0', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'filter')
+        connor_align = MicroMock(filter='foo')
+        self.assertEquals('foo', tag._get_value(None, connor_align))
+
+    def test_build_bam_tags_x1_unique_identifier(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X1')
+        self.assertEqual('X1', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'unique identifier')
+        family = MicroMock(umi_sequence=42)
+        self.assertEquals(42, tag._get_value(family, None))
+
+    def test_build_bam_tags_x2_umi_barcodes(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
+        self.assertEqual('X2', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'UMI barcodes')
+        family = MicroMock(umi=('AAA','CCC'))
+        self.assertEquals("AAA~CCC", tag._get_value(family, None))
+
+    def test_build_bam_tags_x3_family_size(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
+        self.assertEqual('X3', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'family size')
+        family = MicroMock(alignments=[1]*42)
+        self.assertEquals(42, tag._get_value(family, None))
+
     def test_build_annotated_aligns_writer(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate

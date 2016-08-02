@@ -458,32 +458,30 @@ def _build_annotated_aligns_writer(args, tags):
         input_bam.close()
         return samtools.AlignWriter(header, args.annotated_output_bam, tags)
 
-def _build_bam_tags(args):
+def _build_bam_tags():
     tags = [
         samtools.BamTag("X0", "Z",
-                        ("filter; rationale explaining why the align was "
-                         "excluded"),
+                        ("filter (rationale explaining why the align was "
+                         "excluded)"),
                         lambda fam, align: align.filter),
         samtools.BamTag("X1", "i",
                         "unique identifier for this alignment family",
-                        lambda fam, align: fam.umi_sequence),
+                        lambda fam, align: fam.umi_sequence if fam else None),
         samtools.BamTag("X2", "Z",
-                        ("L~R UMI sequence for this alignment family; because "
+                        ("L~R UMI barcodes for this alignment family; because "
                          "of fuzzy matching the family UMI may be distinct "
                          "from the UMI of the original alignment"),
                         lambda fam, align: "{0}~{1}".format(fam.umi[0],
-                                                            fam.umi[1])),
+                                                            fam.umi[1]) if fam else None),
         samtools.BamTag("X3", "i",
-                        ("family size (number of original align pairs in this "
-                         "family)"),
-                        lambda fam, align: len(fam.alignments))]
+                        "family size (number of align pairs in this family)",
+                        lambda fam, align: len(fam.alignments) if fam else None)]
 #         samtools.BamTag("X4", "Z",
 #                         "left align start, right align end",
 #                         lambda fam, align: align.left_alignment.reference_start + 1, align.right_alignment.reference_end),
 #         samtools.BamTag("X5", "i",
 #                         ("family CIGAR"),
 #                         lambda fam, align: fam.paired_cigar)]
-
 
     return tags
 
