@@ -137,6 +137,7 @@ class _TagFamily(object):
         (self.distinct_cigar_count,
          self.minority_cigar_percentage,
          dominant_cigar) = _TagFamily._generate_dominant_cigar_stats(list_of_alignments)
+        #TODO: cgates: do we need to store these as separate collections?
         (self.alignments,
          self.excluded_alignments) = _TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
                                                                        list_of_alignments)
@@ -161,6 +162,8 @@ class _TagFamily(object):
             if _TagFamily._get_cigarstring_tuple(pair) == dominant_cigar:
                 included_alignments.append(pair)
             else:
+                pair.left_alignment.filter = "minority CIGAR"
+                pair.right_alignment.filter = "minority CIGAR"
                 excluded_alignments.append(pair)
         return included_alignments, excluded_alignments
 

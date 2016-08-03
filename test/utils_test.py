@@ -1,8 +1,10 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
-import unittest
+from argparse import Namespace
 from collections import defaultdict
 from collections import OrderedDict
+import unittest
 import connor.utils as utils
+
 
 class MicroMock(object):
     def __init__(self, **kwargs):
@@ -140,3 +142,97 @@ class FilteredGeneratorTest(BaseConnorTestCase):
 
         self.assertEqual([], actual_collection)
         self.assertEqual(0, len(generator.filter_stats))
+
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
+
+
+class MockBaseLogger(object):
+    def __init__(self):
+        self.lines = []
+    def info(self, line, extra=None): #pylint: disable=unused-argument
+        self.lines.append(line)
+    def debug(self, line, extra=None):
+        self.info(line, extra)
+    def error(self, line, extra=None):
+        self.info(line, extra)
+    def warning(self, line, extra=None):
+        self.info(line, extra)
+
+
+class LoggerTestCase(BaseConnorTestCase):
+    def test_consoleFormat(self):
+        args = Namespace(log_file="test.log",
+                         verbose=None)
+        console_stream = StringIO()
+        logger = utils.Logger(args, console_stream)
+        logger._file_logger = MockBaseLogger()
+        logger.info("info [{}]", "i")
+        console_lines = console_stream.getvalue().strip().split("\n")
+        self.assertEqual(1, len(console_lines))
+        fields = console_lines[0].split("|")
+        self.assertEqual(3, len(fields))
+        self.assertEqual(fields[1], "INFO")
+        self.assertEqual(fields[2], "info [i]")
+
+
+    def test_notVerbose(self):
+        args = Namespace(log_file="test.log",
+                         verbose=None)
+        console_stream = StringIO()
+        file_logger = MockBaseLogger()
+        logger = utils.Logger(args, console_stream)
+        logger._file_logger = file_logger
+        logger.debug("debug [{}]", "d")
+        logger.info("info [{}]", "i")
+        logger.warning("warning [{}]", "w")
+        logger.error("error [{}]", "e")
+
+        console_lines = console_stream.getvalue().strip().split("\n")
+        self.assertEqual(3, len(console_lines))
+        console_lines[0].endswith("info [i]")
+        console_lines[1].endswith("warning [w]")
+        console_lines[2].endswith("error [e]")
+        self.assertEqual(4, len(file_logger.lines))
+        file_logger.lines[0].endswith("debug [d]")
+        file_logger.lines[1].endswith("info [i]")
+        file_logger.lines[2].endswith("warning [w]")
+        file_logger.lines[3].endswith("error [e]")
+
+    def test_consoleVerbose(self):
+        args = Namespace(log_file="test.log",
+                         verbose=True)
+        console_stream = StringIO()
+        logger = utils.Logger(args, console_stream)
+        file_logger = MockBaseLogger()
+        logger._file_logger = file_logger
+        logger.debug("debug [{}]", "d")
+        logger.info("info [{}]", "i")
+        logger.warning("warning [{}]", "w")
+        logger.error("error [{}]", "e")
+
+        console_lines = console_stream.getvalue().strip().split("\n")
+        self.assertEqual(4, len(console_lines))
+        console_lines[0].endswith("debug [d]")
+        console_lines[1].endswith("info [i]")
+        console_lines[2].endswith("warning [w]")
+        console_lines[3].endswith("error [e]")
+        self.assertEqual(4, len(file_logger.lines))
+        file_logger.lines[0].endswith("debug [d]")
+        file_logger.lines[1].endswith("info [i]")
+        file_logger.lines[2].endswith("warning [w]")
+        file_logger.lines[3].endswith("error [e]")
+
+
+    def test_warning_setsWarningOccurred(self):
+        args = Namespace(log_file="test.log",
+                         verbose=True)
+        console_stream = StringIO()
+        logger = utils.Logger(args, console_stream)
+        logger._file_logger = MockBaseLogger()
+
+        self.assertEqual(False, logger.warning_occurred)
+        logger.warning("oops")
+        self.assertEqual(True, logger.warning_occurred)

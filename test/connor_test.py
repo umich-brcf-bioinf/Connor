@@ -9,22 +9,22 @@ from collections import namedtuple
 import os
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
+from connor import samtools
 import connor.utils as utils
 import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
-from connor import samtools
-from test.samtools_test import MockAlignWriter
 
-
+#TODO: cgates: can we simplify how aligns and pairs are mocked
 class MockAlignSegment(object):
+    #pylint: disable=too-many-instance-attributes
     def __init__(self,
                  query_name,
                  reference_name,
                  reference_start,
                  next_reference_start,
                  query_sequence='AAACCC',
-                 query_qualities=[25,25,25,25,25,25],
+                 query_qualities=None,
                  cigarstring='6M',
                  reference_end=None):
         if not reference_end:
@@ -34,9 +34,13 @@ class MockAlignSegment(object):
         self.reference_start = reference_start
         self.next_reference_start = next_reference_start
         self.query_sequence = query_sequence
-        self.query_qualities = query_qualities
+        if query_qualities is None:
+            self.query_qualities = [25,25,25,25,25,25]
+        else:
+            self.query_qualities = query_qualities
         self.cigarstring = cigarstring
         self.reference_end = reference_end
+        self.filter = None
 
     def __hash__(self):
         return hash(self.query_name)
@@ -47,8 +51,8 @@ class MockAlignSegment(object):
     def set_tag(self, name, value, tag_type):
         pass
 
-#TODO: cgates: inline this method
-def align_seg(query_name,
+
+def align_seg(query_name, #pylint: disable=dangerous-default-value
               reference_name,
               reference_start,
               next_reference_start,
@@ -364,7 +368,7 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
-    def test_minority_cigar_singleton(self):
+    def test_minority_noMinorityIfConsistentCigar(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -385,7 +389,7 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(0, actual_tag_family.minority_cigar_percentage)
 
-    def test_minority_cigar_percentage(self):
+    def test_minority_cigar_setsMinorityPercentage(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -405,6 +409,36 @@ class TagFamiliyTest(BaseConnorTestCase):
                                              consensus_threshold=0.6)
 
         self.assertEquals(1/3, actual_tag_family.minority_cigar_percentage)
+
+    def test_minority_cigar_addsFilterForMinority(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1.left_alignment.cigarstring = "3S3M"
+        pair1.right_alignment.cigarstring = "3S3M"
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2.left_alignment.cigarstring = "3S3M"
+        pair2.right_alignment.cigarstring = "3S3M"
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3.left_alignment.cigarstring = "3S3I"
+        pair3.right_alignment.cigarstring = "3S3I"
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
+
+        actual_tag_family = connor._TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count,
+                                             consensus_threshold=0.6)
+
+        for a_pair in actual_tag_family.alignments:
+            self.assertEqual(None, a_pair.left_alignment.filter)
+            self.assertEqual(None, a_pair.right_alignment.filter)
+
+        self.assertEquals(1, len(actual_tag_family.excluded_alignments))
+        excluded_align_pair = actual_tag_family.excluded_alignments[0]
+        self.assertEquals("minority CIGAR",
+                          excluded_align_pair.left_alignment.filter)
+        self.assertEquals("minority CIGAR",
+                          excluded_align_pair.right_alignment.filter)
 
 
     def test_input_alignment_count(self):

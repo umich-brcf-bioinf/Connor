@@ -21,7 +21,6 @@ class MockAlignWriter(object):
     def write(self, family, connor_align):
         self._write_calls.append((family, connor_align))
 
-
 def mock_align(**kwargs):
     a = pysam.AlignedSegment()
     a.query_name = "align1"
