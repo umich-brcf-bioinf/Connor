@@ -127,7 +127,7 @@ class _PairedAlignment(object):
 class _TagFamily(object):
     FILTER_FORMAT = "small family (<{})"
     umi_sequence = 0
-    
+
     @staticmethod
     def filter_small_alignments(alignments, min_family_size):
         if len(alignments) < min_family_size:
@@ -208,11 +208,16 @@ class _TagFamily(object):
         counter = Counter([_TagFamily._get_cigarstring_tuple(s) for s in alignments])
         number_distict_cigars = len(counter)
         top_two_cigar_count = counter.most_common(2)
+        dominant_cigar = top_two_cigar_count[0][0]
+        dominant_cigar_count = top_two_cigar_count[0][1]
         if len(top_two_cigar_count) == 1:
             minority_cigar_percentage = 0
+        elif dominant_cigar_count == top_two_cigar_count[0][1]:
+            dominant_cigar = sorted(counter.most_common(),
+                                    key=lambda x: (-x[1], x[0]))[0][0]
+            minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
         else:
             minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
-        dominant_cigar = top_two_cigar_count[0][0]
         return number_distict_cigars, minority_cigar_percentage, dominant_cigar
 
 
@@ -241,7 +246,7 @@ class _TagFamily(object):
         self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
-#TODO: (cgates): please make this into a handler
+#TODO: (cgates): transition to use AlignWriter and remove this
     def _add_tags(self, consensus_align, num_alignments):
         x0 = self.umi_sequence
         x1 = "{0}|{1}".format(self.umi[0], self.umi[1])
@@ -274,7 +279,7 @@ def _build_coordinate_read_name_manifest(lw_aligns):
         af_dict[lwa.key].add(lwa.name)
     return af_dict
 
-def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
+def _build_coordinate_families(aligned_segments, coord_read_name_manifest):
     '''Generate sets of PairedAlignments that share the same coordinates.'''
     family_dict = defaultdict(set)
     pairing_dict = {}
@@ -283,9 +288,9 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
             pairing_dict[aseg.query_name]= aseg
         else:
             paired_align = _PairedAlignment(pairing_dict.pop(aseg.query_name),
-                                           aseg)
+                                            aseg)
             key = _LightweightPair(paired_align.left_alignment,
-                                  paired_align.right_alignment).key
+                                   paired_align.right_alignment).key
             family_dict[key].add(paired_align)
             coord_read_name_manifest[key].remove(aseg.query_name)
             if not coord_read_name_manifest[key]:
@@ -319,7 +324,7 @@ def _build_tag_families(tagged_paired_aligns,
                 tag_inexact_match_count[best_tag] += 1
                 break
     tag_families = []
-    for tag in tag_aligns:
+    for tag in sorted(tag_aligns):
         tag_family = _TagFamily(tag,
                                tag_aligns[tag],
                                tag_inexact_match_count[tag],
@@ -390,11 +395,11 @@ def _parse_command_line_args(arguments):
 
 def _rank_tags(tagged_paired_aligns):
     '''Return the list of tags ranked from most to least popular.'''
-    tag_count = defaultdict(int)
+    tag_count_dict = defaultdict(int)
     for paired_align in tagged_paired_aligns:
         umi =  paired_align.umi
-        tag_count[umi] += 1
-    tags_by_count = sorted(tag_count.items(),
+        tag_count_dict[umi] += 1
+    tags_by_count = sorted(tag_count_dict.items(),
                            key=lambda x: (-1 * x[1], x[0]))
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
@@ -526,6 +531,7 @@ def main(command_line_args=None):
         bam_tags = _build_bam_tags()
         annotated_aligns_writer = _build_annotated_aligns_writer(args, bam_tags)
         _dedup_alignments(args, annotated_aligns_writer, log)
+        annotated_aligns_writer.close()
         warning = ' (See warnings above)' if log.warning_occurred else ''
         log.info('connor complete{}', warning)
     except utils.UsageError as usage_error:
