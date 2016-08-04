@@ -305,7 +305,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals(['alignC'], excluded_names)
 
 
-    def test_distinct_cigar_count(self):
+    def test_init_distinctCigarCountTwo(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -326,7 +326,7 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
-    def test_distinct_cigar_count_singleton(self):
+    def test_init_distinctCigarCountOneForConsisentCigar(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -368,7 +368,7 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
-    def test_minority_noMinorityIfConsistentCigar(self):
+    def test_init_noMinorityIfConsistentCigar(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -389,7 +389,7 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(0, actual_tag_family.minority_cigar_percentage)
 
-    def test_minority_cigar_setsMinorityPercentage(self):
+    def test_init_setsMinorityPercentage(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -410,7 +410,7 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(1/3, actual_tag_family.minority_cigar_percentage)
 
-    def test_minority_cigar_addsFilterForMinority(self):
+    def test_init_addsFilterForMinority(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
         pair1.left_alignment.cigarstring = "3S3M"
         pair1.right_alignment.cigarstring = "3S3M"
@@ -427,7 +427,8 @@ class TagFamiliyTest(BaseConnorTestCase):
         actual_tag_family = connor._TagFamily(input_umis,
                                              alignments,
                                              inexact_match_count,
-                                             consensus_threshold=0.6)
+                                             consensus_threshold=0.6,
+                                             min_family_size=1)
 
         for a_pair in actual_tag_family.alignments:
             self.assertEqual(None, a_pair.left_alignment.filter)
@@ -439,6 +440,30 @@ class TagFamiliyTest(BaseConnorTestCase):
                           excluded_align_pair.left_alignment.filter)
         self.assertEquals("minority CIGAR",
                           excluded_align_pair.right_alignment.filter)
+
+    def test_init_addsFilterForSmallFamily(self):
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1.left_alignment.cigarstring = "3S3M"
+        pair1.right_alignment.cigarstring = "3S3M"
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2.left_alignment.cigarstring = "3S3M"
+        pair2.right_alignment.cigarstring = "3S3M"
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3.left_alignment.cigarstring = "3S3M"
+        pair3.right_alignment.cigarstring = "3S3M"
+        alignments = [pair1, pair2, pair3]
+        input_umis = ("nnn", "nnn")
+        inexact_match_count = 0
+
+        actual_tag_family = connor._TagFamily(input_umis,
+                                             alignments,
+                                             inexact_match_count,
+                                             consensus_threshold=0.6,
+                                             min_family_size=5)
+
+        for a_pair in actual_tag_family.alignments:
+            self.assertEqual('small family (<5)', a_pair.left_alignment.filter)
+            self.assertEqual('small family (<5)', a_pair.right_alignment.filter)
 
 
     def test_input_alignment_count(self):
@@ -471,10 +496,22 @@ class ConnorTest(BaseConnorTestCase):
                 return tag
         return None
 
+    def test_log_environment(self):
+        args = Namespace(original_command_line=['foo', 'bar'],
+                         other_stuff='baz')
+        connor._log_environment_info(self.mock_logger, args)
+        log_text = '\n'.join(self.mock_logger._log_calls['DEBUG'])
+        self.assertRegexpMatches(log_text, 'command_line.*foo bar')
+        self.assertRegexpMatches(log_text, 'command_options.*foo.*bar')
+        self.assertRegexpMatches(log_text, 'command_options.*baz')
+        self.assertRegexpMatches(log_text, 'command_cwd')
+        self.assertRegexpMatches(log_text, 'platform_uname')
+        self.assertRegexpMatches(log_text, 'python_version')
+        self.assertRegexpMatches(log_text, 'pysam_version')
 
     def test_build_bam_tags(self):
         actual_tags = connor._build_bam_tags()
-        self.assertEqual(4, len(actual_tags))
+        self.assertEqual(5, len(actual_tags))
 
     def test_build_bam_tags_x0_filter(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X0')
@@ -507,6 +544,22 @@ class ConnorTest(BaseConnorTestCase):
         self.assertRegexpMatches(tag._description, 'family size')
         family = MicroMock(alignments=[1]*42)
         self.assertEquals(42, tag._get_value(family, None))
+
+    def test_build_bam_tags_x4_filter(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
+        self.assertEqual('X4', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'template for the consensus alignment')
+        nontemplate_connor_align = MicroMock(query_name='foo')
+        template_connor_align = MicroMock(query_name='bar')
+        consensus = MicroMock(left_alignment=MicroMock(query_name='bar'))
+        family = MicroMock(consensus=consensus)
+        self.assertEquals(None,
+                          tag._get_value(None, template_connor_align))
+        self.assertEquals(None,
+                          tag._get_value(family, nontemplate_connor_align))
+        self.assertEquals(1, tag._get_value(family, template_connor_align))
 
     def test_build_annotated_aligns_writer(self):
         sam_contents = \

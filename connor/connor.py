@@ -22,9 +22,10 @@ from copy import deepcopy
 import operator
 import os
 import platform
-import pysam
 import sys
 import traceback
+
+import pysam
 
 import connor
 import connor.samtools as samtools
@@ -122,25 +123,38 @@ class _PairedAlignment(object):
                                     self.right_alignment.reference_start,
                                     self.right_alignment.query_sequence)
 
-#TODO: cgates: separate consensus builder into separate class
+#TODO: cgates: move consensus builder into separate class
 class _TagFamily(object):
+    FILTER_FORMAT = "small family (<{})"
     umi_sequence = 0
+    
+    @staticmethod
+    def filter_small_alignments(alignments, min_family_size):
+        if len(alignments) < min_family_size:
+            align_filter = _TagFamily.FILTER_FORMAT.format(min_family_size)
+            for align in alignments:
+                align.left_alignment.filter = align_filter
+                align.right_alignment.filter = align_filter
+
+
     def __init__(self,
                  umi,
-                 list_of_alignments,
+                 alignments,
                  inexact_match_count,
-                 consensus_threshold):
+                 consensus_threshold,
+                 min_family_size=DEFAULT_MIN_FAMILY_SIZE_THRESHOLD):
         self.umi_sequence = _TagFamily.umi_sequence
         _TagFamily.umi_sequence += 1
         self.umi = umi
-        self.input_alignment_count = len(list_of_alignments)
+        self.input_alignment_count = len(alignments)
         (self.distinct_cigar_count,
          self.minority_cigar_percentage,
-         dominant_cigar) = _TagFamily._generate_dominant_cigar_stats(list_of_alignments)
+         dominant_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
         #TODO: cgates: do we need to store these as separate collections?
         (self.alignments,
          self.excluded_alignments) = _TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
-                                                                       list_of_alignments)
+                                                                                   alignments)
+        _TagFamily.filter_small_alignments(self.alignments, min_family_size)
         self.inexact_match_count = inexact_match_count
         #Necessary to make output deterministic
         self.alignments.sort(key=lambda x: x.left_alignment.query_name)
@@ -179,26 +193,25 @@ class _TagFamily(object):
                 consensus.append("N")
         return "".join(consensus)
 
-    #TODO (cgates): consider zipping over alignments instead
     @staticmethod
-    def _generate_consensus_qualities(list_of_alignments):
+    def _generate_consensus_qualities(alignments):
         consensus_quality = []
-        for i in utils.zrange(0, len(list_of_alignments[0].query_qualities)):
-            qualities = tuple([s.query_qualities[i] for s in list_of_alignments])
+        for i in utils.zrange(0, len(alignments[0].query_qualities)):
+            qualities = tuple([s.query_qualities[i] for s in alignments])
             counter = Counter(qualities)
             qual = counter.most_common(1)[0][0]
             consensus_quality.append(qual)
         return consensus_quality
 
     @staticmethod
-    def _generate_dominant_cigar_stats(list_of_alignments):
-        counter = Counter([_TagFamily._get_cigarstring_tuple(s) for s in list_of_alignments])
+    def _get_dominant_cigar_stats(alignments):
+        counter = Counter([_TagFamily._get_cigarstring_tuple(s) for s in alignments])
         number_distict_cigars = len(counter)
         top_two_cigar_count = counter.most_common(2)
         if len(top_two_cigar_count) == 1:
             minority_cigar_percentage = 0
         else:
-            minority_cigar_percentage = top_two_cigar_count[1][1]/len(list_of_alignments)
+            minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
         dominant_cigar = top_two_cigar_count[0][0]
         return number_distict_cigars, minority_cigar_percentage, dominant_cigar
 
@@ -281,7 +294,8 @@ def _build_coordinate_families(aligned_segments,coord_read_name_manifest):
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
                         hamming_threshold,
-                        consensus_threshold):
+                        consensus_threshold,
+                        min_family_size=DEFAULT_MIN_FAMILY_SIZE_THRESHOLD):
     '''Partition paired aligns into families.
 
     Each read is considered against each ranked tag until all reads are
@@ -309,7 +323,8 @@ def _build_tag_families(tagged_paired_aligns,
         tag_family = _TagFamily(tag,
                                tag_aligns[tag],
                                tag_inexact_match_count[tag],
-                               consensus_threshold)
+                               consensus_threshold,
+                               min_family_size)
         tag_families.append(tag_family)
     #Necessary to make output deterministic
     tag_families.sort(key=lambda x: x.consensus.left_alignment.query_name)
@@ -431,7 +446,8 @@ def _dedup_alignments(args, aligns_writer, log):
             tag_families = _build_tag_families(coord_family,
                                                ranked_tags,
                                                args.umi_distance_threshold,
-                                               args.consensus_freq_threshold)
+                                               args.consensus_freq_threshold,
+                                               args.min_family_size_threshold)
             for handler in handlers:
                 for tag_family in tag_families:
                     handler.handle(tag_family)
@@ -480,11 +496,15 @@ def _build_bam_tags():
                                                             fam.umi[1]) if fam else None),
         samtools.BamTag("X3", "i",
                         "family size (number of align pairs in this family)",
-                        lambda fam, align: len(fam.alignments) if fam else None)]
-#         samtools.BamTag("X4", "Z",
+                        lambda fam, align: len(fam.alignments) if fam else None),
+        samtools.BamTag("X4", "i",
+                        ("presence of this tag signals that this alignment "
+                         "would be the template for the consensus alignment"),
+                        lambda fam, align: 1 if fam and fam.consensus.left_alignment.query_name == align.query_name else None)]
+#         samtools.BamTag("XN", "Z",
 #                         "left align start, right align end",
 #                         lambda fam, align: align.left_alignment.reference_start + 1, align.right_alignment.reference_end),
-#         samtools.BamTag("X5", "i",
+#         samtools.BamTag("XN", "i",
 #                         ("family CIGAR"),
 #                         lambda fam, align: fam.paired_cigar)]
 

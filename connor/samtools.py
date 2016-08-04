@@ -244,6 +244,7 @@ class AlignWriter(object):
 
     def close(self):
         self._bam_file.close()
+        sort_and_index_bam(self._bam_path)
 
 class BamTag(object):
     HEADER_FORMAT = 'connor|BAM tag|{}: {}'.replace('|', '\t')

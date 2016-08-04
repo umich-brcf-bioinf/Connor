@@ -370,7 +370,6 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write(family, align2)
             writer.write(family, align3)
             writer.close()
-            samtools.index(bam_path)
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
             actual_query_names = [align.query_name for align in bamfile.fetch()]
@@ -399,7 +398,6 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write('familyB', align2)
             writer.write('familyC', align3)
             writer.close()
-            samtools.index(bam_path)
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
@@ -439,7 +437,6 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write('familyB', align2)
             writer.write('familyC', align3)
             writer.close()
-            samtools.index(bam_path)
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
@@ -473,7 +470,6 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer.write('familyA', align1)
             writer.close()
-            samtools.index(bam_path)
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
@@ -519,6 +515,40 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         samtools.AlignWriter.NULL.write('foo')
         samtools.AlignWriter.NULL.close()
         self.assertEqual(1, 1)
+
+    def test_close_sortsAndIndexes(self):
+        with TempDirectory() as tmp_dir:
+            bam_path = os.path.join(tmp_dir.path, 'destination.bam')
+            header = { 'HD': {'VN': '1.0'},
+                      'SQ': [{'LN': 1575, 'SN': 'chr1'},
+                             {'LN': 1584, 'SN': 'chr2'}] }
+            align1 = ConnorAlign(mock_align(query_name='align1',
+                                            reference_start=100))
+            align2 = ConnorAlign(mock_align(query_name='align2',
+                                            reference_start=200))
+            align3 = ConnorAlign(mock_align(query_name='align3',
+                                            reference_start=300))
+
+            tag1 = BamTag('X1','Z', 'desc',
+                          get_value=lambda family, align: family)
+            tag2 = BamTag('X2','Z', 'desc',
+                          get_value=lambda family, align: align.query_name)
+
+            writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
+
+            writer.write('familyC', align3)
+            writer.write('familyA', align1)
+            writer.write('familyB', align2)
+            writer.close()
+
+            bamfile = samtools.alignment_file(bam_path, 'rb')
+            actual_aligns = [a for a in bamfile.fetch()]
+            bamfile.close()
+
+            self.assertEqual(3, len(actual_aligns))
+            self.assertEqual('align1', actual_aligns[0].query_name)
+            self.assertEqual('align2', actual_aligns[1].query_name)
+            self.assertEqual('align3', actual_aligns[2].query_name)
 
 class BamTagTest(utils_test.BaseConnorTestCase):
     def test_init_setsHeaderComment(self):
