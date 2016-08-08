@@ -3,24 +3,22 @@ from collections import defaultdict
 import pandas as pd
 import connor.samtools as samtools
 
-def build_family_handlers(args, logger):
+def build_family_handlers(args,
+                          consensus_writer,
+                          annotated_writer,
+                          logger):
     handlers = [_FamilySizeStatHandler(logger),
-            _MatchStatHandler(args, logger),
-            _CigarMinorityStatHandler(logger),
-            _CigarStatHandler(logger),
-            _WriteFamilyHandler(args, logger)]
-    if args.output_excluded_alignments:
-        handlers.append(_WriteExcludedReadsHandler(args, logger))
+                _MatchStatHandler(args, logger),
+                _CigarMinorityStatHandler(logger),
+                _CigarStatHandler(logger),
+                _WriteFamilyHandler(args, consensus_writer, logger)]
+    if annotated_writer != samtools.AlignWriter.NULL:
+        handlers.append(_WriteAnnotatedAlignsHandler(annotated_writer))
     return handlers
 
 class _WriteFamilyHandler(object):
-    def __init__(self, args, logger):
-        self._output_filename = args.output_bam
-        input_bamfile = samtools.alignment_file(args.input_bam, 'rb')
-        self._output_bamfile = samtools.alignment_file(self._output_filename,
-                                                       'wb',
-                                                       template=input_bamfile)
-        input_bamfile.close()
+    def __init__(self, args, consensus_writer, logger):
+        self._writer = consensus_writer
         self._min_family_size_threshold = args.min_family_size_threshold
         self._log = logger
         self.included_family_count = 0
@@ -29,10 +27,13 @@ class _WriteFamilyHandler(object):
 
     def handle(self, tag_family):
         self.total_alignment_count += len(tag_family.alignments)
+        #TODO: cgates: This check should be done using the filter field
         if len(tag_family.alignments) >= self._min_family_size_threshold:
-            consensus_pair = tag_family.consensus
-            self._output_bamfile.write(consensus_pair.left_alignment)
-            self._output_bamfile.write(consensus_pair.right_alignment)
+            consensus = tag_family.consensus
+            self._writer.write(tag_family,
+                               consensus.left_alignment)
+            self._writer.write(tag_family,
+                               consensus.right_alignment)
             self.included_family_count += 1
         else:
             self.excluded_family_count += 1
@@ -55,64 +56,24 @@ class _WriteFamilyHandler(object):
                   dedup_percent)
         self._log.info('{} families written to [{}]',
                   self.included_family_count,
-                  self._output_filename)
-        self._output_bamfile.close()
-        self._log.info('sorting and indexing [{}]', self._output_filename)
-        samtools.sort_and_index_bam(self._output_filename)
+                  self._writer.bam_file_path)
 
 
-class _WriteExcludedReadsHandler(object):
-    def __init__(self, args, logger):
-        self._output_filename = args.output_excluded_alignments
-        input_bamfile = samtools.alignment_file(args.input_bam, 'rb')
-        self._output_bamfile = samtools.alignment_file(self._output_filename,
-                                                       'wb',
-                                                       template=input_bamfile)
-        input_bamfile.close()
-        self._min_family_size_threshold = args.min_family_size_threshold
-        self._log = logger
-        self.total_alignment_count = 0
+class _WriteAnnotatedAlignsHandler(object):
+    def __init__(self, writer):
+        self._writer = writer
 
-    def handle(self, tag_family):
-        self.total_alignment_count += len(tag_family.excluded_alignments)
-        self.total_alignment_count += 1
-        self.tag_reads(tag_family, tag_family.consensus, included=1)
-        self._output_bamfile.write(tag_family.consensus.left_alignment)
-        self._output_bamfile.write(tag_family.consensus.right_alignment)
-        for pair in tag_family.excluded_alignments:
-            self.tag_reads(tag_family, pair, included=0)
-            self._output_bamfile.write(pair.left_alignment)
-            self._output_bamfile.write(pair.right_alignment)
-
-    #TODO: cgates: extract this into a separate method?
-    def tag_reads(self, tag_family, original_pair, included):
-        x0 = tag_family.umi_sequence
-        x1 = "{0}|{1}".format(tag_family.umi[0], tag_family.umi[1])
-        x2 = "{0},{1}".format(original_pair.left_alignment.reference_start + 1,
-                              original_pair.right_alignment.reference_end)
-        x3 = len(tag_family.alignments)
-        x4 = str(x3 >= self._min_family_size_threshold)
-        original_pair.left_alignment.set_tag("X0", x0, "i")
-        original_pair.left_alignment.set_tag("X1", x1, "Z")
-        original_pair.left_alignment.set_tag("X2", x2, "Z")
-        original_pair.left_alignment.set_tag("X3", x3, "i")
-        original_pair.left_alignment.set_tag("X4", x4, "Z")
-        original_pair.left_alignment.set_tag("X5", included, "i")
-
-        original_pair.right_alignment.set_tag("X0", x0, "i")
-        original_pair.right_alignment.set_tag("X1", x1, "Z")
-        original_pair.right_alignment.set_tag("X2", x2, "Z")
-        original_pair.right_alignment.set_tag("X3", x3, "i")
-        original_pair.right_alignment.set_tag("X4", x4, "Z")
-        original_pair.right_alignment.set_tag("X5", included, "i")
+    def handle(self, family):
+        for align_pair in family.alignments:
+            self._writer.write(family, align_pair.left_alignment)
+            self._writer.write(family, align_pair.right_alignment)
+        for align_pair in family.excluded_alignments:
+            self._writer.write(family, align_pair.left_alignment)
+            self._writer.write(family, align_pair.right_alignment)
 
     def end(self):
-        self._log.info('{} tagged original pairs written to [{}]',
-                  self.total_alignment_count,
-                  self._output_filename)
-        self._output_bamfile.close()
-        self._log.info('sorting and indexing [{}]', self._output_filename)
-        samtools.sort_and_index_bam(self._output_filename)
+        pass
+
 
 class _BaseTukeyStatHandler(object):
     def __init__(self):

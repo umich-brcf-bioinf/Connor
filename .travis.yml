@@ -20,7 +20,7 @@ install:
 
 script:
     - nosetests --with-coverage --verbose --cover-package=connor
-#    - nosetests examples
+    - nosetests examples
 
 after_success:
 # note CODECLIMATE_REPO_TOKEN must be set in travis env vars

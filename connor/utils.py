@@ -67,22 +67,6 @@ class FilteredGenerator(object):
         return OrderedDict(sorted(self._filter_stats.items(),
                                    key=lambda x: (-1 * x[1], x[0])))
 
-def _makepath(path):
-    try:
-        os.makedirs(path)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else: raise
-
-def _validate_output_file(log_file):
-    try:
-        _makepath(os.path.dirname(log_file))
-        log = open(log_file, "w")
-        log.close()
-    except Exception:
-        raise UsageError(("Connor cannot create specified output file "
-                                "[{}]. Review inputs and try again."), log_file)
 
 class Logger(object):
     _DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
@@ -90,9 +74,13 @@ class Logger(object):
                         '%(user)s|%(message)s')
     _CONSOLE_LOG_FORMAT = '%(asctime)s|%(levelname)s|%(message)s'
 
-    def __init__(self, args):
+    def __init__(self, args, console_stream=None):
         self._verbose = args.verbose
         self._log_filename = args.log_file
+        if console_stream:
+            self._console_stream = console_stream
+        else:
+            self._console_stream = sys.stderr
         user = getpass.getuser()
         host = socket.gethostname()
         start_time = datetime.now().strftime(Logger._DATE_FORMAT)
@@ -103,6 +91,7 @@ class Logger(object):
                             level="DEBUG",
                             datefmt=Logger._DATE_FORMAT,
                             filename=self._log_filename)
+        self._file_logger = logging
         self.warning_occurred = False
 
     def _print(self, level, message, args):
@@ -111,8 +100,8 @@ class Logger(object):
                                             'levelname': level,
                                             'message': self._format(message,
                                                                     args)},
-              file=sys.stderr)
-        sys.stderr.flush()
+              file=self._console_stream)
+        self._console_stream.flush()
 
     @staticmethod
     def _format(message, args):
@@ -129,17 +118,21 @@ class Logger(object):
     def debug(self, message, *args):
         if self._verbose:
             self._print("DEBUG", message, args)
-        logging.debug(self._format(message, args), extra=self._logging_dict)
+        self._file_logger.debug(self._format(message, args),
+                               extra=self._logging_dict)
 
     def error(self, message, *args):
         self._print("ERROR", message, args)
-        logging.error(self._format(message, args), extra=self._logging_dict)
+        self._file_logger.error(self._format(message, args),
+                               extra=self._logging_dict)
 
     def info(self, message, *args):
         self._print("INFO", message, args)
-        logging.info(self._format(message, args), extra=self._logging_dict)
+        self._file_logger.info(self._format(message, args),
+                              extra=self._logging_dict)
 
     def warning(self, message, *args):
         self._print("WARNING", message, args)
-        logging.warning(self._format(message, args), extra=self._logging_dict)
+        self._file_logger.warning(self._format(message, args),
+                                 extra=self._logging_dict)
         self.warning_occurred = True
