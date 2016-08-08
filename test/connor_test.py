@@ -15,7 +15,6 @@ import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 
-#TODO: cgates: can we simplify how aligns and pairs are mocked
 class MockAlignSegment(object):
     #pylint: disable=too-many-instance-attributes
     def __init__(self,
@@ -572,13 +571,11 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
             input_bam = samtools_test.create_bam(tmp_dir.path,
                                                  'input.sam',
                                                  sam_contents)
-            output_bam = os.path.join(tmp_dir.path, 'output.bam')
             annotated_output_bam = os.path.join(tmp_dir.path, 'annotated.bam')
-            args = Namespace(input_bam=input_bam,
-                             output_bam=output_bam,
-                             annotated_output_bam = annotated_output_bam)
             tags = []
-            actual_writer = connor._build_annotated_aligns_writer(args, tags)
+            actual_writer = connor._build_writer(input_bam,
+                                                 annotated_output_bam,
+                                                 tags)
             actual_writer.close()
 
             actual_output = samtools.alignment_file(annotated_output_bam, 'rb',)
@@ -589,11 +586,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
             self.assertEqual(expected_header, actual_output.header)
 
     def test_build_annotated_aligns_writer_nullIfNotSpecified(self):
-        args = Namespace(input_bam='input_bam',
-                         output_bam='output_bam',
-                         annotated_output_bam='')
-        tags = []
-        actual_writer = connor._build_annotated_aligns_writer(args, tags)
+        actual_writer = connor._build_writer(input_bam='foo',
+                                             output_bam='',
+                                             tags=[])
         self.assertEqual(samtools.AlignWriter.NULL, actual_writer)
 
     def test_build_coordinate_read_name_manifest(self):
@@ -640,7 +635,8 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                 ('chr1', 20, 86): set(['alignC']),
                                 ('chr1', 30, 96): set(['alignD'])}
 
-        actual_families = [family for family in connor._build_coordinate_families(alignments, coord_read_name_manifest)]
+        actual_families = [family for family in connor._build_coordinate_families(alignments,
+                                                                                  coord_read_name_manifest)]
 
         pair_A = connor._PairedAlignment(align_A0, align_A1)
         pair_B = connor._PairedAlignment(align_B0, align_B1)
@@ -651,19 +647,6 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                              set([pair_D]),
                              set([pair_C])]
         self.assertEquals(expected_families, actual_families)
-
-#     def test_build_consensus_pair(self):
-#         align_A0 = align_seg("alignA", 'chr1', 10, 100)
-#         align_A1 = align_seg("alignA", 'chr1', 100, 10)
-#         align_B0 = align_seg("alignB", 'chr1', 10, 100)
-#         align_B1 = align_seg("alignB", 'chr1', 100, 10)
-#         alignments = set([connor._PairedAlignment(align_A0, align_A1),
-#                           connor._PairedAlignment(align_B0, align_B1)])
-#
-#         actual_pair = connor._build_consensus_pair(alignments)
-#
-#         expected_pair = connor._PairedAlignment(align_B0, align_B1)
-#         self.assertEquals(expected_pair, actual_pair)
 
     def test_build_tag_families_exact_left_or_right(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
@@ -914,8 +897,6 @@ class TestLightweightAlignment(BaseConnorTestCase):
         self.assertEquals("align1", actual_lwa.name)
         self.assertEquals(('chr1', 100, 100), actual_lwa.key)
 
-#TODO: cgates: Test deduplicate_alignment separately
-#TODO: cgates: Test main parses args correctly
 class ConnorIntegrationTestCase(BaseConnorTestCase):
     def test_deduplicate_alignnemnts(self):
         sam_contents = \
@@ -930,18 +911,21 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path, "input.sam", sam_contents)
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 "input.sam",
+                                                 sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
+            consensus_writer = connor._build_writer(input_bam, output_bam, [])
+            annotated_writer = samtools_test.MockAlignWriter()
             args = Namespace(input_bam=input_bam,
-                                         output_bam=output_bam,
-                                         consensus_freq_threshold=0.6,
-                                         min_family_size_threshold=0,
-                                         umi_distance_threshold=1,
-                                         annotated_output_bam=None)
+                             consensus_freq_threshold=0.6,
+                             min_family_size_threshold=0,
+                             umi_distance_threshold=1)
             connor._dedup_alignments(args,
-                                     samtools_test.MockAlignWriter(),
+                                     consensus_writer,
+                                     annotated_writer,
                                      self.mock_logger)
-
+            consensus_writer.close()
             alignments = samtools.alignment_file(output_bam, "rb").fetch()
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
@@ -977,6 +961,7 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                              annotated_output_bam=None)
             connor._dedup_alignments(args,
                                      samtools_test.MockAlignWriter(),
+                                     samtools_test.MockAlignWriter(),
                                      self.mock_logger)
 
             log_calls = self.mock_logger._log_calls['INFO']
@@ -1002,15 +987,19 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
                                                  sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(input_bam=input_bam,
-                             output_bam=output_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
-                             umi_distance_threshold=1,
-                             annotated_output_bam=None)
-            connor._dedup_alignments(args,
-                                     samtools_test.MockAlignWriter(),
-                                     self.mock_logger)
+                             umi_distance_threshold=1)
+            consensus_writer = connor._build_writer(input_bam,
+                                                    output_bam,
+                                                    tags=[])
+            annotated_writer = samtools.AlignWriter.NULL
 
+            connor._dedup_alignments(args,
+                                     consensus_writer,
+                                     annotated_writer,
+                                     self.mock_logger)
+            consensus_writer.close()
             alignments = samtools_test.pysam_alignments_from_bam(output_bam)
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]

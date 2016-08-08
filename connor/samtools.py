@@ -7,7 +7,7 @@ import pysam
 import connor.utils as utils
 
 
-#TODO: cgates: make this into constants?
+#TODO: cgates: consider making this into simple constants
 class BamFlag(object):
     PAIRED = 1
     PROPER_PAIR = 2
@@ -233,6 +233,10 @@ class AlignWriter(object):
             new_header['CO'] = []
         new_header['CO'].extend([tag.header_comment for tag in tags])
         return new_header
+
+    @property
+    def bam_file_path(self):
+        return self._bam_path
 
     def _add_bam_tags(self, family, connor_align):
         for tag in self._tags:

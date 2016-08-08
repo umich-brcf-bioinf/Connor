@@ -17,6 +17,7 @@ import connor.samtools as samtools
 class MockAlignWriter(object):
     def __init__(self):
         self._write_calls = []
+        self.bam_file_path = "foo.bam"
 
     def write(self, family, connor_align):
         self._write_calls.append((family, connor_align))

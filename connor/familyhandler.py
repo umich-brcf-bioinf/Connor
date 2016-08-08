@@ -3,24 +3,22 @@ from collections import defaultdict
 import pandas as pd
 import connor.samtools as samtools
 
-def build_family_handlers(args, aligns_writer, logger):
+def build_family_handlers(args,
+                          consensus_writer,
+                          annotated_writer,
+                          logger):
     handlers = [_FamilySizeStatHandler(logger),
                 _MatchStatHandler(args, logger),
                 _CigarMinorityStatHandler(logger),
                 _CigarStatHandler(logger),
-                _WriteFamilyHandler(args, logger)]
-    if args.annotated_output_bam:
-        handlers.append(_WriteAnnotatedAlignsHandler(aligns_writer))
+                _WriteFamilyHandler(args, consensus_writer, logger)]
+    if annotated_writer != samtools.AlignWriter.NULL:
+        handlers.append(_WriteAnnotatedAlignsHandler(annotated_writer))
     return handlers
 
 class _WriteFamilyHandler(object):
-    def __init__(self, args, logger):
-        self._output_filename = args.output_bam
-        input_bamfile = samtools.alignment_file(args.input_bam, 'rb')
-        self._output_bamfile = samtools.alignment_file(self._output_filename,
-                                                       'wb',
-                                                       template=input_bamfile)
-        input_bamfile.close()
+    def __init__(self, args, consensus_writer, logger):
+        self._writer = consensus_writer
         self._min_family_size_threshold = args.min_family_size_threshold
         self._log = logger
         self.included_family_count = 0
@@ -29,10 +27,13 @@ class _WriteFamilyHandler(object):
 
     def handle(self, tag_family):
         self.total_alignment_count += len(tag_family.alignments)
+        #TODO: cgates: This check should be done using the filter field
         if len(tag_family.alignments) >= self._min_family_size_threshold:
-            consensus_pair = tag_family.consensus
-            self._output_bamfile.write(consensus_pair.left_alignment.pysam_align_segment)
-            self._output_bamfile.write(consensus_pair.right_alignment.pysam_align_segment)
+            consensus = tag_family.consensus
+            self._writer.write(tag_family,
+                               consensus.left_alignment)
+            self._writer.write(tag_family,
+                               consensus.right_alignment)
             self.included_family_count += 1
         else:
             self.excluded_family_count += 1
@@ -55,10 +56,7 @@ class _WriteFamilyHandler(object):
                   dedup_percent)
         self._log.info('{} families written to [{}]',
                   self.included_family_count,
-                  self._output_filename)
-        self._output_bamfile.close()
-        self._log.info('sorting and indexing [{}]', self._output_filename)
-        samtools.sort_and_index_bam(self._output_filename)
+                  self._writer.bam_file_path)
 
 
 class _WriteAnnotatedAlignsHandler(object):

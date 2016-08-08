@@ -15,6 +15,7 @@ from connor.familyhandler import _CigarMinorityStatHandler
 from connor.familyhandler import _FamilySizeStatHandler
 from connor.familyhandler import _MatchStatHandler
 from connor.familyhandler import _WriteAnnotatedAlignsHandler
+import connor.samtools as samtools
 import test.samtools_test as samtools_test
 
 def _mock_tag_family(input_alignment_count=5,
@@ -37,27 +38,14 @@ def _mock_tag_family(input_alignment_count=5,
 
 class FamilyHandlerTest(BaseConnorTestCase):
     def test_build_family_handlers(self):
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
-'''.replace("|", "\t")
+        args = Namespace(umi_distance_threshold=1,
+                         min_family_size_threshold=3)
 
-        with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
-            output_bam = os.path.join(tmp_dir.path, 'output.bam')
-
-            args = Namespace(input_bam=input_bam,
-                             output_bam=output_bam,
-                             umi_distance_threshold=1,
-                             min_family_size_threshold=3,
-                             annotated_output_bam=None)
-            handlers = build_family_handlers(args,
-                                             samtools_test.MockAlignWriter(),
-                                             self.mock_logger)
-            actual_handler_names = [x.__class__.__name__ for x in handlers]
+        handlers = build_family_handlers(args,
+                                         samtools_test.MockAlignWriter(),
+                                         samtools.AlignWriter.NULL,
+                                         self.mock_logger)
+        actual_handler_names = [x.__class__.__name__ for x in handlers]
 
         expected_handler_names = ['_FamilySizeStatHandler',
                                   '_MatchStatHandler',
@@ -67,27 +55,13 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEqual(expected_handler_names, actual_handler_names)
 
     def test_build_family_handlers_withAnnotatedAlign(self):
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
-'''.replace("|", "\t")
-
-        with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
-            output_bam = os.path.join(tmp_dir.path, 'output.bam')
-
-            args = Namespace(input_bam=input_bam,
-                             output_bam=output_bam,
-                             umi_distance_threshold=1,
-                             min_family_size_threshold=3,
-                             annotated_output_bam='annotated_output.bam')
-            handlers = build_family_handlers(args,
-                                             samtools_test.MockAlignWriter(),
-                                             self.mock_logger)
-            actual_handler_names = [x.__class__.__name__ for x in handlers]
+        args = Namespace(umi_distance_threshold=1,
+                         min_family_size_threshold=3)
+        handlers = build_family_handlers(args,
+                                         samtools_test.MockAlignWriter(),
+                                         samtools_test.MockAlignWriter(),
+                                         self.mock_logger)
+        actual_handler_names = [x.__class__.__name__ for x in handlers]
 
         expected_handler_names = ['_FamilySizeStatHandler',
                                   '_MatchStatHandler',

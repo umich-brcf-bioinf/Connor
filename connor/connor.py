@@ -150,7 +150,7 @@ class _TagFamily(object):
         (self.distinct_cigar_count,
          self.minority_cigar_percentage,
          dominant_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
-        #TODO: cgates: do we need to store these as separate collections?
+        #TODO: cgates: Better to store as single collection of ConnorAligns
         (self.alignments,
          self.excluded_alignments) = _TagFamily._get_alignments_for_dominant_cigar(dominant_cigar,
                                                                                    alignments)
@@ -243,29 +243,8 @@ class _TagFamily(object):
         consensus_align.replace_umi(umi)
         left_consensus_align.query_qualities = left_consensus_qualities
         right_consensus_align.query_qualities = right_consensus_qualities
-        self._add_tags(consensus_align, len(alignments))
         return consensus_align
 
-#TODO: (cgates): transition to use AlignWriter and remove this
-    def _add_tags(self, consensus_align, num_alignments):
-        x0 = self.umi_sequence
-        x1 = "{0}|{1}".format(self.umi[0], self.umi[1])
-        x2 = "{0},{1}".format(consensus_align.left_alignment.reference_start + 1,
-                              consensus_align.right_alignment.reference_end)
-        x3 = num_alignments
-#TODO: (cgates): until you make this into a handler, the next line is a bug
-        x4 = str(num_alignments >= DEFAULT_MIN_FAMILY_SIZE_THRESHOLD)
-        consensus_align.left_alignment.set_tag("X0", x0, "i")
-        consensus_align.left_alignment.set_tag("X1", x1, "Z")
-        consensus_align.left_alignment.set_tag("X2", x2, "Z")
-        consensus_align.left_alignment.set_tag("X3", x3, "i")
-        consensus_align.left_alignment.set_tag("X4", x4, "Z")
-
-        consensus_align.right_alignment.set_tag("X0", x0, "i")
-        consensus_align.right_alignment.set_tag("X1", x1, "Z")
-        consensus_align.right_alignment.set_tag("X2", x2, "Z")
-        consensus_align.right_alignment.set_tag("X3", x3, "i")
-        consensus_align.right_alignment.set_tag("X4", x4, "Z")
 
 def _build_coordinate_read_name_manifest(lw_aligns):
     '''Return a dict mapping coordinates to set of aligned querynames.
@@ -429,7 +408,7 @@ def _build_lightweight_pairs(aligned_segments, log):
     return lightweight_pairs
 
 
-def _dedup_alignments(args, aligns_writer, log):
+def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     try:
         log.info('reading input bam [{}]', args.input_bam)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
@@ -441,7 +420,8 @@ def _dedup_alignments(args, aligns_writer, log):
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
 
         handlers = familyhandler.build_family_handlers(args,
-                                                       aligns_writer,
+                                                       consensus_writer,
+                                                       annotated_writer,
                                                        log)
 
         filtered_aligns = samtools.filter_alignments(bamfile.fetch())
@@ -463,7 +443,7 @@ def _dedup_alignments(args, aligns_writer, log):
         bamfile.close()
 
     except Exception: #pylint: disable=broad-except
-        log.error("ERROR: An unexpected error occurred")
+        log.error("An unexpected error occurred")
         log.error(traceback.format_exc())
         exit(1)
 
@@ -475,14 +455,14 @@ def _log_environment_info(log, args):
     log.debug('platform_python_version|{}', platform.python_version())
     log.debug('pysam_version|{}', pysam.__version__)
 
-def _build_annotated_aligns_writer(args, tags):
-    if not args.annotated_output_bam:
+def _build_writer(input_bam, output_bam, tags):
+    if not output_bam:
         return samtools.AlignWriter.NULL
     else:
-        input_bam = samtools.alignment_file(args.input_bam, "rb")
+        input_bam = samtools.alignment_file(input_bam, "rb")
         header = input_bam.header
         input_bam.close()
-        return samtools.AlignWriter(header, args.annotated_output_bam, tags)
+        return samtools.AlignWriter(header, output_bam, tags)
 
 def _build_bam_tags():
     tags = [
@@ -506,13 +486,6 @@ def _build_bam_tags():
                         ("presence of this tag signals that this alignment "
                          "would be the template for the consensus alignment"),
                         lambda fam, align: 1 if fam and fam.consensus.left_alignment.query_name == align.query_name else None)]
-#         samtools.BamTag("XN", "Z",
-#                         "left align start, right align end",
-#                         lambda fam, align: align.left_alignment.reference_start + 1, align.right_alignment.reference_end),
-#         samtools.BamTag("XN", "i",
-#                         ("family CIGAR"),
-#                         lambda fam, align: fam.paired_cigar)]
-
     return tags
 
 def main(command_line_args=None):
@@ -529,9 +502,15 @@ def main(command_line_args=None):
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
         bam_tags = _build_bam_tags()
-        annotated_aligns_writer = _build_annotated_aligns_writer(args, bam_tags)
-        _dedup_alignments(args, annotated_aligns_writer, log)
-        annotated_aligns_writer.close()
+        annotated_writer = _build_writer(args.input_bam,
+                                         args.annotated_output_bam,
+                                         bam_tags)
+        consensus_writer = _build_writer(args.input_bam,
+                                         args.output_bam,
+                                         bam_tags)
+        _dedup_alignments(args, consensus_writer, annotated_writer, log)
+        annotated_writer.close()
+        consensus_writer.close()
         warning = ' (See warnings above)' if log.warning_occurred else ''
         log.info('connor complete{}', warning)
     except utils.UsageError as usage_error:
