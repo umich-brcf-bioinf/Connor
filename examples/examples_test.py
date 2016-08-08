@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import filecmp
 import os
-import unittest
+from test.utils_test import BaseConnorTestCase
 
 from testfixtures import TempDirectory
 
@@ -9,25 +9,7 @@ import connor.connor as connor
 
 INPUT_DIR=os.path.realpath(os.path.dirname(__file__))
 
-class MockLogger(object):
-    def __init__(self):
-        self._log_calls = []
-
-    def log(self, msg_format, *args):
-        self._log_calls.append((msg_format, args))
-
-
-class ExamplesFunctionalTest(unittest.TestCase):
-    def setUp(self):
-        unittest.TestCase.setUp(self)
-        self.original_logger = connor._log
-        self.mock_logger = MockLogger()
-        connor._log = self.mock_logger.log
-
-    def tearDown(self):
-        connor._log = self.original_logger
-        unittest.TestCase.tearDown(self)
-    
+class ExamplesFunctionalTest(BaseConnorTestCase):
     def test_examples(self):
         with TempDirectory() as output_dir:
 
