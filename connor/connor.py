@@ -474,9 +474,9 @@ def _build_bam_tags():
                         "unique identifier for this alignment family",
                         lambda fam, align: fam.umi_sequence if fam else None),
         samtools.BamTag("X2", "Z",
-                        ("L~R UMI barcodes for this alignment family; because "
-                         "of fuzzy matching the family UMI may be distinct "
-                         "from the UMI of the original alignment"),
+                        ("L~R UMT barcodes for this alignment family; because "
+                         "of fuzzy matching the family UMT may be distinct "
+                         "from the UMT of the original alignment"),
                         lambda fam, align: "{0}~{1}".format(fam.umi[0],
                                                             fam.umi[1]) if fam else None),
         samtools.BamTag("X3", "i",

@@ -1,10 +1,13 @@
 Installing Connor
 ==================
-Connor has been tested with:
+Connor requires python 2.7 or later and has been tested with:
 
 * Python 2.7 and 3.4
 * pysam 0.8.4 and 0.9.0
-* OSX and \*nix
+* OSX and \*nix RHEL6/7
+
+Connor does not work in Windows OS because it depends on the python library
+pysam, which is not supported on windows.
 
 Prerequisites
 -------------
@@ -16,14 +19,18 @@ Prerequisites
 
 Installing
 ----------
-The easiest way to install Connor is through PyPI. Get pip if it's
-not available in your system:
+
+   *This option only available after general release:*
+   The easiest way to install Connor is through PyPI:
+   
+   ``$ pip install connor``
+
 
 You can install from source from github:
 
 ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor``
 
-If you don't have root permissions, you can install locally:
+If you don't have root permissions, you can install connor locally:
 
 ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor --user``
 
