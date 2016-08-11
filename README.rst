@@ -102,9 +102,7 @@ working directory).
 
 Note that 158401 alignments were deduplicated to 4932 (2466 pairs).
 
-5. **Each consensus alignment has a set of custom tags that explain how that
-alignment was grouped.**
-
+5. **Each consensus alignment has a set of custom tags that explain how that alignment was grouped.**
 ::
   $ samtools view PIK3CA-deduped.bam | head -1 | tr '\t' '\n'
   NS500501:108:HMKNKBGXX:1:13205:18985:5894
@@ -127,7 +125,7 @@ position matched exactly and left-right UMT barcodes matched ATGGAT-AAGACC (X2).
 -----------
 Connor help
 -----------
-::
+
   $ connor --help
    usage: connor input_bam output_bam
    
