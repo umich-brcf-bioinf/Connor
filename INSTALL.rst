@@ -21,23 +21,22 @@ Prerequisites
 Installing
 ----------
 
- * The simplest way to install Connor is through PyPI:
+* The simplest way to install Connor is through PyPI:
 
-   *This option only available after general release:*
+  *(This option only available after general release.)*
 
-   ``$ pip install connor``
+  ``$ pip install connor``
 
+* You can also install directly from source from github:
 
- * You can also install directly from source from github:
+  ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor``
 
-   ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor``
+* If you don't have root permissions, you can install connor locally:
 
- * If you don't have root permissions, you can install connor locally:
+  ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor --user``
 
-   ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor --user``
-
-   Following a --user install, you may need to adjust your path settings to
-   include $HOME/.local/bin. 
+  Following a --user install, you may need to adjust your path settings to
+  include $HOME/.local/bin. 
 
 
 Uninstalling
