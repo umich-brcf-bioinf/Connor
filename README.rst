@@ -80,7 +80,6 @@ See `INSTALL`_ for more info on requirements and more install options.
 
 This command will read PIK3CA-original.bam and produce PIK3CA-deduped.bam (with
 BAM index) and a log file in your working directory.
-
 ::
   $ connor sample_data/examples/PIK3CA-original.bam PIK3CA-deduped.bam
   2016-08-11 17:08:07|INFO|connor begins
@@ -104,7 +103,6 @@ deduplicated families (pairs).
 
 If you have samtools installed, you can examine the difference between original
 and deduplicated bams:
-
 ::
   $ samtools flagstat Connor/examples/PIK3CA-original.bam
   158401 + 0 in total (QC-passed reads + QC-failed reads)
