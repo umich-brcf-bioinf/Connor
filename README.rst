@@ -28,47 +28,83 @@ When analyzing deep-sequence NGS data it is sometimes difficult to distinguish
 sequencing and PCR errors from rare variants; as a result some variants may
 be missed and some will be identified with an inaccurate variant frequency. To
 address this, researchers can attach random barcode sequences during sample
-preparation which can used to more accurately deduplicate the PCR amplified
-sequences.
+preparation. Upon sequencing, the barcodes act as a signature to trace the set 
+of PCR amplified molecules back to the original biological molecules of
+interest thereby differentiating rare variants in the original molecule from
+errors introduced downstream.
 
 Connor accepts a barcoded, paired alignment file (BAM), groups those input
 alignments into families, combines each family into a consensus alignment, and
 emits the set of deduplicated, consensus alignments (BAM). 
 
    *Connor workflow:*
-  
+   
    *Sequencing [FASTQ 1/2] -> Aligner [BAM] -> Connor [BAM] -> Variant Detection [VCF]*
 
-Each consensus alignment is created by grouping original alignments into
-families based on their alignment position and Universal Molecular Tag (UMT)
-barcode. (Connor assumes the incoming aligned sequences begin with the UMT
-barcode.) Each family of alignments is then combined into a single alignment;
-discrepancies in base-calls and qualities are resolved by majority vote across
-family members. By default, smaller families (<3 align pairs) are excluded. See
-*METHODS.rst* for more details on UMT barcode structure, suggestions on
-alignment parameters, family grouping approach, and examples.
+Connor first groups original alignments into **alignment families** based on their
+alignment position and **Universal Molecular Tag (UMT)** barcode. (Connor assumes
+the incoming aligned sequences begin with the UMT barcode.) Each family of
+alignments is then combined into a single **consensus alignment**; discrepancies
+in base-calls and qualities are resolved by majority vote across family members.
+By default, smaller families (<3 align pairs) are excluded.
 
+See `METHODS`_ for more details on UMT barcode structure, suggestions on
+alignment parameters, details on family grouping, and examples.
 
 -----------
 Quick Start
 -----------
 
-1. **Install Connor (see INSTALL.rst for info on requirements and more install options):**
+1. **Install Connor**
+
+The following command will install connor and its dependencies. The command may
+take several moments to start showing progress and several minutes to complete.
+See `INSTALL`_ for more info on requirements and more install options.
 ::
   $ pip install git+https://github.com/umich-brcf-bioinf/Connor
-
-2. **Get the examples directory:**
+  ...
+  Successfully installed Connor-0.3
+  
+  $ connor --help
+  usage: connor input_bam output_bam
+  positional arguments:
+  ...
+  v0.3
+ 
+2. **Download the example data:**
 ::
-  $ git clone https://github.com/umich-brcf-bioinf/Connor
+  $ git clone https://github.com/umich-brcf-bioinf/Connor sample_data
+  ...
 
 3. **Run Connor:**
+
+This command will read PIK3CA-original.bam and produce PIK3CA-deduped.bam (with
+BAM index) and a log file in your working directory.
+
 ::
-  $ connor Connor/examples/PIK3CA-original.bam PIK3CA-deduped.bam
+  $ connor sample_data/examples/PIK3CA-original.bam PIK3CA-deduped.bam
+  2016-08-11 17:08:07|INFO|connor begins
+  2016-08-11 17:08:07|INFO|logging to [PIK3CA-deduped.bam.log]
+  2016-08-11 17:08:07|INFO|reading input bam [sample_data/examples/PIK3CA-original.bam]
+  ...
+  2016-08-11 17:09:06|INFO|1016/3482 (29.18%) families were excluded because the original read count < 3
+  2016-08-11 17:09:06|INFO|61937 original pairs were deduplicated to 2466 families (overall dedup rate 96.02%)
+  2016-08-11 17:09:06|INFO|2466 families written to [PIK3CA-deduped.bam]
+  2016-08-11 17:09:06|INFO|connor complete
 
-This will read PIK3CA-original.bam and produce PIK3CA-deduped.bam (in your
-working directory).
+  $ ls -1 PIK3CA*
+  PIK3CA-deduped.bam
+  PIK3CA-deduped.bam.bai
+  PIK3CA-deduped.bam.log
 
-4. **If you have samtools installed, you can examine the difference between original and deduplicated bams:**
+From the log above, you can see that the original alignments resulted in 2466
+deduplicated families (pairs).
+
+4. **Reviewing output file**
+
+If you have samtools installed, you can examine the difference between original
+and deduplicated bams:
+
 ::
   $ samtools flagstat Connor/examples/PIK3CA-original.bam
   158401 + 0 in total (QC-passed reads + QC-failed reads)
@@ -100,9 +136,12 @@ working directory).
   0 + 0 with mate mapped to a different chr
   0 + 0 with mate mapped to a different chr (mapQ>=5)
 
-Note that 158401 alignments were deduplicated to 4932 (2466 pairs).
+Note that 158401 original alignments were deduplicated to 4932 (2466 pairs).
 
-5. **Each consensus alignment has a set of custom tags that explain how that alignment was grouped.**
+5. **Reviewing a consensus alignment**
+
+Each consensus alignment has a set of custom tags that provide details
+on the family of original alignments.
 ::
   $ samtools view PIK3CA-deduped.bam | head -1 | tr '\t' '\n'
   NS500501:108:HMKNKBGXX:1:13205:18985:5894
@@ -113,14 +152,17 @@ Note that 158401 alignments were deduplicated to 4932 (2466 pairs).
   X2:Z:ATGGAT~AAGACC
   X3:i:41
 
+The documentation for these tags is in the SAM/BAM header and excerpted here:
+
 * X1: unique identifier (integer) for this alignment family
 * X2: Left~Right UMT barcodes for this alignment family; because of fuzzy matching the
   family UMT may be distinct from the UMT of the original alignment
 * X3: family size (number of align pairs in this family)
 
 Interpreting the tag definitions with the alignment above, the consensus
-alignment 175 (X1) represents 41 original alignment pairs (X3) whose alignment
-position matched exactly and left-right UMT barcodes matched ATGGAT-AAGACC (X2).
+alignment **175** (X1) represents **41** original alignment pairs (X3) whose
+alignment position matched exactly and left-right UMT barcodes matched
+**ATGGAT-AAGACC** (X2).
 
 -----------
 Connor help
@@ -160,3 +202,8 @@ Connor help
 Email bfx-connor@umich.edu for support and questions.
 
 UM BRCF Bioinformatics Core
+
+.. _METHODS: METHODS.rst
+.. _INSTALL: INSTALL.rst
+
+
