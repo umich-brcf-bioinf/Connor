@@ -49,8 +49,11 @@ in base-calls and qualities are resolved by majority vote across family members.
 By default, smaller families (<3 align pairs) are excluded.
 
 For more information see:
+
 * `QUICKSTART`_ : get started deduplicating bacoded BAMs.
+
 * `INSTALL`_ : alternative ways to install.
+
 * `METHODS`_ : details on UMT barcode structure, suggestions on
   alignment parameters, details on family grouping, and examples.
 
