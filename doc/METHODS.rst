@@ -181,6 +181,6 @@ References
 
 TBD
 
-.. |fig1_position_families| image:: doc/images/fig1_position_families.png
-.. |fig2_umt_families| image:: doc/images/fig2_umt_families.png
-.. |fig3_consensus| image:: doc/images/fig3_consensus.png
+.. |fig1_position_families| image:: images/fig1_position_families.png
+.. |fig2_umt_families| image:: images/fig2_umt_families.png
+.. |fig3_consensus| image:: images/fig3_consensus.png
