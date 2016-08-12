@@ -532,7 +532,7 @@ class ConnorTest(BaseConnorTestCase):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
         self.assertEqual('X2', tag._tag_name)
         self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'UMI barcodes')
+        self.assertRegexpMatches(tag._description, 'UMT barcodes')
         family = MicroMock(umi=('AAA','CCC'))
         self.assertEquals("AAA~CCC", tag._get_value(family, None))
 
