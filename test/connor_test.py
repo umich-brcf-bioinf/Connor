@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 from argparse import Namespace
 from collections import namedtuple
 import os
+import sys
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
 from connor import samtools
@@ -14,6 +15,11 @@ import connor.utils as utils
 import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
+
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 
 class MockAlignSegment(object):
     #pylint: disable=too-many-instance-attributes
@@ -1031,27 +1037,31 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
             ##pylint: disable=unused-argument
             def angry_dedup(args, consensus_writer, annotated_writer, log):
                 log.warning("possible problem")
+            old_stderr = sys.stderr
+            console_stream = StringIO()
             try:
+                sys.stderr = console_stream
                 connor._dedup_alignments = angry_dedup
                 connor.main(["program_name",
                              input_bam,
                              output_bam,
                              "--min_family_size_threshold=0",
                              "--log_file=" + output_log])
-
             finally:
                 connor._dedup_alignments = old_dedup_alignments
-            with open(output_log) as f:
-                log_lines = f.readlines()
+                sys.stderr = old_stderr
+            log_lines = console_stream.getvalue().strip().split('\n')
 
-        info_log_lines = [line for line in log_lines if "INFO" in line]
-        self.assertRegexpMatches(info_log_lines[0],
+        self.assertRegexpMatches(log_lines[0],
                                  r'connor begins \(v.*\)')
-        self.assertRegexpMatches(info_log_lines[1],
+        self.assertRegexpMatches(log_lines[1],
                                  (r'logging to \[' + output_log + r'\]'))
-        self.assertRegexpMatches(info_log_lines[2],
-                                 r'connor complete \(.*seconds.*memory\). \*\*See warnings above\*\*')
-        self.assertEqual(3, len(info_log_lines))
+        self.assertRegexpMatches(log_lines[2],
+                                 r'possible problem')
+        self.assertRegexpMatches(log_lines[3],
+                                 (r'connor complete \(.*seconds.*memory\). '
+                                 r'\*\*See warnings above\*\*'))
+        self.assertEqual(4, len(log_lines))
 
 
 if __name__ == "__main__":

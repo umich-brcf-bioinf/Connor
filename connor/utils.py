@@ -3,11 +3,9 @@ from __future__ import print_function, absolute_import, division
 from collections import defaultdict
 from collections import OrderedDict
 from datetime import datetime
-import errno
 import getpass
 import itertools
 import logging
-import os
 import socket
 import sys
 

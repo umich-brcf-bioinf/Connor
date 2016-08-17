@@ -184,6 +184,24 @@ class _TagFamily(object):
         return included_alignments, excluded_alignments
 
     def _generate_consensus_sequence(self, list_of_alignments):
+        consensus_seq = self._generate_consensus_sequence_quickly(list_of_alignments)
+        if not consensus_seq:
+            consensus_seq = self._generate_consensus_sequence_long(list_of_alignments)
+        return consensus_seq
+
+    def _generate_consensus_sequence_quickly(self, list_of_alignments):
+        seq_counter = Counter([a.query_sequence for a in list_of_alignments])
+        consensus_seq = None
+        if len(seq_counter) == 1:
+            consensus_seq = list_of_alignments[0].query_sequence
+        elif len(seq_counter) == 2:
+            majority_seq, majority_count = seq_counter.most_common(1)[0]
+            total = len(list_of_alignments)
+            if majority_count / total > self.consensus_threshold:
+                consensus_seq = majority_seq
+        return consensus_seq
+
+    def _generate_consensus_sequence_long(self, list_of_alignments):
         consensus = []
         for i in utils.zrange(0, len(list_of_alignments[0].query_sequence)):
             counter = Counter([s.query_sequence[i:i+1] for s in list_of_alignments])
