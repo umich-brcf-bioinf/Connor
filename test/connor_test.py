@@ -233,15 +233,15 @@ class TagFamiliyTest(BaseConnorTestCase):
                           consensus_pair.right_alignment.query_sequence)
 
     def test_consensus_qualities_majority_vote(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left_alignment.query_qualities = [30, 30, 30, 30, 30, 30]
-        pair1.right_alignment.query_qualities = [25, 25, 25, 25, 25, 25]
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left_alignment.query_qualities = [30, 20, 30, 30, 30, 30]
-        pair2.right_alignment.query_qualities = [25, 15, 25, 15, 15, 15]
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left_alignment.query_qualities = [10, 20, 10, 20, 20 ,20]
-        pair3.right_alignment.query_qualities = [5, 15, 5 , 15, 15, 15]
+        pair1 = align_pair('alignA', 'chr1', 100, 200, 'GT', 'CT')
+        pair1.left_alignment.query_qualities = [30, 30]
+        pair1.right_alignment.query_qualities = [25, 25]
+        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GT', 'CT')
+        pair2.left_alignment.query_qualities = [20, 20]
+        pair2.right_alignment.query_qualities = [15, 15]
+        pair3 = align_pair('alignC', 'chr1', 100, 200, 'GT', 'CT')
+        pair3.left_alignment.query_qualities = [10, 10]
+        pair3.right_alignment.query_qualities = [5, 5]
         alignments = [pair1, pair2, pair3]
         input_umis = ("nnn", "nnn")
         inexact_match_count = 0
@@ -253,9 +253,9 @@ class TagFamiliyTest(BaseConnorTestCase):
                                                consensus_threshold=0.6)
         paired_consensus = actual_tag_family.consensus
 
-        self.assertEquals([30, 20, 30, 30, 30, 30],
+        self.assertEquals([30, 30],
                           paired_consensus.left_alignment.query_qualities)
-        self.assertEquals([25, 15, 25, 15, 15, 15],
+        self.assertEquals([25, 25],
                           paired_consensus.right_alignment.query_qualities)
 
     def test_consensus_uniform_cigars_admitted(self):

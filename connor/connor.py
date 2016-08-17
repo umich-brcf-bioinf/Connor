@@ -213,15 +213,26 @@ class _TagFamily(object):
                 consensus.append("N")
         return "".join(consensus)
 
+#     @staticmethod
+#     def _generate_consensus_qualities(alignments):
+#         consensus_quality = []
+#         for i in utils.zrange(0, len(alignments[0].query_qualities)):
+#             qualities = tuple([s.query_qualities[i] for s in alignments])
+#             counter = Counter(qualities)
+#             qual = counter.most_common(1)[0][0]
+#             consensus_quality.append(qual)
+#        return consensus_quality
+
     @staticmethod
     def _generate_consensus_qualities(alignments):
-        consensus_quality = []
-        for i in utils.zrange(0, len(alignments[0].query_qualities)):
-            qualities = tuple([s.query_qualities[i] for s in alignments])
-            counter = Counter(qualities)
-            qual = counter.most_common(1)[0][0]
-            consensus_quality.append(qual)
-        return consensus_quality
+        top_quality_sum = 0
+        top_alignment = None
+        for alignment in alignments:
+            qual_sum = alignment.mapping_quality #sum(alignment.query_qualities)
+            if qual_sum > top_quality_sum:
+                top_quality_sum = qual_sum
+                top_alignment = alignment
+        return top_alignment.query_qualities
 
     @staticmethod
     def _get_dominant_cigar_stats(alignments):
