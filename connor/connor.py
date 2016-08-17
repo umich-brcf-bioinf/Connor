@@ -24,6 +24,8 @@ import os
 import platform
 import sys
 import traceback
+import resource
+import time
 
 import pysam
 
@@ -488,11 +490,21 @@ def _build_bam_tags():
                         lambda fam, align: 1 if fam and fam.consensus.left_alignment.query_name == align.query_name else None)]
     return tags
 
+
+def _peak_memory():
+    peak_memory = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    peak_memory_mb = peak_memory/1024
+    if sys.platform == 'darwin':
+        peak_memory_mb /= 1024
+    return int(peak_memory_mb)
+
+
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
     if not command_line_args:
         command_line_args = sys.argv
     try:
+        start_time = time.time()
         args = _parse_command_line_args(command_line_args[1:])
         args.original_command_line = command_line_args
         if not args.log_file:
@@ -511,8 +523,12 @@ def main(command_line_args=None):
         _dedup_alignments(args, consensus_writer, annotated_writer, log)
         annotated_writer.close()
         consensus_writer.close()
-        warning = ' (See warnings above)' if log.warning_occurred else ''
-        log.info('connor complete{}', warning)
+        warning = ' **See warnings above**' if log.warning_occurred else ''
+        elapsed_time = int(time.time() - start_time)
+        log.info("connor complete ({} seconds, {}mb peak memory).{}",
+             elapsed_time,
+             _peak_memory(),
+             warning)
     except utils.UsageError as usage_error:
         message = "connor usage problem: {}".format(str(usage_error))
         print(message, file=sys.stderr)

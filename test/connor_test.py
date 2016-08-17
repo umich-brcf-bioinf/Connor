@@ -827,8 +827,6 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                           "ABC",
                           "AB")
 
-
-
     def test_rank_tags_sortsByPopularity(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "NNNGGG")
         pair1 = align_pair("align1", 'chr1', 100, 200, "AAANNN", "NNNCCC")
@@ -1009,6 +1007,51 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
                                ("readNameA1", 300),
                                ("readNameB1", 500)],
                               aligns)
+
+
+    def test_main_logging(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameA2|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|20|5M|=|400|200|CCCCC|>>>>>
+readNameA1|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameA2|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
+readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = samtools_test.create_bam(tmp_dir.path,
+                                                 'input.sam',
+                                                 sam_contents)
+            output_bam = os.path.join(tmp_dir.path, 'output.bam')
+            output_log = os.path.join(tmp_dir.path, 'output.log')
+            old_dedup_alignments = connor._dedup_alignments
+            ##pylint: disable=unused-argument
+            def angry_dedup(args, consensus_writer, annotated_writer, log):
+                log.warning("possible problem")
+            try:
+                connor._dedup_alignments = angry_dedup
+                connor.main(["program_name",
+                             input_bam,
+                             output_bam,
+                             "--min_family_size_threshold=0",
+                             "--log_file=" + output_log])
+
+            finally:
+                connor._dedup_alignments = old_dedup_alignments
+            with open(output_log) as f:
+                log_lines = f.readlines()
+
+        info_log_lines = [line for line in log_lines if "INFO" in line]
+        self.assertRegexpMatches(info_log_lines[0],
+                                 r'connor begins \(v.*\)')
+        self.assertRegexpMatches(info_log_lines[1],
+                                 (r'logging to \[' + output_log + r'\]'))
+        self.assertRegexpMatches(info_log_lines[2],
+                                 r'connor complete \(.*seconds.*memory\). \*\*See warnings above\*\*')
+        self.assertEqual(3, len(info_log_lines))
 
 
 if __name__ == "__main__":
