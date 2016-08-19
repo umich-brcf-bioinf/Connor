@@ -12,15 +12,20 @@ from connor.samtools import BamFlag
 from connor.samtools import BamTag
 from connor.samtools import ConnorAlign
 import connor.samtools as samtools
+from test.utils_test import MicroMock
 
 
 class MockAlignWriter(object):
     def __init__(self):
         self._write_calls = []
         self.bam_file_path = "foo.bam"
+        self._close_was_called = False
 
     def write(self, family, connor_align):
         self._write_calls.append((family, connor_align))
+
+    def close(self):
+        self._close_was_called = True
 
 def mock_align(**kwargs):
     a = pysam.AlignedSegment()
@@ -576,3 +581,75 @@ class BamTagTest(utils_test.BaseConnorTestCase):
 
         self.assertEqual(False, base.__lt__(BamTag('X1','i', 'Desc B', None)))
         self.assertEqual(False, base.__lt__(BamTag('X2','i', 'Desc A', None)))
+
+
+class LoggingWriterTest(utils_test.BaseConnorTestCase):
+    def test_close_logsFilterStats(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+        fam1 = None
+        al1A = MicroMock(filter='low mapping qual')
+        al1B = MicroMock(filter='low mapping qual')
+        fam2 = None
+        al2A = MicroMock(filter='unpaired read')
+        al2B = MicroMock(filter='unpaired read')
+        fam3 = MicroMock(umi_sequence=3, filter=None)
+        al3A = MicroMock(filter='minority CIGAR')
+        al3B = MicroMock(filter=None)
+        fam4 = MicroMock(umi_sequence=4, filter=None)
+        al4A = MicroMock(filter=None)
+        al4B = MicroMock(filter=None)
+        fam5 = MicroMock(umi_sequence=5, filter='small family')
+        al5A = MicroMock(filter=None)
+        al5B = MicroMock(filter=None)
+        family_aligns = [(fam1, al1A), (fam1, al1B),
+                         (fam2, al2A), (fam2, al2B),
+                         (fam3, al3A), (fam3, al3B),
+                         (fam4, al4A), (fam4, al4B),
+                         (fam5, al5A), (fam5, al5B)]
+
+        for family, align in family_aligns:
+            writer.write(family, align)
+        writer.close()
+
+        log_lines = self.mock_logger._log_calls['INFO']
+        self.assertEqual('70.00% (7/10) alignments unplaced or discarded',
+                         log_lines[0])
+        self.assertEqual('30.00% (3/10) alignments included in 2 families',
+                         log_lines[1])
+        self.assertEqual('33.33% (1/3) families discarded: small family',
+                         log_lines[2])
+        self.assertEqual(3, len(log_lines))
+
+        log_lines = self.mock_logger._log_calls['DEBUG']
+        self.assertEqual('20.00% (2/10) alignments unplaced: low mapping qual',
+                         log_lines[0])
+        self.assertEqual('20.00% (2/10) alignments unplaced: unpaired read',
+                         log_lines[1])
+        self.assertEqual('10.00% (1/10) alignments discarded: minority CIGAR',
+                         log_lines[2])
+        self.assertEqual(3, len(log_lines))
+
+
+    def test_write_passThroughToBaseWriter(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+        fam1 = MicroMock(umi_sequence = 1, filter=None)
+        al1A = MicroMock(filter=None)
+        al1B = MicroMock(filter = 'foo')
+        family_aligns = [(fam1, al1A), (fam1, al1B)]
+
+        for family, align in family_aligns:
+            writer.write(family, align)
+
+        self.assertEqual([(fam1, al1A), (fam1, al1B)],
+                         base_writer._write_calls)
+
+    def test_close_passThroughToBaseWriter(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+
+        writer.close()
+
+        self.assertEqual(True, base_writer._close_was_called)
+

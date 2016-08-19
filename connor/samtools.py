@@ -1,5 +1,6 @@
 """Simplifies discrepancies in how different versions pysam wrap samtools"""
 from __future__ import print_function, absolute_import, division
+from collections import defaultdict, OrderedDict
 from copy import deepcopy
 import os
 import re
@@ -204,6 +205,136 @@ def sort_and_index_bam(bam_filename):
     sort(bam_filename, sorted_bam_filename)
     os.rename(sorted_bam_filename, bam_filename)
     index(bam_filename)
+
+
+class UnplacedFamily(object):
+    def __init__(self):
+        self.filter = 'unplaced'
+        self.umi_sequence = -1
+
+UNPLACED_FAMILY = UnplacedFamily()
+
+class LoggingWriter(object):
+    def __init__(self, base_writer, log):
+        self._base_writer = base_writer
+        self._log = log
+        self._align_filter_stats = defaultdict(int)
+        self._family_filter_stats = defaultdict(set)
+
+    def write(self, family, connor_align):
+        if not family:
+            family = UNPLACED_FAMILY
+        self._align_filter_stats[(family.filter, connor_align.filter)] += 1
+        self._family_filter_stats[family.filter].add(family.umi_sequence)
+        self._base_writer.write(family, connor_align)
+
+    @staticmethod
+    def _filter_counts(filter_dict):
+        '''Returns an immutable ordered dict of filter:counts; when an item
+        would be filtered by multiple filters, all are listed in alpha order;
+        the dict itself is ordered by descending count, filter name.
+        '''
+        return OrderedDict(sorted(filter_dict.items(),
+                                  key=lambda x: (-1 * x[1], x[0])))
+
+    @staticmethod
+    def _log_line(text, count, total, filter_name):
+        line = '{:.2f}% ({}/{}) {}: {}'
+        return line.format(100 * count / total,
+                           count,
+                           total,
+                           text,
+                           filter_name)
+
+    @property
+    def _unplaced_aligns(self):
+        unplaced_aligns = {}
+        for (fam_filter, align_filter), cnt in self._align_filter_stats.items():
+            if fam_filter == UNPLACED_FAMILY.filter and align_filter:
+                unplaced_aligns[align_filter] = cnt
+        return LoggingWriter._filter_counts(unplaced_aligns)
+
+    @property
+    def _discarded_aligns(self):
+        discarded_aligns = {}
+        for (fam_filter, align_filter), cnt in self._align_filter_stats.items():
+            if not fam_filter and align_filter:
+                discarded_aligns[align_filter] = cnt
+        return LoggingWriter._filter_counts(discarded_aligns)
+
+    @property
+    def _family_stats(self):
+        family_filter_stats = dict(self._family_filter_stats)
+        family_filter_stats.pop(UNPLACED_FAMILY.filter)
+        included_count = len(family_filter_stats.pop(None))
+        discarded_count = 0
+        filter_counts = OrderedDict()
+        for name, fam_ids in family_filter_stats.items():
+            align_count = len(fam_ids)
+            discarded_count += align_count
+            filter_counts[name] = align_count
+        total_count = included_count + discarded_count
+        return (included_count,
+                total_count,
+                LoggingWriter._filter_counts(filter_counts))
+
+    @property
+    def _align_stats(self):
+        included_filter = (None, None)
+        included_count = self._align_filter_stats[included_filter]
+        excluded_count = sum([count for fam_align_filter, count in self._align_filter_stats.items() if fam_align_filter != included_filter])
+        total_count = included_count + excluded_count
+        return included_count, excluded_count, total_count
+
+    @staticmethod
+    def _log_stat(log_method, text, count, total):
+        log_method('{:.2f}% ({}/{}) {}',
+                   100 * count / total,
+                   count,
+                   total,
+                   text)
+
+    def _log_results(self):
+        (included_align_count,
+         excluded_align_count,
+         total_align_count) = self._align_stats
+        (included_fam_count,
+         total_fam_count,
+         discarded_fam_filter_counts) = self._family_stats
+
+        LoggingWriter._log_stat(self._log.info,
+                                'alignments unplaced or discarded',
+                                excluded_align_count,
+                                total_align_count)
+
+        for name, count in self._unplaced_aligns.items():
+            LoggingWriter._log_stat(self._log.debug,
+                                    'alignments unplaced: {}'.format(name),
+                                    count,
+                                    total_align_count)
+
+        for name, count in self._discarded_aligns.items():
+            LoggingWriter._log_stat(self._log.debug,
+                                    'alignments discarded: {}'.format(name),
+                                    count,
+                                    total_align_count)
+
+        LoggingWriter._log_stat(self._log.info,
+                                ('alignments included in '
+                                 '{} families').format(included_fam_count),
+                                included_align_count,
+                                total_align_count)
+
+        for name, count in discarded_fam_filter_counts.items():
+            LoggingWriter._log_stat(self._log.info,
+                                    'families discarded: {}'.format(name),
+                                    count,
+                                    total_fam_count)
+
+    def close(self):
+        if self._align_filter_stats:
+            self._log_results()
+        self._base_writer.close()
 
 
 class AlignWriter(object):

@@ -31,6 +31,7 @@ import connor
 import connor.samtools as samtools
 import connor.familyhandler as familyhandler
 import connor.utils as utils
+from connor.samtools import LoggingWriter
 
 __version__ = connor.__version__
 
@@ -502,9 +503,10 @@ def main(command_line_args=None):
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
         bam_tags = _build_bam_tags()
-        annotated_writer = _build_writer(args.input_bam,
-                                         args.annotated_output_bam,
-                                         bam_tags)
+        base_annotated_writer = _build_writer(args.input_bam,
+                                              args.annotated_output_bam,
+                                              bam_tags)
+        annotated_writer = LoggingWriter(base_annotated_writer, log)
         consensus_writer = _build_writer(args.input_bam,
                                          args.output_bam,
                                          bam_tags)

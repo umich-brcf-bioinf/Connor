@@ -3,27 +3,27 @@
 #pylint: disable=too-many-arguments
 from __future__ import print_function, absolute_import, division
 from argparse import Namespace
-import os
 
-from testfixtures.tempdirectory import TempDirectory
-
-from test.utils_test import BaseConnorTestCase
-from test.utils_test import MicroMock
-from test.samtools_test import mock_align
 from connor.familyhandler import _CigarStatHandler, build_family_handlers
 from connor.familyhandler import _CigarMinorityStatHandler
 from connor.familyhandler import _FamilySizeStatHandler
 from connor.familyhandler import _MatchStatHandler
 from connor.familyhandler import _WriteAnnotatedAlignsHandler
+from connor.familyhandler import _NewWriteConsensusHandler
 import connor.samtools as samtools
+from test.samtools_test import mock_align
 import test.samtools_test as samtools_test
+from test.utils_test import BaseConnorTestCase
+from test.utils_test import MicroMock
 
 def _mock_tag_family(input_alignment_count=5,
                     alignments=None,
                     excluded_alignments=None,
                     distinct_cigar_count=1,
                     inexact_match_count=0,
-                    minority_cigar_percentage=0):
+                    minority_cigar_percentage=0,
+                    consensus=None,
+                    filter=None):
     if alignments is None:
         alignments = [1,2,3,4]
     if excluded_alignments is None:
@@ -33,7 +33,9 @@ def _mock_tag_family(input_alignment_count=5,
                      excluded_alignments=excluded_alignments,
                      distinct_cigar_count=distinct_cigar_count,
                      inexact_match_count=inexact_match_count,
-                     minority_cigar_percentage=minority_cigar_percentage)
+                     minority_cigar_percentage=minority_cigar_percentage,
+                     consensus=consensus,
+                     filter=filter)
 
 
 class FamilyHandlerTest(BaseConnorTestCase):
@@ -156,22 +158,60 @@ class MatchStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(20, stat_handler.total_pair_count)
         self.assertEqual(5/20, stat_handler.percent_inexact_match)
 
-def align_pairs(num_pairs, query_prefix):
+def _mock_align_pair(query_name):
+    left = mock_align(query_name=query_name)
+    right = mock_align(query_name=query_name)
+    return MicroMock(left_alignment=left, right_alignment=right)
+
+def _mock_align_pairs(num_pairs, query_prefix):
     pairs = []
-    query_name_format = "{}_{}"
+    query_name_fmt = "{}_{}"
     for i in range(0, num_pairs):
-        left = mock_align(query_name = query_name_format.format(query_prefix, i))
-        right = mock_align(query_name = query_name_format.format(query_prefix, i))
-        pair =  MicroMock(left_alignment=left, right_alignment=right)
-        pairs.append(pair)
+        pairs.append(_mock_align_pair(query_name_fmt.format(query_prefix, i)))
     return pairs
+
+class WriteConsensusHandlerTest(BaseConnorTestCase):
+    def test_handle_writesConsensus(self):
+        family_1 = _mock_tag_family(consensus=_mock_align_pair("readA"),
+                                    filter=None)
+        family_2 = _mock_tag_family(consensus=_mock_align_pair("readB"),
+                                    filter=None)
+        families = [family_1, family_2]
+        writer = samtools_test.MockAlignWriter()
+
+        handler = _NewWriteConsensusHandler(writer)
+        for family in families:
+            handler.handle(family)
+
+        name_pairs = [(fam,
+                       align.query_name) for fam, align in writer._write_calls]
+        self.assertEqual([(family_1, 'readA'), (family_1, 'readA'),
+                          (family_2, 'readB'), (family_2, 'readB')], name_pairs)
+
+    def test_handle_excludedFilteredFamilies(self):
+        family_1 = _mock_tag_family(consensus=_mock_align_pair("readA"),
+                                    filter=None)
+        family_2 = _mock_tag_family(consensus=_mock_align_pair("readB"),
+                                    filter=None)
+        families = [family_1, family_2]
+        writer = samtools_test.MockAlignWriter()
+
+        handler = _NewWriteConsensusHandler(writer)
+        for family in families:
+            handler.handle(family)
+
+        name_pairs = [(fam,
+                       align.query_name) for fam, align in writer._write_calls]
+        self.assertEqual([(family_1, 'readA'), (family_1, 'readA'),
+                          (family_2, 'readB'), (family_2, 'readB')], name_pairs)
+
 
 class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
     def test_handle(self):
-        family_1 = _mock_tag_family(alignments=align_pairs(1, "A"),
-                                    excluded_alignments=align_pairs(2, "a"))
-        family_2 = _mock_tag_family(alignments=align_pairs(1, "B"),
-                                    excluded_alignments=align_pairs(2, "b"))
+        family_1 = _mock_tag_family(alignments=_mock_align_pairs(1, "A"),
+                                    excluded_alignments=_mock_align_pairs(2, "a"))
+        family_2 = _mock_tag_family(alignments=_mock_align_pairs(1, "B"),
+                                    excluded_alignments=_mock_align_pairs(2, "b"))
         families = [family_1, family_2]
         writer = samtools_test.MockAlignWriter()
 

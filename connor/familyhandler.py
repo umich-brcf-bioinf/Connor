@@ -16,6 +16,17 @@ def build_family_handlers(args,
         handlers.append(_WriteAnnotatedAlignsHandler(annotated_writer))
     return handlers
 
+class _NewWriteConsensusHandler(object):
+    def __init__(self, consensus_writer):
+        self._writer = consensus_writer
+    def handle(self, family):
+        if not family.filter:
+            self._writer.write(family,
+                               family.consensus.left_alignment)
+            self._writer.write(family,
+                               family.consensus.right_alignment)
+
+
 class _WriteFamilyHandler(object):
     def __init__(self, args, consensus_writer, logger):
         self._writer = consensus_writer
@@ -57,7 +68,6 @@ class _WriteFamilyHandler(object):
         self._log.info('{} families written to [{}]',
                   self.included_family_count,
                   self._writer.bam_file_path)
-
 
 class _WriteAnnotatedAlignsHandler(object):
     def __init__(self, writer):
