@@ -228,7 +228,7 @@ class _TagFamily(object):
         top_quality_sum = 0
         top_alignment = None
         for alignment in alignments:
-            qual_sum = alignment.mapping_quality #sum(alignment.query_qualities)
+            qual_sum = sum(alignment.query_qualities)
             if qual_sum > top_quality_sum:
                 top_quality_sum = qual_sum
                 top_alignment = alignment
