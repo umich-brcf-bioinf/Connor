@@ -48,13 +48,14 @@ class MockAlignSegment(object):
         self.cigarstring = cigarstring
         self.reference_end = reference_end
         self.filter = None
- 
+        self.mapping_quality = 20
+
     def __hash__(self):
         return hash(self.query_name)
- 
+
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
- 
+
     def set_tag(self, name, value, tag_type):
         pass
 
@@ -129,6 +130,15 @@ class PairedAlignmentTest(BaseConnorTestCase):
         self.assertEquals(1, len(actual_set))
 
     def test_replace_umt(self):
+        # pysam's represtation of the sequence is inconsistent across pysam 
+        # and python versions; this hack makes the values comparable
+        def _byte_array_to_string(sequence):
+            if isinstance(sequence, str):
+                return sequence
+            else:
+                return str(sequence.decode("utf-8"))
+
+        
         left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
         right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
         paired_align = connor._PairedAlignment(left_A, right_A, tag_length=2)
@@ -136,9 +146,9 @@ class PairedAlignmentTest(BaseConnorTestCase):
         paired_align.replace_umt(('GG','TT'))
 
         self.assertEquals('GGNN',
-                          paired_align.left_alignment.query_sequence)
+                          _byte_array_to_string(paired_align.left_alignment.query_sequence))
         self.assertEquals('NNTT',
-                          paired_align.right_alignment.query_sequence)
+                          _byte_array_to_string(paired_align.right_alignment.query_sequence))
         self.assertEquals([1,2,3,4],
                           paired_align.left_alignment.query_qualities)
         self.assertEquals([5,6,7,8],
@@ -260,17 +270,17 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals("TNTnnn",
                           consensus_pair.right_alignment.query_sequence)
 
-    def test_consensus_qualities_maxQualityScores(self):
-        alignAL = mock_align(query_name='alignA', query_sequence="nGT", query_qualities=[30, 30, 30])
-        alignAR = mock_align(query_name='alignA', query_sequence="nCT", query_qualities=[25, 25, 25])
+    def test_consensus_qualities_maxMappingQualityScores(self):
+        alignAL = mock_align(query_name='alignA', query_sequence="nGT", mapping_quality=30)
+        alignAR = mock_align(query_name='alignA', query_sequence="nCT", mapping_quality=25)
         pairA = connor._PairedAlignment(alignAL, alignAR, tag_length=1)
 
-        alignBL = mock_align(query_name='alignB', query_sequence="nGT", query_qualities=[20, 20, 20])
-        alignBR = mock_align(query_name='alignB', query_sequence="nCT", query_qualities=[15, 15, 15])
+        alignBL = mock_align(query_name='alignB', query_sequence="nGT", mapping_quality=20)
+        alignBR = mock_align(query_name='alignB', query_sequence="nCT", mapping_quality=15)
         pairB = connor._PairedAlignment(alignBL, alignBR, tag_length=1)
 
-        alignCL = mock_align(query_name='alignC', query_sequence="nGT", query_qualities=[10, 10, 10])
-        alignCR = mock_align(query_name='alignC', query_sequence="nCT", query_qualities=[5, 5, 5])
+        alignCL = mock_align(query_name='alignC', query_sequence="nGT", mapping_quality=10)
+        alignCR = mock_align(query_name='alignC', query_sequence="nCT", mapping_quality=5)
         pairC = connor._PairedAlignment(alignCL, alignCR, tag_length=1)
 
         alignments = [pairA, pairB, pairC]
@@ -283,40 +293,63 @@ class TagFamiliyTest(BaseConnorTestCase):
                                                consensus_threshold=0.6)
         paired_consensus = actual_tag_family.consensus
 
-        self.assertEquals([30, 30, 30],
-                          paired_consensus.left_alignment.query_qualities)
-        self.assertEquals([25, 25, 25],
-                          paired_consensus.right_alignment.query_qualities)
+        self.assertEquals(30,
+                          paired_consensus.left_alignment.mapping_quality)
+        self.assertEquals(25,
+                          paired_consensus.right_alignment.mapping_quality)
 
 
     def test_select_template_alignment_pair_picksMaxQualityScores(self):
-        pair1 = align_pair('alignC', 'chr1', 100, 200, 'GT', 'CT')
-        pair1.left_alignment.query_qualities = [20, 20]
-        pair1.right_alignment.query_qualities = [15, 15]
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GT', 'CT')
-        pair2.left_alignment.query_qualities = [30, 30]
-        pair2.right_alignment.query_qualities = [25, 25]
-        pair3 = align_pair('alignA', 'chr1', 100, 200, 'GT', 'CT')
-        pair3.left_alignment.query_qualities = [10, 10]
-        pair3.right_alignment.query_qualities = [5, 5]
-        alignment_pairs = [pair1, pair2, pair3]
+        alignAL = mock_align(query_name='alignA', query_sequence="nGT", mapping_quality=20)
+        alignAR = mock_align(query_name='alignA', query_sequence="nCT", mapping_quality=15)
+        pairA = connor._PairedAlignment(alignAL, alignAR, tag_length=1)
+
+        alignBL = mock_align(query_name='alignB', query_sequence="nGT", mapping_quality=30)
+        alignBR = mock_align(query_name='alignB', query_sequence="nCT", mapping_quality=25)
+        pairB = connor._PairedAlignment(alignBL, alignBR, tag_length=1)
+
+        alignCL = mock_align(query_name='alignC', query_sequence="nGT", mapping_quality=10)
+        alignCR = mock_align(query_name='alignC', query_sequence="nCT", mapping_quality=5)
+        pairC = connor._PairedAlignment(alignCL, alignCR, tag_length=1)
+
+        alignment_pairs = [pairA, pairB, pairC]
+
+#         pair1 = align_pair('alignC', 'chr1', 100, 200, 'GT', 'CT')
+#         pair1.left_alignment.query_qualities = [20, 20]
+#         pair1.right_alignment.query_qualities = [15, 15]
+#         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GT', 'CT')
+#         pair2.left_alignment.query_qualities = [30, 30]
+#         pair2.right_alignment.query_qualities = [25, 25]
+#         pair3 = align_pair('alignA', 'chr1', 100, 200, 'GT', 'CT')
+#         pair3.left_alignment.query_qualities = [10, 10]
+#         pair3.right_alignment.query_qualities = [5, 5]
+#         alignment_pairs = [pair1, pair2, pair3]
 
         actual_template = connor._TagFamily._select_template_alignment_pair(alignment_pairs)
 
-        self.assertEquals(pair2, actual_template)
+        self.assertEquals(pairB, actual_template)
 
     def test_select_template_alignment_pair_breaksTiesByQueryName(self):
-        pair1 = align_pair('alignB', 'chr1', 100, 200, 'GT', 'CT')
-        pair1.left_alignment.query_qualities = [20, 20]
-        pair1.right_alignment.query_qualities = [15, 15]
-        pair2 = align_pair('alignA', 'chr1', 100, 200, 'GT', 'CT')
-        pair2.left_alignment.query_qualities = [20, 20]
-        pair2.right_alignment.query_qualities = [15, 15]
-        alignment_pairs = [pair1, pair2]
+        alignAL = mock_align(query_name='alignA', query_sequence="nGT", mapping_quality=20)
+        alignAR = mock_align(query_name='alignA', query_sequence="nCT", mapping_quality=15)
+        pairA = connor._PairedAlignment(alignAL, alignAR, tag_length=1)
+
+        alignBL = mock_align(query_name='alignB', query_sequence="nGT", mapping_quality=20)
+        alignBR = mock_align(query_name='alignB', query_sequence="nCT", mapping_quality=15)
+        pairB = connor._PairedAlignment(alignBL, alignBR, tag_length=1)
+        alignment_pairs = [pairA, pairB]
+
+#         pair1 = align_pair('alignB', 'chr1', 100, 200, 'GT', 'CT')
+#         pair1.left_alignment.query_qualities = [20, 20]
+#         pair1.right_alignment.query_qualities = [15, 15]
+#         pair2 = align_pair('alignA', 'chr1', 100, 200, 'GT', 'CT')
+#         pair2.left_alignment.query_qualities = [20, 20]
+#         pair2.right_alignment.query_qualities = [15, 15]
+#         alignment_pairs = [pair1, pair2]
 
         actual_template = connor._TagFamily._select_template_alignment_pair(alignment_pairs)
 
-        self.assertEquals(pair2, actual_template)
+        self.assertEquals(pairA, actual_template)
 
 
     def test_consensus_uniform_cigars_admitted(self):

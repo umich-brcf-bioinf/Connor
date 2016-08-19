@@ -242,8 +242,8 @@ class _TagFamily(object):
         best_template = (0, None)
         for alignment_pair in alignment_pairs:
             query_name = alignment_pair.left_alignment.query_name
-            qual_sum = sum(alignment_pair.left_alignment.query_qualities) + \
-                    sum(alignment_pair.right_alignment.query_qualities)
+            qual_sum = alignment_pair.left_alignment.mapping_quality + \
+                    alignment_pair.right_alignment.mapping_quality
             if (-qual_sum, query_name) < best_template:
                 best_template = (-qual_sum, query_name)
                 top_alignment_pair = alignment_pair
