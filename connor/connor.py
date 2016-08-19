@@ -93,22 +93,31 @@ class _PairedAlignment(object):
         self.left_alignment = left_alignment
         self.right_alignment = right_alignment
         self._tag_length = tag_length
-        left_umi = self.left_alignment.query_sequence[0:self._tag_length]
-        right_umi = self.right_alignment.query_sequence[-1 * self._tag_length:]
-        self.umi = (left_umi, right_umi)
+        left_umt = self.left_alignment.query_sequence[0:self._tag_length]
+        right_umt = self.right_alignment.query_sequence[-1 * self._tag_length:]
+        self.umi = (left_umt, right_umt)
 
-    def replace_umi(self, umi):
-        def byte_array_to_string(sequence):
+    def replace_umt(self, umt):
+        def _byte_array_to_string(sequence):
             if isinstance(sequence, str):
                 return sequence
             else:
                 return str(sequence.decode("utf-8"))
-        query_frag = self.left_alignment.query_sequence[len(umi[0]):]
-        query_frag_str = byte_array_to_string(query_frag)
-        self.left_alignment.query_sequence = umi[0] + query_frag_str
-        seq = byte_array_to_string(self.right_alignment.query_sequence)
-        self.right_alignment.query_sequence = seq[:-1 * len(umi[1])] + umi[1]
-        self.umi = umi
+        if not (umt[0] or umt[1]) or \
+            (len(umt[0]) != self._tag_length) or \
+            (len(umt[1]) != self._tag_length):
+            raise ValueError("Each UMT must match tag_length ({})".format(self._tag_length))
+        left_qual = self.left_alignment.query_qualities
+        right_qual = self.right_alignment.query_qualities
+        left_query_frag = self.left_alignment.query_sequence[len(umt[0]):]
+        left_query_frag_str = _byte_array_to_string(left_query_frag)
+        self.left_alignment.query_sequence = umt[0] + left_query_frag_str
+        right_query_frag = self.right_alignment.query_sequence[:-len(umt[1])]
+        right_query_frag_str = _byte_array_to_string(right_query_frag)
+        self.right_alignment.query_sequence = right_query_frag_str + umt[1]
+        self.umi = umt
+        self.left_alignment.query_qualities = left_qual
+        self.right_alignment.query_qualities = right_qual
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
@@ -183,11 +192,25 @@ class _TagFamily(object):
                 excluded_alignments.append(pair)
         return included_alignments, excluded_alignments
 
-    def _generate_consensus_sequence(self, list_of_alignments):
-        consensus_seq = self._generate_consensus_sequence_quickly(list_of_alignments)
-        if not consensus_seq:
-            consensus_seq = self._generate_consensus_sequence_long(list_of_alignments)
-        return consensus_seq
+#    def _generate_consensus_sequence(self, list_of_alignments):
+#        consensus_seq = self._generate_consensus_sequence_quickly(list_of_alignments)
+#        if not consensus_seq:
+#            consensus_seq = self._generate_consensus_sequence_long(list_of_alignments)
+#        return consensus_seq
+    
+    def _generate_consensus_sequence(self, list_of_alignment_pairs):
+        left_alignments = []
+        right_alignments = []
+        for align_pair in list_of_alignment_pairs:
+            left_alignments.append(align_pair.left_alignment)
+            right_alignments.append(align_pair.right_alignment)
+        left_consensus_seq = self._generate_consensus_sequence_quickly(left_alignments)
+        if not left_consensus_seq:
+            left_consensus_seq = self._generate_consensus_sequence_long(left_alignments)
+        right_consensus_seq = self._generate_consensus_sequence_quickly(right_alignments)
+        if not right_consensus_seq:
+            right_consensus_seq = self._generate_consensus_sequence_long(right_alignments)
+        return (left_consensus_seq, right_consensus_seq)
 
     def _generate_consensus_sequence_quickly(self, list_of_alignments):
         seq_counter = Counter([a.query_sequence for a in list_of_alignments])
@@ -213,26 +236,19 @@ class _TagFamily(object):
                 consensus.append("N")
         return "".join(consensus)
 
-#     @staticmethod
-#     def _generate_consensus_qualities(alignments):
-#         consensus_quality = []
-#         for i in utils.zrange(0, len(alignments[0].query_qualities)):
-#             qualities = tuple([s.query_qualities[i] for s in alignments])
-#             counter = Counter(qualities)
-#             qual = counter.most_common(1)[0][0]
-#             consensus_quality.append(qual)
-#        return consensus_quality
-
     @staticmethod
-    def _generate_consensus_qualities(alignments):
-        top_quality_sum = 0
-        top_alignment = None
-        for alignment in alignments:
-            qual_sum = sum(alignment.query_qualities)
-            if qual_sum > top_quality_sum:
-                top_quality_sum = qual_sum
-                top_alignment = alignment
-        return top_alignment.query_qualities
+    def _select_template_alignment_pair(alignment_pairs):
+        top_alignment_pair = None
+        best_template = (0, None)
+        for alignment_pair in alignment_pairs:
+            query_name = alignment_pair.left_alignment.query_name
+            qual_sum = sum(alignment_pair.left_alignment.query_qualities) + \
+                    sum(alignment_pair.right_alignment.query_qualities)
+            if (-qual_sum, query_name) < best_template:
+                best_template = (-qual_sum, query_name)
+                top_alignment_pair = alignment_pair
+        return top_alignment_pair
+
 
     @staticmethod
     def _get_dominant_cigar_stats(alignments):
@@ -254,26 +270,23 @@ class _TagFamily(object):
 
     #TODO: (cgates) tags should not assume umi is a tuple and symmetric
     #between left and right
-    def _build_consensus(self, umi, alignments):
-        left_aligns = []
-        right_aligns = []
-        for align in alignments:
-            left_aligns.append(align.left_alignment)
-            right_aligns.append(align.right_alignment)
-        left_consensus_sequence = self._generate_consensus_sequence(left_aligns)
-        right_consensus_sequence = self._generate_consensus_sequence(right_aligns)
-        left_consensus_qualities = _TagFamily._generate_consensus_qualities(left_aligns)
-        right_consensus_qualities = _TagFamily._generate_consensus_qualities(right_aligns)
-        left_consensus_align = deepcopy(alignments[0].left_alignment, {})
-        right_consensus_align = deepcopy(alignments[0].right_alignment, {})
-        left_consensus_align.query_sequence = left_consensus_sequence
-        right_consensus_align.query_sequence = right_consensus_sequence
+    def _build_consensus(self, umt, align_pairs):
+        template_alignment_pair = _TagFamily._select_template_alignment_pair(align_pairs)
+        
+        left_consensus_align = deepcopy(template_alignment_pair.left_alignment,
+                                        {})
+        right_consensus_align = deepcopy(template_alignment_pair.right_alignment,
+                                         {})
         consensus_align = _PairedAlignment(left_consensus_align,
                                           right_consensus_align,
-                                          tag_length=len(umi[0]))
-        consensus_align.replace_umi(umi)
-        left_consensus_align.query_qualities = left_consensus_qualities
-        right_consensus_align.query_qualities = right_consensus_qualities
+                                          tag_length=len(umt[0]))
+        (left_consensus_sequence,
+         right_consensus_sequence) = self._generate_consensus_sequence(align_pairs)
+        left_consensus_align.query_sequence = left_consensus_sequence
+        right_consensus_align.query_sequence = right_consensus_sequence
+        consensus_align.left_alignment.query_qualities = template_alignment_pair.left_alignment.query_qualities
+        consensus_align.right_alignment.query_qualities = template_alignment_pair.right_alignment.query_qualities
+        consensus_align.replace_umt(umt)
         return consensus_align
 
 
