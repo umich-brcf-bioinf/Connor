@@ -449,15 +449,31 @@ def _build_lightweight_pairs(aligned_segments, log):
              len(name_pairs),
              total_align_count,
              100 * len(name_pairs) / total_align_count)
-    return lightweight_pairs
+    return lightweight_pairs, total_align_count
 
+
+def _progress_logger(base_generator, total_rows, log):
+    row_count = 0
+    next_breakpoint = 0
+    for item in base_generator:
+        row_count += 1
+        progress = 100 * row_count / total_rows
+        if progress >= next_breakpoint and progress < 100:
+            log.info("{}% ({}/{}) alignments processed",
+                     next_breakpoint,
+                     row_count,
+                     total_rows)
+            next_breakpoint = 10 * int(progress/10) + 10
+        yield item
+    log.info("100% ({}/{}) alignments processed", row_count, total_rows)
 
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     try:
         log.info('reading input bam [{}]', args.input_bam)
         bamfile = samtools.alignment_file(args.input_bam, 'rb')
         filtered_aligns = samtools.filter_alignments(bamfile.fetch(), log)
-        lightweight_pairs = _build_lightweight_pairs(filtered_aligns, log)
+        (lightweight_pairs, 
+         total_aligns) = _build_lightweight_pairs(filtered_aligns, log)
         bamfile.close()
 
         coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
@@ -468,8 +484,11 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                                        annotated_writer,
                                                        log)
 
-        filtered_aligns = samtools.filter_alignments(bamfile.fetch())
-        for coord_family in _build_coordinate_families(filtered_aligns,
+        filtered_aligns_gen = samtools.filter_alignments(bamfile.fetch())
+        progress_gen = _progress_logger(filtered_aligns_gen,
+                                        total_aligns,
+                                        log)
+        for coord_family in _build_coordinate_families(progress_gen,
                                                        coord_manifest):
             ranked_tags = _rank_tags(coord_family)
             tag_families = _build_tag_families(coord_family,

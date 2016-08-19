@@ -16,6 +16,7 @@ import test.samtools_test as samtools_test
 from test.samtools_test import mock_align
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
+from connor.connor import _build_lightweight_pairs
 
 try:
     from StringIO import StringIO
@@ -748,6 +749,43 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                              set([pair_C])]
         self.assertEquals(expected_families, actual_families)
 
+    def test_build_lightweight_alignment_pairs_simple(self):
+        alignAL = mock_align(query_name='alignA', pos=100, query_sequence='AAA', cigarstring='3M')
+        alignAR = mock_align(query_name='alignA', pos=200, query_sequence='AAA', cigarstring='3M')
+        alignments = [alignAL, alignAR]
+
+        (lightweight_pairs,
+         align_count) = _build_lightweight_pairs(alignments,
+                                                 self.mock_logger)
+
+        self.assertEqual(2, align_count)
+        self.assertEqual(1, len(lightweight_pairs))
+        self.assertEqual('alignA', lightweight_pairs[0].name)
+        chrom = None
+        left_pos_start = 100
+        right_pos_end = 203
+        self.assertEqual((chrom, left_pos_start, right_pos_end),
+                         lightweight_pairs[0].key)
+
+    def test_build_lightweight_alignment_pairs_singletonsDiscarded(self):
+        alignAL = mock_align(query_name='alignA', pos=100)
+        alignAR = mock_align(query_name='alignA', pos=200)
+        alignBL = mock_align(query_name='alignB', pos=100)
+        alignBR = mock_align(query_name='alignB', pos=200)
+        alignCR = mock_align(query_name='alignC', pos=100)
+
+        alignments = [alignAL, alignAR, alignBL, alignBR, alignCR]
+
+        (lightweight_pairs,
+         align_count) = _build_lightweight_pairs(alignments,
+                                                 self.mock_logger)
+
+        self.assertEqual(5, align_count)
+        self.assertEqual(2, len(lightweight_pairs))
+        align_names = set([p.name for p in lightweight_pairs])
+        self.assertTrue('alignA' in align_names)
+        self.assertTrue('alignB' in align_names)
+
     def test_build_tag_families_exact_left_or_right(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'NNNCCC')
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
@@ -1044,6 +1082,10 @@ readNameB1|99|chr10|200|20|5M|=|400|200|CCCCC|>>>>>
 readNameA1|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
 readNameA2|147|chr10|300|20|5M|=|100|100|AAAAA|>>>>>
 readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
+readNameC1|99|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
+readNameC1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
+readNameC2|99|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
+readNameC2|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
@@ -1062,10 +1104,30 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                                      samtools_test.MockAlignWriter(),
                                      self.mock_logger)
 
-            log_calls = self.mock_logger._log_calls['INFO']
-            self.assertRegexpMatches(log_calls[0],
+            log_iter = iter(self.mock_logger._log_calls['INFO'])
+            self.assertRegexpMatches(next(log_iter),
                                      'reading input bam')
-            self.assertRegexpMatches(log_calls[1],
+            self.assertRegexpMatches(next(log_iter),
+                                     '0% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '20% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '30% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '40% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '50% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '60% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '70% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '80% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '90% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
+                                     '100% .* alignments processed')
+            self.assertRegexpMatches(next(log_iter),
                                     'families were excluded')
 
 
