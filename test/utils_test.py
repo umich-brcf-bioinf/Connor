@@ -18,7 +18,8 @@ class MicroMock(object):
 
 
 class MockLogger(object):
-    def __init__(self):
+    def __init__(self, *args):
+        self.warning_occurred = False
         self._log_calls = defaultdict(list)
 
     def error(self, message, *args):
