@@ -593,13 +593,13 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         fam2 = None
         al2A = MicroMock(filter='unpaired read')
         al2B = MicroMock(filter='unpaired read')
-        fam3 = MicroMock(umi_sequence=3, filter=None)
+        fam3 = MicroMock(umi_sequence=3, filter_value=None)
         al3A = MicroMock(filter='minority CIGAR')
         al3B = MicroMock(filter=None)
-        fam4 = MicroMock(umi_sequence=4, filter=None)
+        fam4 = MicroMock(umi_sequence=4, filter_value=None)
         al4A = MicroMock(filter=None)
         al4B = MicroMock(filter=None)
-        fam5 = MicroMock(umi_sequence=5, filter='small family')
+        fam5 = MicroMock(umi_sequence=5, filter_value='small family')
         al5A = MicroMock(filter=None)
         al5B = MicroMock(filter=None)
         family_aligns = [(fam1, al1A), (fam1, al1B),
@@ -631,10 +631,33 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual(3, len(log_lines))
 
 
+    def test_close_whenAllPlaced(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+        fam1 = MicroMock(umi_sequence=4, filter_value=None)
+        alignA = MicroMock(filter=None)
+        alignA = MicroMock(filter=None)
+        family_aligns = [(fam1, alignA), (fam1, alignA)]
+
+        for family, align in family_aligns:
+            writer.write(family, align)
+        writer.close()
+
+        log_lines = self.mock_logger._log_calls['INFO']
+        self.assertEqual('0.00% (0/2) alignments unplaced or discarded',
+                         log_lines[0])
+        self.assertEqual('100.00% (2/2) alignments included in 1 families',
+                         log_lines[1])
+        self.assertEqual(2, len(log_lines))
+
+        log_lines = self.mock_logger._log_calls['DEBUG']
+        self.assertEqual(0, len(log_lines))
+
+
     def test_write_passThroughToBaseWriter(self):
         base_writer = MockAlignWriter()
         writer = samtools.LoggingWriter(base_writer, self.mock_logger)
-        fam1 = MicroMock(umi_sequence = 1, filter=None)
+        fam1 = MicroMock(umi_sequence = 1, filter_value=None)
         al1A = MicroMock(filter=None)
         al1B = MicroMock(filter = 'foo')
         family_aligns = [(fam1, al1A), (fam1, al1B)]

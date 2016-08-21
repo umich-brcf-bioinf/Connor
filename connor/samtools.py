@@ -56,13 +56,13 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
-
+#TODO: cgates: change filter attr to filter_value
 class ConnorAlign(object):
-    # cgates: FYI, you can use dynamic delegation via __setattr__ and 
+    # cgates: FYI, you can use dynamic delegation via __setattr__ and
     # __getattr__ but it's awkward and about twice as slow
-    def __init__(self, pysam_align_segment):
+    def __init__(self, pysam_align_segment, filter=None):
         self.pysam_align_segment = pysam_align_segment
-        self.filter = None
+        self.filter = filter
 
     def __eq__(self, other):
         return other.__dict__ == self.__dict__
@@ -209,7 +209,7 @@ def sort_and_index_bam(bam_filename):
 
 class UnplacedFamily(object):
     def __init__(self):
-        self.filter = 'unplaced'
+        self.filter_value = 'unplaced'
         self.umi_sequence = -1
 
 UNPLACED_FAMILY = UnplacedFamily()
@@ -224,8 +224,9 @@ class LoggingWriter(object):
     def write(self, family, connor_align):
         if not family:
             family = UNPLACED_FAMILY
-        self._align_filter_stats[(family.filter, connor_align.filter)] += 1
-        self._family_filter_stats[family.filter].add(family.umi_sequence)
+        self._align_filter_stats[(family.filter_value,
+                                  connor_align.filter)] += 1
+        self._family_filter_stats[family.filter_value].add(family.umi_sequence)
         self._base_writer.write(family, connor_align)
 
     @staticmethod
@@ -250,7 +251,7 @@ class LoggingWriter(object):
     def _unplaced_aligns(self):
         unplaced_aligns = {}
         for (fam_filter, align_filter), cnt in self._align_filter_stats.items():
-            if fam_filter == UNPLACED_FAMILY.filter and align_filter:
+            if fam_filter == UNPLACED_FAMILY.filter_value and align_filter:
                 unplaced_aligns[align_filter] = cnt
         return LoggingWriter._filter_counts(unplaced_aligns)
 
@@ -265,7 +266,7 @@ class LoggingWriter(object):
     @property
     def _family_stats(self):
         family_filter_stats = dict(self._family_filter_stats)
-        family_filter_stats.pop(UNPLACED_FAMILY.filter)
+        family_filter_stats.pop(UNPLACED_FAMILY.filter_value, None)
         included_count = len(family_filter_stats.pop(None))
         discarded_count = 0
         filter_counts = OrderedDict()
