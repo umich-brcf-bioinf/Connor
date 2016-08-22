@@ -29,47 +29,6 @@ class _WriteConsensusHandler(object):
     def end(self):
         pass
 
-# class _WriteFamilyHandler(object):
-#     def __init__(self, args, consensus_writer, logger):
-#         self._writer = consensus_writer
-#         self._min_family_size_threshold = args.min_family_size_threshold
-#         self._log = logger
-#         self.included_family_count = 0
-#         self.excluded_family_count = 0
-#         self.total_alignment_count = 0
-# 
-#     def handle(self, tag_family):
-#         self.total_alignment_count += len(tag_family.align_pairs)
-#         #TODO: cgates: This check should be done using the filter field
-#         if len(tag_family.align_pairs) >= self._min_family_size_threshold:
-#             consensus = tag_family.consensus
-#             self._writer.write(tag_family,
-#                                consensus.left)
-#             self._writer.write(tag_family,
-#                                consensus.right)
-#             self.included_family_count += 1
-#         else:
-#             self.excluded_family_count += 1
-# 
-#     def end(self):
-#         total_family_count = self.excluded_family_count + \
-#                              self.included_family_count
-#         self._log.info(('{}/{} ({:.2f}%) families were excluded because the '
-#                    'original read count < {}'),
-#                   self.excluded_family_count,
-#                   total_family_count,
-#              100 * self.excluded_family_count / total_family_count,
-#              self._min_family_size_threshold)
-#         dedup_percent = 100 * \
-#                 (1 - (self.included_family_count / self.total_alignment_count))
-#         self._log.info(('{} original pairs were deduplicated to {} families '
-#                    '(overall dedup rate {:.2f}%)'),
-#                   self.total_alignment_count,
-#                   self.included_family_count,
-#                   dedup_percent)
-#         self._log.info('{} families written to [{}]',
-#                   self.included_family_count,
-#                   self._writer.bam_file_path)
 
 class _WriteAnnotatedAlignsHandler(object):
     def __init__(self, writer):

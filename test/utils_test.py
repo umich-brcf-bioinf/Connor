@@ -56,7 +56,11 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         generator = utils.FilteredGenerator(filters)
         actual_collection  = [x for x in generator.filter(base_collection)]
 
-        self.assertEqual(base_collection, actual_collection)
+        self.assertEqual([(1, None),
+                          (2, None),
+                          (3, None),
+                          (4, None),
+                          (5, None)], actual_collection)
         self.assertEqual(5, generator.total_included)
         self.assertEqual(0, generator.total_excluded)
         self.assertEqual(0, len(generator.filter_stats))
@@ -68,7 +72,16 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         base_collection = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         actual_collection  = [x for x in generator.filter(base_collection)]
 
-        self.assertEqual([1,3,5,7,9], actual_collection)
+        self.assertEqual([(1, None),
+                          (2, 'div by 2'),
+                          (3, None),
+                          (4, 'div by 2'),
+                          (5, None),
+                          (6, 'div by 2'),
+                          (7, None),
+                          (8, 'div by 2'),
+                          (9, None),
+                          (10, 'div by 2')], actual_collection)
         self.assertEqual(5, generator.total_included)
         self.assertEqual(5, generator.total_excluded)
         self.assertEqual(5, generator.filter_stats['div by 2'])
@@ -82,7 +95,17 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         base_collection = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         actual_collection  = [x for x in generator.filter(base_collection)]
 
-        self.assertEqual([1,3,7,9], actual_collection)
+        self.assertEqual([(1, None),
+                          (2, 'div by 2'),
+                          (3, None),
+                          (4, 'div by 2'),
+                          (5, 'div by 5'),
+                          (6, 'div by 2'),
+                          (7, None),
+                          (8, 'div by 2'),
+                          (9, None),
+                          (10, 'div by 2;div by 5')],
+                         actual_collection)
         self.assertEqual(4, generator.total_included)
         self.assertEqual(6, generator.total_excluded)
         self.assertEqual(4, generator.filter_stats['div by 2'])
@@ -98,7 +121,8 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         base_collection = [1, 10]
         actual_collection  = [x for x in generator.filter(base_collection)]
 
-        self.assertEqual([1], actual_collection)
+        self.assertEqual([(1, None),
+                          (10, 'div by 2;div by 5')], actual_collection)
         self.assertEqual(1, generator.filter_stats['div by 2;div by 5'])
 
     def test_filter_stats_immutable(self):
@@ -113,7 +137,8 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         base_collection = [1, 2 ,3]
         actual_collection  = [x for x in generator.filter(base_collection)]
 
-        self.assertEqual(base_collection, actual_collection)
+        self.assertEqual([(1, None), (2, None), (3, None)],
+                         actual_collection)
         self.assertEqual(0, len(generator.filter_stats))
 
     def test_filter_stats_ordersResultsByCountBreakingTiesByName(self):

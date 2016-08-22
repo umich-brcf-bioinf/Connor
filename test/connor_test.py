@@ -13,6 +13,7 @@ import connor.connor as connor
 from connor import samtools
 import connor.utils as utils
 import test.samtools_test as samtools_test
+from test.samtools_test import MockAlignWriter
 from test.samtools_test import mock_align
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
@@ -23,6 +24,21 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
+
+def _mock_connor_align(query_name,
+                       reference_name,
+                       reference_start,
+                       next_reference_start,
+                       reference_end):
+    mock_pysam = MicroMock(query_name=query_name,
+                           reference_name=reference_name,
+                           reference_start=reference_start,
+                           next_reference_start=next_reference_start,
+                           reference_end=reference_end,
+                           query_sequence='AAAGGG')
+    return ConnorAlign(mock_pysam)
+
+
 
 
 def _mock_tag_family(align_pairs=None,
@@ -43,7 +59,7 @@ def _mock_tag_family(align_pairs=None,
                      included_pair_count=included_pair_count)
 
 
-#TODO: cgates: replace this with samtools_test.mock_align
+# #TODO: cgates: replace this with samtools_test.mock_align
 class MockAlignSegment(object):
     #pylint: disable=too-many-instance-attributes
     def __init__(self,
@@ -70,13 +86,13 @@ class MockAlignSegment(object):
         self.reference_end = reference_end
         self.filter = None
         self.mapping_quality = 20
-
+ 
     def __hash__(self):
         return hash(self.query_name)
-
+ 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
-
+ 
     def set_tag(self, name, value, tag_type):
         pass
 
@@ -770,37 +786,60 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEquals(expected_dict, actual_dict)
 
     def test_build_coordinate_families_oneFamily(self):
-        align_A0 = MockAlignSegment("alignA", 'chr1', 10, 50, reference_end=16)
-        align_A1 = MockAlignSegment("alignA", 'chr1', 50, 10, reference_end=56)
-        align_B0 = MockAlignSegment("alignB", 'chr1', 10, 50, reference_end=16)
-        align_B1 = MockAlignSegment("alignB", 'chr1', 50, 10, reference_end=56)
+        align_A0 = _mock_connor_align("alignA", 'chr1', 10, 50, 16)
+        align_A1 = _mock_connor_align("alignA", 'chr1', 50, 10, 56)
+        align_B0 = _mock_connor_align("alignB", 'chr1', 10, 50, 16)
+        align_B1 = _mock_connor_align("alignB", 'chr1', 50, 10, 56)
         alignments = [align_A0, align_B0, align_A1, align_B1]
         coord_read_name_manifest = {('chr1', 10, 56): set(['alignA', 'alignB'])}
 
-        actual_families = [family for family in connor._build_coordinate_families(alignments, coord_read_name_manifest)]
+        family_gen = connor._build_coordinate_families(alignments,
+                                                       coord_read_name_manifest,
+                                                       MockAlignWriter())
+        actual_families = [family for family in family_gen]
 
         pair_A = connor._PairedAlignment(align_A0, align_A1)
         pair_B = connor._PairedAlignment(align_B0, align_B1)
         expected_families = [set([pair_A, pair_B])]
         self.assertEquals(expected_families, actual_families)
 
+    def test_build_coordinate_families_writeRemainders(self):
+        align_A0 = _mock_connor_align('alignA', 'chr1', 10, 50, 16)
+        align_B0 = _mock_connor_align('alignB', 'chr1', 10, 50, 16)
+        align_B1 = _mock_connor_align('alignB', 'chr1', 50, 10, 56)
+        alignments = [align_A0, align_B0, align_B1]
+        coord_read_name_manifest = {('chr1', 10, 56): set(['alignA', 'alignB'])}
+
+        excluded_writer = MockAlignWriter()
+
+        family_gen = connor._build_coordinate_families(alignments,
+                                                       coord_read_name_manifest,
+                                                       excluded_writer)
+        for _dummy in family_gen:
+            pass
+
+        self.assertEqual(1, len(excluded_writer._write_calls))
+        self.assertEqual((None, align_A0), excluded_writer._write_calls[0])
+
     def test_build_coordinate_families_threeFamilies(self):
-        align_A0 = MockAlignSegment("alignA", 'chr1', 10, 70, reference_end=16)
-        align_A1 = MockAlignSegment("alignA", 'chr1', 70, 10, reference_end=76)
-        align_B0 = MockAlignSegment("alignB", 'chr1', 10, 70, reference_end=16)
-        align_B1 = MockAlignSegment("alignB", 'chr1', 70, 10, reference_end=76)
-        align_C0 = MockAlignSegment("alignC", 'chr1', 20, 80, reference_end=26)
-        align_C1 = MockAlignSegment("alignC", 'chr1', 80, 20, reference_end=86)
-        align_D0 = MockAlignSegment("alignD", 'chr1', 30, 90, reference_end=36)
-        align_D1 = MockAlignSegment("alignD", 'chr1', 90, 30, reference_end=96)
+        align_A0 = _mock_connor_align("alignA", 'chr1', 10, 70, 16)
+        align_A1 = _mock_connor_align("alignA", 'chr1', 70, 10, 76)
+        align_B0 = _mock_connor_align("alignB", 'chr1', 10, 70, 16)
+        align_B1 = _mock_connor_align("alignB", 'chr1', 70, 10, 76)
+        align_C0 = _mock_connor_align("alignC", 'chr1', 20, 80, 26)
+        align_C1 = _mock_connor_align("alignC", 'chr1', 80, 20, 86)
+        align_D0 = _mock_connor_align("alignD", 'chr1', 30, 90, 36)
+        align_D1 = _mock_connor_align("alignD", 'chr1', 90, 30, 96)
         alignments = [align_A0, align_B0, align_C0, align_A1, align_B1,
                       align_D0, align_D1, align_C1]
         coord_read_name_manifest = {('chr1', 10, 76): set(['alignA', 'alignB']),
                                 ('chr1', 20, 86): set(['alignC']),
                                 ('chr1', 30, 96): set(['alignD'])}
 
-        actual_families = [family for family in connor._build_coordinate_families(alignments,
-                                                                                  coord_read_name_manifest)]
+        family_gen = connor._build_coordinate_families(alignments,
+                                                       coord_read_name_manifest,
+                                                       MockAlignWriter())
+        actual_families = [family for family in family_gen]
 
         pair_A = connor._PairedAlignment(align_A0, align_A1)
         pair_B = connor._PairedAlignment(align_B0, align_B1)
@@ -813,15 +852,15 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEquals(expected_families, actual_families)
 
     def test_build_lightweight_alignment_pairs_simple(self):
-        alignAL = mock_align(query_name='alignA', pos=100, query_sequence='AAA', cigarstring='3M')
-        alignAR = mock_align(query_name='alignA', pos=200, query_sequence='AAA', cigarstring='3M')
+        alignAL = mock_align(query_name='alignA', pos=100, query_sequence='AAA',
+                             cigarstring='3M')
+        alignAR = mock_align(query_name='alignA', pos=200, query_sequence='AAA',
+                             cigarstring='3M')
         alignments = [alignAL, alignAR]
 
-        (lightweight_pairs,
-         align_count) = _build_lightweight_pairs(alignments,
-                                                 self.mock_logger)
+        lightweight_pairs = _build_lightweight_pairs(alignments,
+                                                     self.mock_logger)
 
-        self.assertEqual(2, align_count)
         self.assertEqual(1, len(lightweight_pairs))
         self.assertEqual('alignA', lightweight_pairs[0].name)
         chrom = None
@@ -839,11 +878,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
         alignments = [alignAL, alignAR, alignBL, alignBR, alignCR]
 
-        (lightweight_pairs,
-         align_count) = _build_lightweight_pairs(alignments,
-                                                 self.mock_logger)
+        lightweight_pairs = _build_lightweight_pairs(alignments,
+                                                     self.mock_logger)
 
-        self.assertEqual(5, align_count)
         self.assertEqual(2, len(lightweight_pairs))
         align_names = set([p.name for p in lightweight_pairs])
         self.assertTrue('alignA' in align_names)
@@ -1073,7 +1110,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
 class TestLightweightAlignment(BaseConnorTestCase):
     def test_lightweight_alignment_forwardRead(self):
-        alignedSegment = align_seg("align1", 'chr1', 10, 100)
+        alignedSegment = _mock_connor_align("align1", 'chr1', 10, 100, 16)
 
         actual_lwa = connor._LightweightAlignment(alignedSegment)
 
@@ -1081,7 +1118,7 @@ class TestLightweightAlignment(BaseConnorTestCase):
         self.assertEquals(('chr1', 10, 100), actual_lwa.key)
 
     def test_lightweight_alignment_reverseRead(self):
-        alignedSegment = align_seg("align1", 'chr1', 100, 10)
+        alignedSegment = _mock_connor_align("align1", 'chr1', 100, 10, 16)
 
         actual_lwa = connor._LightweightAlignment(alignedSegment)
 
@@ -1089,7 +1126,7 @@ class TestLightweightAlignment(BaseConnorTestCase):
         self.assertEquals(('chr1', 10, 100), actual_lwa.key)
 
     def test_lightweight_alignment_weirdRead(self):
-        alignedSegment = align_seg("align1", 'chr1', 100, 100)
+        alignedSegment = _mock_connor_align("align1", 'chr1', 100, 100, 16)
 
         actual_lwa = connor._LightweightAlignment(alignedSegment)
 

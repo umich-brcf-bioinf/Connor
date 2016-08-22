@@ -27,9 +27,17 @@ class UsageError(Exception):
     def __init__(self, msg, *args):
         super(UsageError, self).__init__(msg, *args)
 
+class CountingGenerator(object):
+    def __init__(self):
+        self.item_count = 0
+
+    def count(self, generator):
+        for i in generator:
+            self.item_count += 1
+            yield i
 
 class FilteredGenerator(object):
-    '''Filters a base collection/collection capturing filtered stats'''
+    '''Applies filters to a base collection yielding the item and its filter'''
     def __init__(self, filter_dict):
         '''
         Args:
@@ -50,11 +58,13 @@ class FilteredGenerator(object):
                 if exclude(item):
                     excluded.append(name)
             if excluded:
-                self._filter_stats[";".join(excluded)] += 1
+                filter_value = ";".join(excluded)
+                self._filter_stats[filter_value] += 1
                 self.total_excluded += 1
             else:
+                filter_value = None
                 self.total_included += 1
-                yield item
+            yield item, filter_value
 
     @property
     def filter_stats(self):

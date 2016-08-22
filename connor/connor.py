@@ -292,7 +292,9 @@ def _build_coordinate_read_name_manifest(lw_aligns):
         af_dict[lwa.key].add(lwa.name)
     return af_dict
 
-def _build_coordinate_families(aligned_segments, coord_read_name_manifest):
+def _build_coordinate_families(aligned_segments,
+                               coord_read_name_manifest,
+                               excluded_writer):
     '''Generate sets of PairedAlignments that share the same coordinates.'''
     family_dict = defaultdict(set)
     pairing_dict = {}
@@ -308,6 +310,10 @@ def _build_coordinate_families(aligned_segments, coord_read_name_manifest):
             coord_read_name_manifest[key].remove(aseg.query_name)
             if not coord_read_name_manifest[key]:
                 yield family_dict.pop(key)
+
+    for align in pairing_dict.values():
+        align.filter = 'read mate was missing or excluded'
+        excluded_writer.write(None, align)
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
@@ -438,7 +444,7 @@ def _build_lightweight_pairs(aligned_segments, log):
              len(name_pairs),
              total_align_count,
              100 * len(name_pairs) / total_align_count)
-    return lightweight_pairs, total_align_count
+    return lightweight_pairs
 
 
 def _progress_logger(base_generator, total_rows, log):
@@ -469,10 +475,12 @@ def _build_family_filter(args):
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
     bamfile = samtools.alignment_file(args.input_bam, 'rb')
-    filtered_aligns = samtools.filter_alignments(bamfile.fetch(), log)
-    (lightweight_pairs, 
-     total_aligns) = _build_lightweight_pairs(filtered_aligns, log)
+    counter = utils.CountingGenerator()
+    included_aligns = samtools.filter_alignments(counter.count(bamfile.fetch()),
+                                                 log)
+    lightweight_pairs = _build_lightweight_pairs(included_aligns, log)
     bamfile.close()
+    total_aligns = counter.item_count
 
     coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
     bamfile = samtools.alignment_file(args.input_bam, 'rb')
@@ -481,13 +489,16 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                                    annotated_writer,
                                                    log)
 
-    filtered_aligns_gen = samtools.filter_alignments(bamfile.fetch())
-    progress_gen = _progress_logger(filtered_aligns_gen,
+    progress_gen = _progress_logger(bamfile.fetch(),
                                     total_aligns,
                                     log)
+    filtered_aligns_gen = samtools.filter_alignments(progress_gen,
+                                                     None,
+                                                     annotated_writer)
     family_filter = _build_family_filter(args)
-    for coord_family in _build_coordinate_families(progress_gen,
-                                                   coord_manifest):
+    for coord_family in _build_coordinate_families(filtered_aligns_gen,
+                                                   coord_manifest,
+                                                   annotated_writer):
         ranked_tags = _rank_tags(coord_family)
         tag_families = _build_tag_families(coord_family,
                                            ranked_tags,

@@ -23,7 +23,8 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
             output_bai_filename = os.path.join(output_dir.path, output_bai)
             connor.main(["program_name",
                           input_bam_filename,
-                          output_bam_filename])
+                          output_bam_filename,
+                          "--verbose"])
             self.assertTrue(filecmp.cmp(expect_bam_filename,
                                         output_bam_filename),
                             "{} does not match expected".format(output_bam))
