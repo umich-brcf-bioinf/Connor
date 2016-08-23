@@ -679,6 +679,8 @@ class ConnorTest(BaseConnorTestCase):
         self.assertRegexpMatches(tag._description, 'unique identifier')
         family = MicroMock(umi_sequence=42)
         self.assertEquals(42, tag._get_value(family, None))
+        self.assertEquals(None, tag._get_value(None, None))
+
 
     def test_build_bam_tags_x2_umt_barcodes(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
@@ -687,6 +689,8 @@ class ConnorTest(BaseConnorTestCase):
         self.assertRegexpMatches(tag._description, 'UMT barcodes')
         family = MicroMock(umt=('AAA','CCC'))
         self.assertEquals("AAA~CCC", tag._get_value(family, None))
+        self.assertEquals(None, tag._get_value(None, None))
+
 
     def test_build_bam_tags_x3_family_size(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
@@ -695,6 +699,7 @@ class ConnorTest(BaseConnorTestCase):
         self.assertRegexpMatches(tag._description, 'family size')
         family = MicroMock(included_pair_count=42)
         self.assertEquals(42, tag._get_value(family, None))
+        self.assertEquals(None, tag._get_value(None, None))
 
     def test_build_bam_tags_x4_filter(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
@@ -711,6 +716,8 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals(None,
                           tag._get_value(family, nontemplate_connor_align))
         self.assertEquals(1, tag._get_value(family, template_connor_align))
+        self.assertEquals(None, tag._get_value(None, None))
+
 
     def test_build_family_filter_whenFamilySizeOk(self):
         args = Namespace(min_family_size_threshold=2)
@@ -805,6 +812,26 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
         self.assertEqual(1, len(excluded_writer._write_calls))
         self.assertEqual((None, align_A0), excluded_writer._write_calls[0])
+
+    def test_build_coordinate_families_writeRemaindersIsOrdered(self):
+        align_C = _mock_connor_align('alignC', 'chr1', 10, 50, 16)
+        align_A = _mock_connor_align('alignA', 'chr1', 10, 50, 16)
+        align_B = _mock_connor_align('alignB', 'chr1', 50, 10, 56)
+        alignments = [align_C, align_A, align_B]
+        coord_read_name_manifest = {('chr1', 10, 56): set([])}
+
+        excluded_writer = MockAlignWriter()
+
+        family_gen = connor._build_coordinate_families(alignments,
+                                                       coord_read_name_manifest,
+                                                       excluded_writer)
+        for _dummy in family_gen:
+            pass
+
+        excluded_names = [align.query_name for (_, align) in excluded_writer._write_calls]
+        self.assertEqual(['alignA', 'alignB', 'alignC'],
+                         excluded_names)
+
 
     def test_build_coordinate_families_threeFamilies(self):
         align_A0 = _mock_connor_align("alignA", 'chr1', 10, 70, 16)
@@ -1295,10 +1322,11 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                                  (r'logging to \[' + output_log + r'\]'))
         self.assertRegexpMatches(log_lines[2],
                                  r'possible problem')
-        self.assertRegexpMatches(log_lines[3],
+        self.assertRegexpMatches(log_lines[3], 'sorting/indexing')
+        self.assertRegexpMatches(log_lines[4],
                                  (r'connor complete \(.*seconds.*memory\). '
                                  r'\*\*See warnings above\*\*'))
-        self.assertEqual(4, len(log_lines))
+        self.assertEqual(5, len(log_lines))
 
 
 if __name__ == "__main__":

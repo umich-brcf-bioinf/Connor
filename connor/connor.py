@@ -168,8 +168,6 @@ class _TagFamily(object):
         self.align_pairs = alignments
         self._mark_minority_cigar(majority_cigar)
         self.inexact_match_count = inexact_match_count
-#         #Necessary to make output deterministic
-#         self.alignments.sort(key=lambda x: x.left.query_name)
         self.consensus_threshold = consensus_threshold
         self.consensus = self._build_consensus(umt, self.align_pairs)
         self.included_pair_count = sum([1 for p in self.align_pairs if not p.filter_value])
@@ -186,36 +184,37 @@ class _TagFamily(object):
                 pair.left.filter_value = "minority CIGAR"
                 pair.right.filter_value = "minority CIGAR"
 
-    def _generate_consensus_sequence(self, list_of_alignment_pairs):
+    def _generate_consensus_sequence(self, alignment_pairs):
+        def consensus_sequence(alignments):
+            consensus_seq = self._simple_consensus_sequence(alignments)
+            if not consensus_seq:
+                consensus_seq = self._complex_consensus_sequence(alignments)
+            return consensus_seq
         left_alignments = []
         right_alignments = []
-        for align_pair in list_of_alignment_pairs:
+        for align_pair in alignment_pairs:
             left_alignments.append(align_pair.left)
             right_alignments.append(align_pair.right)
-        left_consensus_seq = self._generate_consensus_sequence_quickly(left_alignments)
-        if not left_consensus_seq:
-            left_consensus_seq = self._generate_consensus_sequence_long(left_alignments)
-        right_consensus_seq = self._generate_consensus_sequence_quickly(right_alignments)
-        if not right_consensus_seq:
-            right_consensus_seq = self._generate_consensus_sequence_long(right_alignments)
+        left_consensus_seq = consensus_sequence(left_alignments)
+        right_consensus_seq = consensus_sequence(right_alignments)
         return (left_consensus_seq, right_consensus_seq)
 
-    def _generate_consensus_sequence_quickly(self, list_of_alignments):
-        seq_counter = Counter([a.query_sequence for a in list_of_alignments])
+    def _simple_consensus_sequence(self, alignments):
+        seq_counter = Counter([a.query_sequence for a in alignments])
         consensus_seq = None
         if len(seq_counter) == 1:
-            consensus_seq = list_of_alignments[0].query_sequence
+            consensus_seq = next(iter(alignments)).query_sequence
         elif len(seq_counter) == 2:
             majority_seq, majority_count = seq_counter.most_common(1)[0]
-            total = len(list_of_alignments)
+            total = len(alignments)
             if majority_count / total > self.consensus_threshold:
                 consensus_seq = majority_seq
         return consensus_seq
 
-    def _generate_consensus_sequence_long(self, list_of_alignments):
+    def _complex_consensus_sequence(self, alignments):
         consensus = []
-        for i in utils.zrange(0, len(list_of_alignments[0].query_sequence)):
-            counter = Counter([s.query_sequence[i:i+1] for s in list_of_alignments])
+        for i in utils.zrange(0, len(alignments[0].query_sequence)):
+            counter = Counter([s.query_sequence[i:i+1] for s in alignments])
             base = counter.most_common(1)[0][0]
             freq = counter[base] / sum(counter.values())
             if freq >= self.consensus_threshold:
@@ -310,7 +309,7 @@ def _build_coordinate_families(aligned_segments,
             if not coord_read_name_manifest[key]:
                 yield family_dict.pop(key)
 
-    for align in pairing_dict.values():
+    for align in sorted(pairing_dict.values(), key=lambda a:a.query_name):
         align.filter_value = 'read mate was missing or excluded'
         excluded_writer.write(None, align)
 
@@ -579,8 +578,8 @@ def main(command_line_args=None):
                                          args.output_bam,
                                          bam_tags)
         _dedup_alignments(args, consensus_writer, annotated_writer, log)
-        annotated_writer.close()
-        consensus_writer.close()
+        annotated_writer.close(log)
+        consensus_writer.close(log)
         warning = ' **See warnings above**' if log.warning_occurred else ''
         elapsed_time = int(time.time() - start_time)
         log.info("connor complete ({} seconds, {}mb peak memory).{}",

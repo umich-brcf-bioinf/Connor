@@ -13,7 +13,7 @@ class AlignWriter(object):
         def write(self, family, connor_align):
             pass
 
-        def close(self):
+        def close(self, log=None):
             pass
 
     NULL= _NullWriter()
@@ -48,8 +48,10 @@ class AlignWriter(object):
         self._add_bam_tags(family, connor_align)
         self._bam_file.write(connor_align.pysam_align_segment)
 
-    def close(self):
+    def close(self, log=None):
         self._bam_file.close()
+        if log:
+            log.info("sorting/indexing [{}]".format(self._bam_path))
         sort_and_index_bam(self._bam_path)
 
 
@@ -68,13 +70,17 @@ class LoggingWriter(object):
         self._align_filter_stats = defaultdict(int)
         self._family_filter_stats = defaultdict(set)
 
+    #TODO: cgates: promote UNPLACED_FAMILY to public NULL class; use throughout
     def write(self, family, connor_align):
         if not family:
             family = LoggingWriter.UNPLACED_FAMILY
         self._align_filter_stats[(family.filter_value,
                                   connor_align.filter_value)] += 1
         self._family_filter_stats[family.filter_value].add(family.umi_sequence)
-        self._base_writer.write(family, connor_align)
+        if family==LoggingWriter.UNPLACED_FAMILY:
+            self._base_writer.write(None, connor_align)
+        else:
+            self._base_writer.write(family, connor_align)
 
     @staticmethod
     def _filter_counts(filter_dict):
@@ -182,22 +188,30 @@ class LoggingWriter(object):
                                     count,
                                     total_align_count)
 
-        LoggingWriter._log_stat(self._log.info,
-                                ('alignments included in '
-                                 '{} families').format(included_fam_count),
-                                included_align_count,
-                                total_align_count)
-
         for name, count in discarded_fam_filter_counts.items():
             LoggingWriter._log_stat(self._log.info,
                                     'families discarded: {}'.format(name),
                                     count,
                                     total_fam_count)
 
-    def close(self):
+        LoggingWriter._log_stat(self._log.info,
+                                ('alignments included in '
+                                 '{} families').format(included_fam_count),
+                                included_align_count,
+                                total_align_count)
+
+        msg = ('{:.2f}% deduplication rate '
+               '(1 - {} families/{} included alignments)')
+        percent_dedup = 100 * (1 - (included_fam_count / included_align_count))
+        self._log.info(msg,
+                       percent_dedup,
+                       included_fam_count,
+                       included_align_count)
+
+    def close(self, log=None):
         if self._align_filter_stats:
             self._log_results()
-        self._base_writer.close()
+        self._base_writer.close(log)
 
 
 class BamTag(object):

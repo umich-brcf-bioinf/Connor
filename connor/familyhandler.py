@@ -1,7 +1,6 @@
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
 import pandas as pd
-import connor.samtools as samtools
 
 def build_family_handlers(args,
                           consensus_writer,
@@ -11,9 +10,8 @@ def build_family_handlers(args,
                 _MatchStatHandler(args, logger),
                 _CigarMinorityStatHandler(logger),
                 _CigarStatHandler(logger),
+                _WriteAnnotatedAlignsHandler(annotated_writer),
                 _WriteConsensusHandler(consensus_writer)]
-    if annotated_writer != samtools.AlignWriter.NULL:
-        handlers.append(_WriteAnnotatedAlignsHandler(annotated_writer))
     return handlers
 
 class _WriteConsensusHandler(object):
@@ -35,7 +33,8 @@ class _WriteAnnotatedAlignsHandler(object):
         self._writer = writer
 
     def handle(self, family):
-        for align_pair in family.align_pairs:
+        for align_pair in sorted(family.align_pairs,
+                                 key=lambda a: a.query_name):
             self._writer.write(family, align_pair.left)
             self._writer.write(family, align_pair.right)
 

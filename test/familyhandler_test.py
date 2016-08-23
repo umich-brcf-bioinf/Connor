@@ -22,10 +22,9 @@ class FamilyHandlerTest(BaseConnorTestCase):
     def test_build_family_handlers(self):
         args = Namespace(umt_distance_threshold=1,
                          min_family_size_threshold=3)
-
         handlers = build_family_handlers(args,
                                          samtools_test.MockAlignWriter(),
-                                         samtools.AlignWriter.NULL,
+                                         samtools_test.MockAlignWriter(),
                                          self.mock_logger)
         actual_handler_names = [x.__class__.__name__ for x in handlers]
 
@@ -33,24 +32,8 @@ class FamilyHandlerTest(BaseConnorTestCase):
                                   '_MatchStatHandler',
                                   '_CigarMinorityStatHandler',
                                   '_CigarStatHandler',
+                                  '_WriteAnnotatedAlignsHandler',
                                   '_WriteConsensusHandler']
-        self.assertEqual(expected_handler_names, actual_handler_names)
-
-    def test_build_family_handlers_withAnnotatedAlign(self):
-        args = Namespace(umt_distance_threshold=1,
-                         min_family_size_threshold=3)
-        handlers = build_family_handlers(args,
-                                         samtools_test.MockAlignWriter(),
-                                         samtools_test.MockAlignWriter(),
-                                         self.mock_logger)
-        actual_handler_names = [x.__class__.__name__ for x in handlers]
-
-        expected_handler_names = ['_FamilySizeStatHandler',
-                                  '_MatchStatHandler',
-                                  '_CigarMinorityStatHandler',
-                                  '_CigarStatHandler',
-                                  '_WriteConsensusHandler',
-                                  '_WriteAnnotatedAlignsHandler']
         self.assertEqual(expected_handler_names, actual_handler_names)
 
 
@@ -141,7 +124,7 @@ class MatchStatHandlerTest(BaseConnorTestCase):
 def _mock_align_pair(query_name, filter_value=None):
     left = ConnorAlign(mock_align(query_name=query_name), filter_value)
     right = ConnorAlign(mock_align(query_name=query_name), filter_value)
-    return MicroMock(left=left, right=right)
+    return MicroMock(query_name=query_name, left=left, right=right)
 
 def _mock_align_pairs(num_pairs, query_prefix):
     pairs = []
@@ -191,8 +174,8 @@ class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
         pairB1 = _mock_align_pair("readB1")
         pairB2 = _mock_align_pair("readB2", filter_value="bar")
 
-        family_A = _mock_tag_family(align_pairs=[pairA1, pairA2])
-        family_B = _mock_tag_family(align_pairs=[pairB1, pairB2])
+        family_A = _mock_tag_family(align_pairs=set([pairA1, pairA2]))
+        family_B = _mock_tag_family(align_pairs=set([pairB1, pairB2]))
         families = [family_A, family_B]
         writer = samtools_test.MockAlignWriter()
 
@@ -206,6 +189,30 @@ class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
                           (family_A, 'readA2'), (family_A, 'readA2'),
                           (family_B, 'readB1'), (family_B, 'readB1'),
                           (family_B, 'readB2'), (family_B, 'readB2')], name_pairs)
+
+    def test_handle_ordersAlignmentsByReadname(self):
+        pairA1 = _mock_align_pair("readA1")
+        pairA2 = _mock_align_pair("readA2")
+        pairA3 = _mock_align_pair("readA3")
+        pairA4 = _mock_align_pair("readA4")
+
+        family_A = _mock_tag_family(align_pairs=set([pairA2,
+                                                     pairA1,
+                                                     pairA4,
+                                                     pairA3]))
+        families = [family_A]
+        writer = samtools_test.MockAlignWriter()
+
+        handler = _WriteAnnotatedAlignsHandler(writer)
+        for family in families:
+            handler.handle(family)
+
+        names = [align.query_name for _, align in writer._write_calls]
+        self.assertEqual(['readA1', 'readA1',
+                          'readA2', 'readA2',
+                          'readA3', 'readA3',
+                          'readA4', 'readA4'], names)
+
 
 class CigarsStatHandlerTest(BaseConnorTestCase):
     def test_percent_deduplication(self):

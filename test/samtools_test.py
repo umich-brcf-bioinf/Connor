@@ -25,7 +25,7 @@ class MockAlignWriter(object):
     def write(self, family, connor_align):
         self._write_calls.append((family, connor_align))
 
-    def close(self):
+    def close(self, log=None):
         self._close_was_called = True
 
 def mock_align(**kwargs):
@@ -584,6 +584,23 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             self.assertEqual('align2', actual_aligns[1].query_name)
             self.assertEqual('align3', actual_aligns[2].query_name)
 
+    def test_close_logs(self):
+        with TempDirectory() as tmp_dir:
+            bam_path = os.path.join(tmp_dir.path, 'destination.bam')
+            header = { 'HD': {'VN': '1.0'},
+                      'SQ': [{'LN': 1575, 'SN': 'chr1'},
+                             {'LN': 1584, 'SN': 'chr2'}] }
+            align1 = ConnorAlign(mock_align(query_name='align1',
+                                            reference_start=100))
+
+            writer = samtools.AlignWriter(header, bam_path, [])
+
+            writer.write('familyA', align1)
+            writer.close(log=self.mock_logger)
+        info_log_lines = self.mock_logger._log_calls['INFO']
+        self.assertEqual(1, len(info_log_lines))
+        self.assertRegexpMatches(info_log_lines[0], 'destination.bam')
+
 class BamTagTest(utils_test.BaseConnorTestCase):
     def test_init_setsHeaderComment(self):
         tag = BamTag('foo', 'Z', 'foo description', lambda fam, align: None)
@@ -643,11 +660,13 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         log_lines = self.mock_logger._log_calls['INFO']
         self.assertEqual('70.00% (7/10) alignments unplaced or discarded',
                          log_lines[0])
-        self.assertEqual('30.00% (3/10) alignments included in 2 families',
-                         log_lines[1])
         self.assertEqual('33.33% (1/3) families discarded: small family',
+                         log_lines[1])
+        self.assertEqual('30.00% (3/10) alignments included in 2 families',
                          log_lines[2])
-        self.assertEqual(3, len(log_lines))
+        self.assertEqual('33.33% deduplication rate (1 - 2 families/3 included alignments)',
+                         log_lines[3])
+        self.assertEqual(4, len(log_lines))
 
         log_lines = self.mock_logger._log_calls['DEBUG']
         self.assertEqual('20.00% (2/10) alignments unplaced: low mapping qual',
@@ -677,7 +696,9 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
                          log_lines[0])
         self.assertEqual('100.00% (2/2) alignments included in 1 families',
                          log_lines[1])
-        self.assertEqual(2, len(log_lines))
+        self.assertEqual('50.00% deduplication rate (1 - 1 families/2 included alignments)',
+                         log_lines[2])
+        self.assertEqual(3, len(log_lines))
 
         log_lines = self.mock_logger._log_calls['DEBUG']
         self.assertEqual(0, len(log_lines))
@@ -696,6 +717,16 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
 
         self.assertEqual([(fam1, al1A), (fam1, al1B)],
                          base_writer._write_calls)
+
+    def test_write_UnplacedAlignWritesFamilyNone(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+        fam1 = samtools.LoggingWriter.UNPLACED_FAMILY
+        al1A = MicroMock(filter_value = 'foo')
+
+        writer.write(fam1, al1A)
+
+        self.assertEqual([(None, al1A)], base_writer._write_calls)
 
     def test_close_passThroughToBaseWriter(self):
         base_writer = MockAlignWriter()
