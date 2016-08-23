@@ -85,7 +85,7 @@ class MockAlignSegment(object):
             self.query_qualities = query_qualities
         self.cigarstring = cigarstring
         self.reference_end = reference_end
-        self.filter = None
+        self.filter_value = None
         self.mapping_quality = 20
 
     def __hash__(self):
@@ -147,23 +147,23 @@ class PairedAlignmentTest(BaseConnorTestCase):
                                 tag_length=1)
 
     def test_filter_value(self):
-        left = ConnorAlign(mock_align(), filter=None)
-        right = ConnorAlign(mock_align(), filter=None)
+        left = ConnorAlign(mock_align(), filter_value=None)
+        right = ConnorAlign(mock_align(), filter_value=None)
         paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
         self.assertEqual(None, paired_alignment.filter_value)
 
-        left = ConnorAlign(mock_align(), filter='')
-        right = ConnorAlign(mock_align(), filter='')
+        left = ConnorAlign(mock_align(), filter_value='')
+        right = ConnorAlign(mock_align(), filter_value='')
         paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
         self.assertEqual(None, paired_alignment.filter_value)
 
-        left = ConnorAlign(mock_align(), filter='foo')
-        right = ConnorAlign(mock_align(), filter=None)
+        left = ConnorAlign(mock_align(), filter_value='foo')
+        right = ConnorAlign(mock_align(), filter_value=None)
         paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
         self.assertEqual(('foo', None), paired_alignment.filter_value)
 
-        left = ConnorAlign(mock_align(), filter=None)
-        right = ConnorAlign(mock_align(), filter='bar')
+        left = ConnorAlign(mock_align(), filter_value=None)
+        right = ConnorAlign(mock_align(), filter_value='bar')
         paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
         self.assertEqual((None, 'bar'), paired_alignment.filter_value)
 
@@ -476,8 +476,8 @@ class TagFamiliyTest(BaseConnorTestCase):
         pair_name_filter = {}
         for pair in actual_tag_family.align_pairs:
             query_name = pair.left.query_name
-            pair_name_filter[query_name] = (pair.left.filter,
-                                            pair.right.filter)
+            pair_name_filter[query_name] = (pair.left.filter_value,
+                                            pair.right.filter_value)
         self.assertEquals((None, None), pair_name_filter['alignA'])
         self.assertEquals((None, None), pair_name_filter['alignB'])
         self.assertEquals(('minority CIGAR', 'minority CIGAR'),
@@ -610,8 +610,8 @@ class TagFamiliyTest(BaseConnorTestCase):
         pair_name_filter = {}
         for pair in actual_tag_family.align_pairs:
             query_name = pair.left.query_name
-            pair_name_filter[query_name] = (pair.left.filter,
-                                            pair.right.filter)
+            pair_name_filter[query_name] = (pair.left.filter_value,
+                                            pair.right.filter_value)
 
         self.assertEqual(3, len(pair_name_filter))
         self.assertEqual((None, None), pair_name_filter['alignA'])
@@ -669,7 +669,7 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual('X0', tag._tag_name)
         self.assertEqual('Z', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'filter')
-        connor_align = MicroMock(filter='foo')
+        connor_align = MicroMock(filter_value='foo')
         self.assertEquals('foo', tag._get_value(None, connor_align))
 
     def test_build_bam_tags_x1_unique_identifier(self):
@@ -1271,7 +1271,7 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
             output_log = os.path.join(tmp_dir.path, 'output.log')
             old_dedup_alignments = connor._dedup_alignments
-            ##pylint: disable=unused-argument
+            #pylint: disable=unused-argument
             def angry_dedup(args, consensus_writer, annotated_writer, log):
                 log.warning("possible problem")
             old_stderr = sys.stderr
@@ -1302,6 +1302,5 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
     import unittest
     unittest.main()

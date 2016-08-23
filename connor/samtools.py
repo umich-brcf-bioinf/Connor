@@ -72,7 +72,7 @@ class LoggingWriter(object):
         if not family:
             family = LoggingWriter.UNPLACED_FAMILY
         self._align_filter_stats[(family.filter_value,
-                                  connor_align.filter)] += 1
+                                  connor_align.filter_value)] += 1
         self._family_filter_stats[family.filter_value].add(family.umi_sequence)
         self._base_writer.write(family, connor_align)
 
@@ -267,19 +267,18 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
-#TODO: cgates: change filter attr to filter_value
 class ConnorAlign(object):
     # cgates: FYI, you can use dynamic delegation via __setattr__ and
     # __getattr__ but it's awkward and about twice as slow
-    def __init__(self, pysam_align_segment, filter=None):
+    def __init__(self, pysam_align_segment, filter_value=None):
         self.pysam_align_segment = pysam_align_segment
-        self.filter = filter
+        self.filter_value = filter_value
 
     def __eq__(self, other):
         return other.__dict__ == self.__dict__
 
     def __hash__(self):
-        return hash(self.filter) + hash(self.pysam_align_segment)
+        return hash(self.filter_value) + hash(self.pysam_align_segment)
 
     @property
     def cigarstring(self):

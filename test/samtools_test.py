@@ -92,7 +92,7 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         different_pysam_align = ConnorAlign(mock_align(query_name = "align2"))
         self.assertNotEqual(base, different_pysam_align)
         different_filter = ConnorAlign(pysam_align)
-        different_filter.filter = "foo; bar"
+        different_filter.filter_value = "foo; bar"
         self.assertNotEqual(base, different_filter)
 
     def test_gettersPassthroughToPysamAlignSegment(self):
@@ -186,9 +186,9 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
                             )
         connor_align = ConnorAlign(pysam_align)
 
-        self.assertEqual(None, connor_align.filter)
-        connor_align.filter = 'foo'
-        self.assertEqual('foo', connor_align.filter)
+        self.assertEqual(None, connor_align.filter_value)
+        connor_align.filter_value = 'foo'
+        self.assertEqual('foo', connor_align.filter_value)
 
 
 class SamtoolsTest(utils_test.BaseConnorTestCase):
@@ -286,7 +286,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         (family, connor_align) = excluded_writer._write_calls[0]
         self.assertEqual(None, family)
         self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('not in proper pair', connor_align.filter)
+        self.assertEqual('not in proper pair', connor_align.filter_value)
 
     def test_filter_alignments_excludesSecondaryAligns(self):
         flag = 99
@@ -304,7 +304,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         (family, connor_align) = excluded_writer._write_calls[0]
         self.assertEqual(None, family)
         self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('secondary alignment', connor_align.filter)
+        self.assertEqual('secondary alignment', connor_align.filter_value)
 
     def test_filter_alignments_excludesQCFails(self):
         flag = 99
@@ -322,7 +322,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         (family, connor_align) = excluded_writer._write_calls[0]
         self.assertEqual(None, family)
         self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('qc failed', connor_align.filter)
+        self.assertEqual('qc failed', connor_align.filter_value)
 
     def test_filter_alignments_excludesMapq0(self):
         align1 = mock_align(query_name="align1", mapping_quality=1)
@@ -339,7 +339,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         (family, connor_align) = excluded_writer._write_calls[0]
         self.assertEqual(None, family)
         self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('mapping quality < 1', connor_align.filter)
+        self.assertEqual('mapping quality < 1', connor_align.filter_value)
 
     def test_filter_alignments_excludesCigarUnavailable(self):
         align1 = mock_align(query_name="align1", cigarstring="6M")
@@ -356,7 +356,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         (family, connor_align) = excluded_writer._write_calls[0]
         self.assertEqual(None, family)
         self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('cigar unavailable', connor_align.filter)
+        self.assertEqual('cigar unavailable', connor_align.filter_value)
 
 
 class AlignWriterTest(utils_test.BaseConnorTestCase):
@@ -616,20 +616,20 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         base_writer = MockAlignWriter()
         writer = samtools.LoggingWriter(base_writer, self.mock_logger)
         fam1 = None
-        al1A = MicroMock(filter='low mapping qual')
-        al1B = MicroMock(filter='low mapping qual')
+        al1A = MicroMock(filter_value='low mapping qual')
+        al1B = MicroMock(filter_value='low mapping qual')
         fam2 = None
-        al2A = MicroMock(filter='unpaired read')
-        al2B = MicroMock(filter='unpaired read')
+        al2A = MicroMock(filter_value='unpaired read')
+        al2B = MicroMock(filter_value='unpaired read')
         fam3 = MicroMock(umi_sequence=3, filter_value=None)
-        al3A = MicroMock(filter='minority CIGAR')
-        al3B = MicroMock(filter=None)
+        al3A = MicroMock(filter_value='minority CIGAR')
+        al3B = MicroMock(filter_value=None)
         fam4 = MicroMock(umi_sequence=4, filter_value=None)
-        al4A = MicroMock(filter=None)
-        al4B = MicroMock(filter=None)
+        al4A = MicroMock(filter_value=None)
+        al4B = MicroMock(filter_value=None)
         fam5 = MicroMock(umi_sequence=5, filter_value='small family')
-        al5A = MicroMock(filter=None)
-        al5B = MicroMock(filter=None)
+        al5A = MicroMock(filter_value=None)
+        al5B = MicroMock(filter_value=None)
         family_aligns = [(fam1, al1A), (fam1, al1B),
                          (fam2, al2A), (fam2, al2B),
                          (fam3, al3A), (fam3, al3B),
@@ -665,7 +665,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         base_writer = MockAlignWriter()
         writer = samtools.LoggingWriter(base_writer, self.mock_logger)
         fam1 = MicroMock(umi_sequence=4, filter_value=None)
-        alignA = MicroMock(filter=None)
+        alignA = MicroMock(filter_value=None)
         family_aligns = [(fam1, alignA), (fam1, alignA)]
 
         for family, align in family_aligns:
@@ -687,8 +687,8 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         base_writer = MockAlignWriter()
         writer = samtools.LoggingWriter(base_writer, self.mock_logger)
         fam1 = MicroMock(umi_sequence = 1, filter_value=None)
-        al1A = MicroMock(filter=None)
-        al1B = MicroMock(filter = 'foo')
+        al1A = MicroMock(filter_value=None)
+        al1B = MicroMock(filter_value = 'foo')
         family_aligns = [(fam1, al1A), (fam1, al1B)]
 
         for family, align in family_aligns:

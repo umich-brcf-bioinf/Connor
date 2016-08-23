@@ -44,9 +44,6 @@ class FilteredGenerator(object):
                 be excluded. For example: {"div by 2": lambda x: x % 2 == 0}
         '''
         self._filters = sorted(filter_dict.items(), key=lambda x: x[0])
-#         self._filter_stats = defaultdict(int)
-#         self.total_included = 0
-#         self.total_excluded = 0
 
     def filter(self, base_collection):
         '''Yields subset of base_collection/generator based on filters.'''
@@ -57,21 +54,9 @@ class FilteredGenerator(object):
                     excluded.append(name)
             if excluded:
                 filter_value = ";".join(excluded)
-#                 self._filter_stats[filter_value] += 1
-#                 self.total_excluded += 1
             else:
                 filter_value = None
-#                 self.total_included += 1
             yield item, filter_value
-
-#     @property
-#     def filter_stats(self):
-#         '''Returns an immutable ordered dict of filter:counts; when an item
-#         would be filtered by multiple filters, all are listed in alpha order;
-#         the dict itself is ordered by descending count, filter name.
-#         '''
-#         return OrderedDict(sorted(self._filter_stats.items(),
-#                                    key=lambda x: (-1 * x[1], x[0])))
 
 
 class Logger(object):

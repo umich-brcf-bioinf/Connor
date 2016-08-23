@@ -105,8 +105,8 @@ class _PairedAlignment(object):
 
     @property
     def filter_value(self):
-        if self.left.filter or self.right.filter:
-            return (self.left.filter, self.right.filter)
+        if self.left.filter_value or self.right.filter_value:
+            return (self.left.filter_value, self.right.filter_value)
         else:
             return None
 
@@ -183,8 +183,8 @@ class _TagFamily(object):
     def _mark_minority_cigar(self, majority_cigar):
         for pair in self.align_pairs:
             if _TagFamily._get_cigarstring_tuple(pair) != majority_cigar:
-                pair.left.filter = "minority CIGAR"
-                pair.right.filter = "minority CIGAR"
+                pair.left.filter_value = "minority CIGAR"
+                pair.right.filter_value = "minority CIGAR"
 
     def _generate_consensus_sequence(self, list_of_alignment_pairs):
         left_alignments = []
@@ -311,7 +311,7 @@ def _build_coordinate_families(aligned_segments,
                 yield family_dict.pop(key)
 
     for align in pairing_dict.values():
-        align.filter = 'read mate was missing or excluded'
+        align.filter_value = 'read mate was missing or excluded'
         excluded_writer.write(None, align)
 
 def _build_tag_families(tagged_paired_aligns,
@@ -527,9 +527,8 @@ def _build_writer(input_bam, output_bam, tags):
 def _build_bam_tags():
     tags = [
         samtools.BamTag("X0", "Z",
-                        ("filter (rationale explaining why the align was "
-                         "excluded)"),
-                        lambda fam, align: align.filter),
+                        ("filter (why the alignment was excluded)"),
+                        lambda fam, align: align.filter_value),
         samtools.BamTag("X1", "i",
                         "unique identifier for this alignment family",
                         lambda fam, align: fam.umi_sequence if fam else None),

@@ -138,9 +138,9 @@ class MatchStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(20, stat_handler.total_pair_count)
         self.assertEqual(5/20, stat_handler.percent_inexact_match)
 
-def _mock_align_pair(query_name, filter=None):
-    left = ConnorAlign(mock_align(query_name=query_name), filter)
-    right = ConnorAlign(mock_align(query_name=query_name), filter)
+def _mock_align_pair(query_name, filter_value=None):
+    left = ConnorAlign(mock_align(query_name=query_name), filter_value)
+    right = ConnorAlign(mock_align(query_name=query_name), filter_value)
     return MicroMock(left=left, right=right)
 
 def _mock_align_pairs(num_pairs, query_prefix):
@@ -187,9 +187,9 @@ class WriteConsensusHandlerTest(BaseConnorTestCase):
 class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
     def test_handle_writesAllAlignments(self):
         pairA1 = _mock_align_pair("readA1")
-        pairA2 = _mock_align_pair("readA2", filter="foo")
+        pairA2 = _mock_align_pair("readA2", filter_value="foo")
         pairB1 = _mock_align_pair("readB1")
-        pairB2 = _mock_align_pair("readB2", filter="bar")
+        pairB2 = _mock_align_pair("readB2", filter_value="bar")
 
         family_A = _mock_tag_family(align_pairs=[pairA1, pairA2])
         family_B = _mock_tag_family(align_pairs=[pairB1, pairB2])
