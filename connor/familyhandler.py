@@ -200,7 +200,7 @@ class _CigarStatHandler(object):
 class _MatchStatHandler(object):
     def __init__(self, args, logger):
         self._log = logger
-        self.hamming_threshold = args.umi_distance_threshold
+        self.hamming_threshold = args.umt_distance_threshold
         self.total_inexact_match_count = 0
         self.total_pair_count = 0
 
@@ -211,14 +211,14 @@ class _MatchStatHandler(object):
     def end(self):
         exact_count = self.total_pair_count - self.total_inexact_match_count
         self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
-                         'UMI exactly'),
+                         'UMT exactly'),
                         exact_count,
                         self.total_pair_count,
                         100 * (1 - self.percent_inexact_match))
 
         self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
                       'by Hamming distance threshold (<={}) on '
-                      'left or right UMI '),
+                      'left or right UMT '),
                      self.total_inexact_match_count,
                      self.total_pair_count,
                      100 * self.percent_inexact_match,

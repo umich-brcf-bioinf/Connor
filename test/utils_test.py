@@ -1,7 +1,8 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
+#pylint: disable=unused-argument
+
 from argparse import Namespace
 from collections import defaultdict
-from collections import OrderedDict
 import unittest
 import connor.utils as utils
 
@@ -61,9 +62,6 @@ class FilteredGeneratorTest(BaseConnorTestCase):
                           (3, None),
                           (4, None),
                           (5, None)], actual_collection)
-        self.assertEqual(5, generator.total_included)
-        self.assertEqual(0, generator.total_excluded)
-        self.assertEqual(0, len(generator.filter_stats))
 
     def test_filter_singleFilter(self):
         filters = {'div by 2' : lambda x: x % 2 == 0}
@@ -82,10 +80,6 @@ class FilteredGeneratorTest(BaseConnorTestCase):
                           (8, 'div by 2'),
                           (9, None),
                           (10, 'div by 2')], actual_collection)
-        self.assertEqual(5, generator.total_included)
-        self.assertEqual(5, generator.total_excluded)
-        self.assertEqual(5, generator.filter_stats['div by 2'])
-        self.assertEqual(1, len(generator.filter_stats))
 
     def test_filter_multipleFilters(self):
         filters = {'div by 2': lambda x: x % 2 == 0,
@@ -106,12 +100,6 @@ class FilteredGeneratorTest(BaseConnorTestCase):
                           (9, None),
                           (10, 'div by 2;div by 5')],
                          actual_collection)
-        self.assertEqual(4, generator.total_included)
-        self.assertEqual(6, generator.total_excluded)
-        self.assertEqual(4, generator.filter_stats['div by 2'])
-        self.assertEqual(1, generator.filter_stats['div by 5'])
-        self.assertEqual(1, generator.filter_stats['div by 2;div by 5'])
-        self.assertEqual(3, len(generator.filter_stats))
 
     def test_filter_multipleFilterAreSortedByName(self):
         filters = {'div by 5': lambda x: x % 5 == 0,
@@ -123,43 +111,6 @@ class FilteredGeneratorTest(BaseConnorTestCase):
 
         self.assertEqual([(1, None),
                           (10, 'div by 2;div by 5')], actual_collection)
-        self.assertEqual(1, generator.filter_stats['div by 2;div by 5'])
-
-    def test_filter_stats_immutable(self):
-        generator = utils.FilteredGenerator({})
-        try:
-            generator.filter_stats = {'foo': 42}
-            self.assertEqual(True, False, 'filter_stats should be immutable')
-        except AttributeError:
-            self.assertEqual(True, True, 'filter_stats is immutable')
-
-        generator.filter_stats['foo'] = 42
-        base_collection = [1, 2 ,3]
-        actual_collection  = [x for x in generator.filter(base_collection)]
-
-        self.assertEqual([(1, None), (2, None), (3, None)],
-                         actual_collection)
-        self.assertEqual(0, len(generator.filter_stats))
-
-    def test_filter_stats_ordersResultsByCountBreakingTiesByName(self):
-        generator = utils.FilteredGenerator({})
-        generator._filter_stats = {'C': 1,
-                                   'B;C':2,
-                                   'B': 2,
-                                   'E': 3,
-                                   'A': 3,
-                                   'D': 4}
-        actual_filter_stats = generator.filter_stats
-        self.assertEqual(6, len(actual_filter_stats))
-        expected_filter_stats = OrderedDict([('D', 4),
-                                             ('A', 3),
-                                             ('E' ,3),
-                                             ('B', 2),
-                                             ('B;C', 2),
-                                             ('C', 1)])
-        self.assertEqual(expected_filter_stats,
-                         actual_filter_stats)
-
 
     def test_filter_returnsEmptyIfBaseEmpty(self):
         generator = utils.FilteredGenerator({})
@@ -167,7 +118,6 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         actual_collection  = [x for x in generator.filter(base_collection)]
 
         self.assertEqual([], actual_collection)
-        self.assertEqual(0, len(generator.filter_stats))
 
 try:
     from StringIO import StringIO

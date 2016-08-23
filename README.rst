@@ -85,10 +85,10 @@ Connor help
                            =3 (>=0): families with count of original reads < threshold are excluded
                             from the deduplicated output. (Higher threshold is more
                             stringent.)
-     -d UMI_DISTANCE_THRESHOLD, --umi_distance_threshold UMI_DISTANCE_THRESHOLD
-                           =1 (>=0); UMIs equal to or closer than this Hamming distance will be
+     -d UMT_DISTANCE_THRESHOLD, --umt_distance_threshold UMT_DISTANCE_THRESHOLD
+                           =1 (>=0); UMTs equal to or closer than this Hamming distance will be
                             combined into a single family. Lower threshold make more families with more
-                            consistent UMIs; 0 implies UMI must match
+                            consistent UMTs; 0 implies UMT must match
                             exactly.
 
 ====

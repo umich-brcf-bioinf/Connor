@@ -20,7 +20,7 @@ from test.utils_test import MicroMock
 
 class FamilyHandlerTest(BaseConnorTestCase):
     def test_build_family_handlers(self):
-        args = Namespace(umi_distance_threshold=1,
+        args = Namespace(umt_distance_threshold=1,
                          min_family_size_threshold=3)
 
         handlers = build_family_handlers(args,
@@ -37,7 +37,7 @@ class FamilyHandlerTest(BaseConnorTestCase):
         self.assertEqual(expected_handler_names, actual_handler_names)
 
     def test_build_family_handlers_withAnnotatedAlign(self):
-        args = Namespace(umi_distance_threshold=1,
+        args = Namespace(umt_distance_threshold=1,
                          min_family_size_threshold=3)
         handlers = build_family_handlers(args,
                                          samtools_test.MockAlignWriter(),
@@ -122,7 +122,7 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
 
 class MatchStatHandlerTest(BaseConnorTestCase):
     def test_total_inexact_match_count(self):
-        args = Namespace(umi_distance_threshold=1)
+        args = Namespace(umt_distance_threshold=1)
         stat_handler = _MatchStatHandler(args, self.mock_logger)
         posAfam1 = _mock_tag_family(align_pairs=[1] * 5,
                                    inexact_match_count=1)

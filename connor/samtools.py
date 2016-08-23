@@ -220,7 +220,6 @@ class BamTag(object):
         connor_align.set_tag(self._tag_name, value, self._tag_type)
 
 
-#TODO: cgates: consider making this into simple constants
 class BamFlag(object):
     PAIRED = 1
     PROPER_PAIR = 2
@@ -369,10 +368,7 @@ class ConnorAlign(object):
     def template_length(self, value):
         self.pysam_align_segment.template_length = value
 
-#TODO: cgates: make this stop logging altogether
-def filter_alignments(pysam_alignments,
-                      log=None,
-                      excluded_writer=AlignWriter.NULL):
+def filter_alignments(pysam_alignments, excluded_writer=AlignWriter.NULL):
     filters = {'not in proper pair': \
                     lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
                 'secondary alignment': \
@@ -391,23 +387,6 @@ def filter_alignments(pysam_alignments,
                                   connor_align=connor_align)
         else:
             yield connor_align
-    #TODO: cgates: remove all this logging along with stats tallying in 
-    # FilteredGenerator; it duplicates functionality in LoggingAlignWriter
-    if log:
-        total = generator.total_excluded + generator.total_included
-        log.debug(('filter_align|{}/{} ({:.2f}%) alignments passed filtering'),
-                 generator.total_included,
-                 total,
-                 100 * generator.total_included / total)
-        log.debug(('filter_align|{}/{} ({:.2f}%) alignments failed filtering '
-                  'and will be excluded (see log file)'),
-                 generator.total_excluded,
-                 total,
-                 100 * generator.total_excluded / total)
-        for filter_name, count in generator.filter_stats.items():
-            log.debug('filter_align|{:>7} alignments excluded because: {}',
-                     count,
-                     filter_name)
 
 def alignment_file(filename, mode, template=None):
     return pysam.AlignmentFile(filename, mode, template)

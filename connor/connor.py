@@ -40,7 +40,7 @@ __version__ = connor.__version__
 DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_FREQ_THRESHOLD=0.6
 DEFAULT_MIN_FAMILY_SIZE_THRESHOLD = 3
-DEFAULT_UMI_DISTANCE_THRESHOLD = 1
+DEFAULT_UMT_DISTANCE_THRESHOLD = 1
 
 
 DESCRIPTION=\
@@ -149,20 +149,19 @@ class _PairedAlignment(object):
                                     self.right.reference_start,
                                     self.right.query_sequence)
 
-#TODO: cgates: move consensus builder into separate class
-#TODO: cgates: rename umi to umt
+#TODO: cgates: move consensus builder into separate class/module
 class _TagFamily(object):
     umi_sequence = 0
 
     def __init__(self,
-                 umi,
+                 umt,
                  alignments,
                  inexact_match_count,
                  consensus_threshold,
                  family_filter=lambda x: None):
         self.umi_sequence = _TagFamily.umi_sequence
         _TagFamily.umi_sequence += 1
-        self.umi = umi
+        self.umt = umt
         (self.distinct_cigar_count,
          self.minority_cigar_percentage,
          majority_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
@@ -172,7 +171,7 @@ class _TagFamily(object):
 #         #Necessary to make output deterministic
 #         self.alignments.sort(key=lambda x: x.left.query_name)
         self.consensus_threshold = consensus_threshold
-        self.consensus = self._build_consensus(umi, self.align_pairs)
+        self.consensus = self._build_consensus(umt, self.align_pairs)
         self.included_pair_count = sum([1 for p in self.align_pairs if not p.filter_value])
         self.filter_value = family_filter(self)
 
@@ -257,7 +256,7 @@ class _TagFamily(object):
         return number_distict_cigars, minority_cigar_percentage, dominant_cigar
 
 
-    #TODO: (cgates) tags should not assume umi is a tuple and symmetric
+    #TODO: (cgates) tags should not assume umt is a tuple and symmetric
     #between left and right
     def _build_consensus(self, umt, align_pairs):
         included_pairs = [p for p in align_pairs if not p.filter_value]
@@ -400,14 +399,14 @@ def _parse_command_line_args(arguments):
 """={} (>=0): families with count of original reads < threshold are excluded
  from the deduplicated output. (Higher threshold is more
  stringent.)""".format(DEFAULT_MIN_FAMILY_SIZE_THRESHOLD))
-    parser.add_argument("-d", "--umi_distance_threshold",
+    parser.add_argument("-d", "--umt_distance_threshold",
                         type=int,
-                        default = DEFAULT_UMI_DISTANCE_THRESHOLD,
+                        default = DEFAULT_UMT_DISTANCE_THRESHOLD,
                         help=\
-"""={} (>=0); UMIs equal to or closer than this Hamming distance will be
+"""={} (>=0); UMTs equal to or closer than this Hamming distance will be
  combined into a single family. Lower threshold make more families with more
- consistent UMIs; 0 implies UMI must match
- exactly.""".format(DEFAULT_UMI_DISTANCE_THRESHOLD))
+ consistent UMTs; 0 implies UMI must match
+ exactly.""".format(DEFAULT_UMT_DISTANCE_THRESHOLD))
 
     args = parser.parse_args(arguments)
     return args
@@ -423,7 +422,7 @@ def _rank_tags(tagged_paired_aligns):
     return ranked_tags
 
 
-def _build_lightweight_pairs(aligned_segments, log):
+def _build_lightweight_pairs(aligned_segments):
     name_pairs = dict()
     lightweight_pairs = list()
     total_align_count = 0
@@ -436,14 +435,6 @@ def _build_lightweight_pairs(aligned_segments, log):
             new_pair = _LightweightPair(name_pairs.pop(query_name),
                                         align_segment)
             lightweight_pairs.append(new_pair)
-    log.debug('filter_unpaired|{}/{} ({:.2f}%) alignments had mate present',
-             len(lightweight_pairs) * 2,
-             total_align_count,
-             100 * len(lightweight_pairs) * 2 / total_align_count)
-    log.debug('filter_unpaired|{}/{} ({:.2f}%) alignments missing their mate',
-             len(name_pairs),
-             total_align_count,
-             100 * len(name_pairs) / total_align_count)
     return lightweight_pairs
 
 
@@ -472,37 +463,38 @@ def _build_family_filter(args):
             return None
     return family_size_filter
 
+def _build_manifest(input_bam):
+    bamfile = samtools.alignment_file(input_bam, 'rb')
+    counter = utils.CountingGenerator()
+    included_aligns = samtools.filter_alignments(counter.count(bamfile.fetch()))
+    lightweight_pairs = _build_lightweight_pairs(included_aligns)
+    bamfile.close()
+    coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
+    return counter.item_count, coord_manifest
+
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
-    counter = utils.CountingGenerator()
-    included_aligns = samtools.filter_alignments(counter.count(bamfile.fetch()),
-                                                 log)
-    lightweight_pairs = _build_lightweight_pairs(included_aligns, log)
-    bamfile.close()
-    total_aligns = counter.item_count
-
-    coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    (total_aligns,
+     coord_manifest) = _build_manifest(args.input_bam)
+    family_filter = _build_family_filter(args)
     handlers = familyhandler.build_family_handlers(args,
                                                    consensus_writer,
                                                    annotated_writer,
                                                    log)
 
+    bamfile = samtools.alignment_file(args.input_bam, 'rb')
     progress_gen = _progress_logger(bamfile.fetch(),
                                     total_aligns,
                                     log)
     filtered_aligns_gen = samtools.filter_alignments(progress_gen,
-                                                     None,
                                                      annotated_writer)
-    family_filter = _build_family_filter(args)
     for coord_family in _build_coordinate_families(filtered_aligns_gen,
                                                    coord_manifest,
                                                    annotated_writer):
         ranked_tags = _rank_tags(coord_family)
         tag_families = _build_tag_families(coord_family,
                                            ranked_tags,
-                                           args.umi_distance_threshold,
+                                           args.umt_distance_threshold,
                                            args.consensus_freq_threshold,
                                            family_filter)
         for handler in handlers:
@@ -545,8 +537,8 @@ def _build_bam_tags():
                         ("L~R UMT barcodes for this alignment family; because "
                          "of fuzzy matching the family UMT may be distinct "
                          "from the UMT of the original alignment"),
-                        lambda fam, align: "{0}~{1}".format(fam.umi[0],
-                                                            fam.umi[1]) if fam else None),
+                        lambda fam, align: "{0}~{1}".format(fam.umt[0],
+                                                            fam.umt[1]) if fam else None),
         samtools.BamTag("X3", "i",
                         "family size (number of align pairs in this family)",
                         lambda fam, align: fam.included_pair_count if fam else None),
