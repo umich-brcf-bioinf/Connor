@@ -1,7 +1,6 @@
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
 import pandas as pd
-import connor.samtools as samtools
 
 def build_family_handlers(args,
                           consensus_writer,
@@ -11,52 +10,22 @@ def build_family_handlers(args,
                 _MatchStatHandler(args, logger),
                 _CigarMinorityStatHandler(logger),
                 _CigarStatHandler(logger),
-                _WriteFamilyHandler(args, consensus_writer, logger)]
-    if annotated_writer != samtools.AlignWriter.NULL:
-        handlers.append(_WriteAnnotatedAlignsHandler(annotated_writer))
+                _WriteAnnotatedAlignsHandler(annotated_writer),
+                _WriteConsensusHandler(consensus_writer)]
     return handlers
 
-class _WriteFamilyHandler(object):
-    def __init__(self, args, consensus_writer, logger):
+class _WriteConsensusHandler(object):
+    def __init__(self, consensus_writer):
         self._writer = consensus_writer
-        self._min_family_size_threshold = args.min_family_size_threshold
-        self._log = logger
-        self.included_family_count = 0
-        self.excluded_family_count = 0
-        self.total_alignment_count = 0
-
-    def handle(self, tag_family):
-        self.total_alignment_count += len(tag_family.alignments)
-        #TODO: cgates: This check should be done using the filter field
-        if len(tag_family.alignments) >= self._min_family_size_threshold:
-            consensus = tag_family.consensus
-            self._writer.write(tag_family,
-                               consensus.left_alignment)
-            self._writer.write(tag_family,
-                               consensus.right_alignment)
-            self.included_family_count += 1
-        else:
-            self.excluded_family_count += 1
+    def handle(self, family):
+        if not family.filter_value:
+            self._writer.write(family,
+                               family.consensus.left)
+            self._writer.write(family,
+                               family.consensus.right)
 
     def end(self):
-        total_family_count = self.excluded_family_count + \
-                             self.included_family_count
-        self._log.info(('{}/{} ({:.2f}%) families were excluded because the '
-                   'original read count < {}'),
-                  self.excluded_family_count,
-                  total_family_count,
-             100 * self.excluded_family_count / total_family_count,
-             self._min_family_size_threshold)
-        dedup_percent = 100 * \
-                (1 - (self.included_family_count / self.total_alignment_count))
-        self._log.info(('{} original pairs were deduplicated to {} families '
-                   '(overall dedup rate {:.2f}%)'),
-                  self.total_alignment_count,
-                  self.included_family_count,
-                  dedup_percent)
-        self._log.info('{} families written to [{}]',
-                  self.included_family_count,
-                  self._writer.bam_file_path)
+        pass
 
 
 class _WriteAnnotatedAlignsHandler(object):
@@ -64,12 +33,10 @@ class _WriteAnnotatedAlignsHandler(object):
         self._writer = writer
 
     def handle(self, family):
-        for align_pair in family.alignments:
-            self._writer.write(family, align_pair.left_alignment)
-            self._writer.write(family, align_pair.right_alignment)
-        for align_pair in family.excluded_alignments:
-            self._writer.write(family, align_pair.left_alignment)
-            self._writer.write(family, align_pair.right_alignment)
+        for align_pair in sorted(family.align_pairs,
+                                 key=lambda a: a.query_name):
+            self._writer.write(family, align_pair.left)
+            self._writer.write(family, align_pair.right)
 
     def end(self):
         pass
@@ -115,7 +82,7 @@ class _FamilySizeStatHandler(_BaseTukeyStatHandler):
         self._log = logger
 
     def get_family_statistic(self, tag_family):
-        return len(tag_family.alignments)
+        return len(tag_family.align_pairs)
 
     def end(self):
         super(_FamilySizeStatHandler, self).end()
@@ -161,8 +128,8 @@ class _CigarStatHandler(object):
 
     def handle(self, tag_family):
         self.distinct_cigar_counts.append(tag_family.distinct_cigar_count)
-        self.total_input_alignment_count += tag_family.input_alignment_count
-        self.total_alignment_count += len(tag_family.alignments)
+        self.total_input_alignment_count += len(tag_family.align_pairs)
+        self.total_alignment_count += tag_family.included_pair_count
         self.total_family_count += 1
         self.families_cigar_counts[tag_family.distinct_cigar_count] += 1
         self.family_cigar_minority_percentage_counts[tag_family.distinct_cigar_count].append(tag_family.minority_cigar_percentage)
@@ -232,25 +199,25 @@ class _CigarStatHandler(object):
 class _MatchStatHandler(object):
     def __init__(self, args, logger):
         self._log = logger
-        self.hamming_threshold = args.umi_distance_threshold
+        self.hamming_threshold = args.umt_distance_threshold
         self.total_inexact_match_count = 0
         self.total_pair_count = 0
 
     def handle(self, tag_family):
         self.total_inexact_match_count += tag_family.inexact_match_count
-        self.total_pair_count += len(tag_family.alignments)
+        self.total_pair_count += len(tag_family.align_pairs)
 
     def end(self):
         exact_count = self.total_pair_count - self.total_inexact_match_count
         self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
-                         'UMI exactly'),
+                         'UMT exactly'),
                         exact_count,
                         self.total_pair_count,
                         100 * (1 - self.percent_inexact_match))
 
         self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
                       'by Hamming distance threshold (<={}) on '
-                      'left or right UMI '),
+                      'left or right UMT '),
                      self.total_inexact_match_count,
                      self.total_pair_count,
                      100 * self.percent_inexact_match,

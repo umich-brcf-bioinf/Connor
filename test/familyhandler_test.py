@@ -3,59 +3,24 @@
 #pylint: disable=too-many-arguments
 from __future__ import print_function, absolute_import, division
 from argparse import Namespace
-import os
 
-from testfixtures.tempdirectory import TempDirectory
-
-from test.utils_test import BaseConnorTestCase
-from test.utils_test import MicroMock
-from test.samtools_test import mock_align
 from connor.familyhandler import _CigarStatHandler, build_family_handlers
 from connor.familyhandler import _CigarMinorityStatHandler
 from connor.familyhandler import _FamilySizeStatHandler
 from connor.familyhandler import _MatchStatHandler
 from connor.familyhandler import _WriteAnnotatedAlignsHandler
+from connor.familyhandler import _WriteConsensusHandler
 import connor.samtools as samtools
+from connor.samtools import ConnorAlign
+from test.connor_test import _mock_tag_family
+from test.samtools_test import mock_align
 import test.samtools_test as samtools_test
-
-def _mock_tag_family(input_alignment_count=5,
-                    alignments=None,
-                    excluded_alignments=None,
-                    distinct_cigar_count=1,
-                    inexact_match_count=0,
-                    minority_cigar_percentage=0):
-    if alignments is None:
-        alignments = [1,2,3,4]
-    if excluded_alignments is None:
-        excluded_alignments = [5,6]
-    return MicroMock(input_alignment_count=input_alignment_count,
-                     alignments=alignments,
-                     excluded_alignments=excluded_alignments,
-                     distinct_cigar_count=distinct_cigar_count,
-                     inexact_match_count=inexact_match_count,
-                     minority_cigar_percentage=minority_cigar_percentage)
-
+from test.utils_test import BaseConnorTestCase
+from test.utils_test import MicroMock
 
 class FamilyHandlerTest(BaseConnorTestCase):
     def test_build_family_handlers(self):
-        args = Namespace(umi_distance_threshold=1,
-                         min_family_size_threshold=3)
-
-        handlers = build_family_handlers(args,
-                                         samtools_test.MockAlignWriter(),
-                                         samtools.AlignWriter.NULL,
-                                         self.mock_logger)
-        actual_handler_names = [x.__class__.__name__ for x in handlers]
-
-        expected_handler_names = ['_FamilySizeStatHandler',
-                                  '_MatchStatHandler',
-                                  '_CigarMinorityStatHandler',
-                                  '_CigarStatHandler',
-                                  '_WriteFamilyHandler']
-        self.assertEqual(expected_handler_names, actual_handler_names)
-
-    def test_build_family_handlers_withAnnotatedAlign(self):
-        args = Namespace(umi_distance_threshold=1,
+        args = Namespace(umt_distance_threshold=1,
                          min_family_size_threshold=3)
         handlers = build_family_handlers(args,
                                          samtools_test.MockAlignWriter(),
@@ -67,16 +32,16 @@ class FamilyHandlerTest(BaseConnorTestCase):
                                   '_MatchStatHandler',
                                   '_CigarMinorityStatHandler',
                                   '_CigarStatHandler',
-                                  '_WriteFamilyHandler',
-                                  '_WriteAnnotatedAlignsHandler']
+                                  '_WriteAnnotatedAlignsHandler',
+                                  '_WriteConsensusHandler']
         self.assertEqual(expected_handler_names, actual_handler_names)
 
 
 class FamilySizeStatHandlerTest(BaseConnorTestCase):
     def test_end_min(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
+        posAfam1 = MicroMock(align_pairs=[1,1])
+        posAfam2 = MicroMock(align_pairs=[1,1,1])
+        posBfam1 = MicroMock(align_pairs=[1,1,1,1,1])
         families = [posAfam1, posAfam2, posBfam1]
         stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
@@ -87,9 +52,9 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(2, stat_handler.min)
 
     def test_end_max(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
+        posAfam1 = MicroMock(align_pairs=[1,1])
+        posAfam2 = MicroMock(align_pairs=[1,1,1])
+        posBfam1 = MicroMock(align_pairs=[1,1,1,1,1])
         families = [posAfam1, posAfam2, posBfam1]
         stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
@@ -100,9 +65,9 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(5, stat_handler.max)
 
     def test_end_median(self):
-        posAfam1 = MicroMock(alignments=[1,1])
-        posAfam2 = MicroMock(alignments=[1,1,1])
-        posBfam1 = MicroMock(alignments=[1,1,1,1,1])
+        posAfam1 = MicroMock(align_pairs=[1,1])
+        posAfam2 = MicroMock(align_pairs=[1,1,1])
+        posBfam1 = MicroMock(align_pairs=[1,1,1,1,1])
         families = [posAfam1, posAfam2, posBfam1]
         stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
@@ -113,11 +78,11 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(3, stat_handler.median)
 
     def test_end_quantiles(self):
-        posAfam1 = MicroMock(alignments=[1]*2)
-        posAfam2 = MicroMock(alignments=[1]*3)
-        posBfam1 = MicroMock(alignments=[1]*9)
-        posBfam2 = MicroMock(alignments=[1]*12)
-        posBfam3 = MicroMock(alignments=[1]*8)
+        posAfam1 = MicroMock(align_pairs=[1]*2)
+        posAfam2 = MicroMock(align_pairs=[1]*3)
+        posBfam1 = MicroMock(align_pairs=[1]*9)
+        posBfam2 = MicroMock(align_pairs=[1]*12)
+        posBfam3 = MicroMock(align_pairs=[1]*8)
         families = [posAfam1, posAfam2, posBfam1, posBfam2, posBfam3]
         stat_handler = _FamilySizeStatHandler(self.mock_logger)
 
@@ -140,11 +105,11 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
 
 class MatchStatHandlerTest(BaseConnorTestCase):
     def test_total_inexact_match_count(self):
-        args = Namespace(umi_distance_threshold=1)
+        args = Namespace(umt_distance_threshold=1)
         stat_handler = _MatchStatHandler(args, self.mock_logger)
-        posAfam1 = _mock_tag_family(alignments=[1] * 5,
+        posAfam1 = _mock_tag_family(align_pairs=[1] * 5,
                                    inexact_match_count=1)
-        posAfam2 = _mock_tag_family(alignments=[1] * 15,
+        posAfam2 = _mock_tag_family(align_pairs=[1] * 15,
                                    inexact_match_count=4)
         families = [posAfam1, posAfam2]
 
@@ -156,23 +121,62 @@ class MatchStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(20, stat_handler.total_pair_count)
         self.assertEqual(5/20, stat_handler.percent_inexact_match)
 
-def align_pairs(num_pairs, query_prefix):
+def _mock_align_pair(query_name, filter_value=None):
+    left = ConnorAlign(mock_align(query_name=query_name), filter_value)
+    right = ConnorAlign(mock_align(query_name=query_name), filter_value)
+    return MicroMock(query_name=query_name, left=left, right=right)
+
+def _mock_align_pairs(num_pairs, query_prefix):
     pairs = []
-    query_name_format = "{}_{}"
+    query_name_fmt = "{}_{}"
     for i in range(0, num_pairs):
-        left = mock_align(query_name = query_name_format.format(query_prefix, i))
-        right = mock_align(query_name = query_name_format.format(query_prefix, i))
-        pair =  MicroMock(left_alignment=left, right_alignment=right)
-        pairs.append(pair)
+        pairs.append(_mock_align_pair(query_name_fmt.format(query_prefix, i)))
     return pairs
 
-class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
-    def test_handle(self):
-        family_1 = _mock_tag_family(alignments=align_pairs(1, "A"),
-                                    excluded_alignments=align_pairs(2, "a"))
-        family_2 = _mock_tag_family(alignments=align_pairs(1, "B"),
-                                    excluded_alignments=align_pairs(2, "b"))
+class WriteConsensusHandlerTest(BaseConnorTestCase):
+    def test_handle_writesConsensus(self):
+        family_1 = _mock_tag_family(consensus=_mock_align_pair("readA"),
+                                    filter_value=None)
+        family_2 = _mock_tag_family(consensus=_mock_align_pair("readB"),
+                                    filter_value=None)
         families = [family_1, family_2]
+        writer = samtools_test.MockAlignWriter()
+
+        handler = _WriteConsensusHandler(writer)
+        for family in families:
+            handler.handle(family)
+
+        name_pairs = [(fam,
+                       align.query_name) for fam, align in writer._write_calls]
+        self.assertEqual([(family_1, 'readA'), (family_1, 'readA'),
+                          (family_2, 'readB'), (family_2, 'readB')], name_pairs)
+
+    def test_handle_excludeFilteredFamilies(self):
+        family_1 = _mock_tag_family(consensus=_mock_align_pair("readA"),
+                                    filter_value=None)
+        family_2 = _mock_tag_family(consensus=_mock_align_pair("readB"),
+                                    filter_value='foo')
+        families = [family_1, family_2]
+        writer = samtools_test.MockAlignWriter()
+
+        handler = _WriteConsensusHandler(writer)
+        for family in families:
+            handler.handle(family)
+
+        name_pairs = [(fam,
+                       align.query_name) for fam, align in writer._write_calls]
+        self.assertEqual([(family_1, 'readA'), (family_1, 'readA')], name_pairs)
+
+class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
+    def test_handle_writesAllAlignments(self):
+        pairA1 = _mock_align_pair("readA1")
+        pairA2 = _mock_align_pair("readA2", filter_value="foo")
+        pairB1 = _mock_align_pair("readB1")
+        pairB2 = _mock_align_pair("readB2", filter_value="bar")
+
+        family_A = _mock_tag_family(align_pairs=set([pairA1, pairA2]))
+        family_B = _mock_tag_family(align_pairs=set([pairB1, pairB2]))
+        families = [family_A, family_B]
         writer = samtools_test.MockAlignWriter()
 
         handler = _WriteAnnotatedAlignsHandler(writer)
@@ -181,21 +185,43 @@ class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
 
         name_pairs = [(fam,
                        align.query_name) for fam, align in writer._write_calls]
-        self.assertEqual([(family_1, 'A_0'), (family_1, 'A_0'),
-                          (family_1, 'a_0'), (family_1, 'a_0'),
-                          (family_1, 'a_1'), (family_1, 'a_1'),
-                          (family_2, 'B_0'), (family_2, 'B_0'),
-                          (family_2, 'b_0'), (family_2, 'b_0'),
-                          (family_2, 'b_1'), (family_2, 'b_1')], name_pairs)
+        self.assertEqual([(family_A, 'readA1'), (family_A, 'readA1'),
+                          (family_A, 'readA2'), (family_A, 'readA2'),
+                          (family_B, 'readB1'), (family_B, 'readB1'),
+                          (family_B, 'readB2'), (family_B, 'readB2')], name_pairs)
+
+    def test_handle_ordersAlignmentsByReadname(self):
+        pairA1 = _mock_align_pair("readA1")
+        pairA2 = _mock_align_pair("readA2")
+        pairA3 = _mock_align_pair("readA3")
+        pairA4 = _mock_align_pair("readA4")
+
+        family_A = _mock_tag_family(align_pairs=set([pairA2,
+                                                     pairA1,
+                                                     pairA4,
+                                                     pairA3]))
+        families = [family_A]
+        writer = samtools_test.MockAlignWriter()
+
+        handler = _WriteAnnotatedAlignsHandler(writer)
+        for family in families:
+            handler.handle(family)
+
+        names = [align.query_name for _, align in writer._write_calls]
+        self.assertEqual(['readA1', 'readA1',
+                          'readA2', 'readA2',
+                          'readA3', 'readA3',
+                          'readA4', 'readA4'], names)
+
 
 class CigarsStatHandlerTest(BaseConnorTestCase):
     def test_percent_deduplication(self):
-        posAfam1 = _mock_tag_family(input_alignment_count=1,
-                                   alignments = [1] * 1)
-        posAfam2 = _mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 2)
-        posAfam3 = _mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 2)
+        posAfam1 = _mock_tag_family(included_pair_count=1,
+                                   align_pairs = [1] * 1)
+        posAfam2 = _mock_tag_family(included_pair_count=2,
+                                   align_pairs = [1] * 2)
+        posAfam3 = _mock_tag_family(included_pair_count=2,
+                                   align_pairs = [1] * 2)
         families = [posAfam1, posAfam2, posAfam3]
         stat_handler = _CigarStatHandler(self.mock_logger)
 
@@ -207,10 +233,10 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(expected, stat_handler.percent_deduplication)
 
     def test_total_input_alignment_allCounted(self):
-        posAfam1 = _mock_tag_family(input_alignment_count=1,
-                                   alignments = [1] * 1)
-        posAfam2 = _mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 2)
+        posAfam1 = _mock_tag_family(included_pair_count=1,
+                                   align_pairs = [1] * 1)
+        posAfam2 = _mock_tag_family(included_pair_count=2,
+                                   align_pairs = [1] * 2)
         families = [posAfam1, posAfam2]
         stat_handler = _CigarStatHandler(self.mock_logger)
 
@@ -224,10 +250,10 @@ class CigarsStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(0, stat_handler.percent_excluded_alignments)
 
     def test_total_input_alignment_someCounted(self):
-        posAfam1 = _mock_tag_family(input_alignment_count=3,
-                                   alignments = [1] * 3)
-        posAfam2 = _mock_tag_family(input_alignment_count=2,
-                                   alignments = [1] * 1)
+        posAfam1 = _mock_tag_family(included_pair_count=3,
+                                   align_pairs = [1] * 3)
+        posAfam2 = _mock_tag_family(included_pair_count=1,
+                                   align_pairs = [1] * 2)
         families = [posAfam1, posAfam2]
         stat_handler = _CigarStatHandler(self.mock_logger)
 

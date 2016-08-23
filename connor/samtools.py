@@ -1,5 +1,6 @@
 """Simplifies discrepancies in how different versions pysam wrap samtools"""
 from __future__ import print_function, absolute_import, division
+from collections import defaultdict, OrderedDict
 from copy import deepcopy
 import os
 import re
@@ -7,7 +8,232 @@ import pysam
 import connor.utils as utils
 
 
-#TODO: cgates: consider making this into simple constants
+class AlignWriter(object):
+    class _NullWriter(object):
+        def write(self, family, connor_align):
+            pass
+
+        def close(self, log=None):
+            pass
+
+    NULL= _NullWriter()
+    BAM_TAG_FORMAT = 'connor|BAM tag|{}:{}'.replace('|', '\t')
+
+    def __init__(self, header, bam_path, tags=None):
+        if tags is None:
+            self._tags = []
+        else:
+            self._tags = sorted(tags)
+        new_header = self._add_header_lines(header, self._tags)
+        self._bam_path = bam_path
+        self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=new_header)
+
+    @staticmethod
+    def _add_header_lines(original_header, tags):
+        new_header =  deepcopy(original_header)
+        if 'CO' not in new_header:
+            new_header['CO'] = []
+        new_header['CO'].extend([tag.header_comment for tag in tags])
+        return new_header
+
+    @property
+    def bam_file_path(self):
+        return self._bam_path
+
+    def _add_bam_tags(self, family, connor_align):
+        for tag in self._tags:
+            tag.set_tag(family, connor_align)
+
+    def write(self, family, connor_align):
+        self._add_bam_tags(family, connor_align)
+        self._bam_file.write(connor_align.pysam_align_segment)
+
+    def close(self, log=None):
+        self._bam_file.close()
+        if log:
+            log.info("sorting/indexing [{}]".format(self._bam_path))
+        sort_and_index_bam(self._bam_path)
+
+
+class LoggingWriter(object):
+
+    class UnplacedFamily(object):
+        def __init__(self):
+            self.filter_value = 'unplaced'
+            self.umi_sequence = -1
+
+    UNPLACED_FAMILY = UnplacedFamily()
+
+    def __init__(self, base_writer, log):
+        self._base_writer = base_writer
+        self._log = log
+        self._align_filter_stats = defaultdict(int)
+        self._family_filter_stats = defaultdict(set)
+
+    #TODO: cgates: promote UNPLACED_FAMILY to public NULL class; use throughout
+    def write(self, family, connor_align):
+        if not family:
+            family = LoggingWriter.UNPLACED_FAMILY
+        self._align_filter_stats[(family.filter_value,
+                                  connor_align.filter_value)] += 1
+        self._family_filter_stats[family.filter_value].add(family.umi_sequence)
+        if family==LoggingWriter.UNPLACED_FAMILY:
+            self._base_writer.write(None, connor_align)
+        else:
+            self._base_writer.write(family, connor_align)
+
+    @staticmethod
+    def _filter_counts(filter_dict):
+        '''Returns an immutable ordered dict of filter:counts; when an item
+        would be filtered by multiple filters, all are listed in alpha order;
+        the dict itself is ordered by descending count, filter name.
+        '''
+        return OrderedDict(sorted(filter_dict.items(),
+                                  key=lambda x: (-1 * x[1], x[0])))
+
+    @staticmethod
+    def _log_line(text, count, total, filter_name):
+        line = '{:.2f}% ({}/{}) {}: {}'
+        return line.format(100 * count / total,
+                           count,
+                           total,
+                           text,
+                           filter_name)
+
+    @property
+    def _unplaced_aligns(self):
+        unplaced_aligns = {}
+        for (fam_filter, align_filter), cnt in self._align_filter_stats.items():
+            if fam_filter == LoggingWriter.UNPLACED_FAMILY.filter_value and align_filter:
+                unplaced_aligns[align_filter] = cnt
+        return LoggingWriter._filter_counts(unplaced_aligns)
+
+    @staticmethod
+    def _discarded_filter_value(fam_filter, align_filter):
+        if fam_filter == LoggingWriter.UNPLACED_FAMILY.filter_value:
+            return None
+        else:
+            filter_values = []
+            if fam_filter:
+                filter_values.append(fam_filter)
+            if align_filter:
+                filter_values.append(align_filter)
+            return ";".join(filter_values)
+
+    @property
+    def _discarded_aligns(self):
+        discarded_aligns = {}
+        for (fam_filter, align_filter), cnt in self._align_filter_stats.items():
+            filter_value = LoggingWriter._discarded_filter_value(fam_filter,
+                                                                 align_filter)
+            if filter_value:
+                discarded_aligns[filter_value] = cnt
+        return LoggingWriter._filter_counts(discarded_aligns)
+
+    @property
+    def _family_stats(self):
+        family_filter_stats = dict(self._family_filter_stats)
+        family_filter_stats.pop(LoggingWriter.UNPLACED_FAMILY.filter_value,
+                                None)
+        included_count = len(family_filter_stats.pop(None))
+        discarded_count = 0
+        filter_counts = OrderedDict()
+        for name, fam_ids in family_filter_stats.items():
+            align_count = len(fam_ids)
+            discarded_count += align_count
+            filter_counts[name] = align_count
+        total_count = included_count + discarded_count
+        return (included_count,
+                total_count,
+                LoggingWriter._filter_counts(filter_counts))
+
+    @property
+    def _align_stats(self):
+        included_filter = (None, None)
+        included_count = self._align_filter_stats[included_filter]
+        excluded_count = sum([count for fam_align_filter, count in self._align_filter_stats.items() if fam_align_filter != included_filter])
+        total_count = included_count + excluded_count
+        return included_count, excluded_count, total_count
+
+    @staticmethod
+    def _log_stat(log_method, text, count, total):
+        log_method('{:.2f}% ({}/{}) {}',
+                   100 * count / total,
+                   count,
+                   total,
+                   text)
+
+    def _log_results(self):
+        (included_align_count,
+         excluded_align_count,
+         total_align_count) = self._align_stats
+        (included_fam_count,
+         total_fam_count,
+         discarded_fam_filter_counts) = self._family_stats
+
+        LoggingWriter._log_stat(self._log.info,
+                                'alignments unplaced or discarded',
+                                excluded_align_count,
+                                total_align_count)
+
+        for name, count in self._unplaced_aligns.items():
+            LoggingWriter._log_stat(self._log.debug,
+                                    'alignments unplaced: {}'.format(name),
+                                    count,
+                                    total_align_count)
+
+        for name, count in self._discarded_aligns.items():
+            LoggingWriter._log_stat(self._log.debug,
+                                    'alignments discarded: {}'.format(name),
+                                    count,
+                                    total_align_count)
+
+        for name, count in discarded_fam_filter_counts.items():
+            LoggingWriter._log_stat(self._log.info,
+                                    'families discarded: {}'.format(name),
+                                    count,
+                                    total_fam_count)
+
+        LoggingWriter._log_stat(self._log.info,
+                                ('alignments included in '
+                                 '{} families').format(included_fam_count),
+                                included_align_count,
+                                total_align_count)
+
+        msg = ('{:.2f}% deduplication rate '
+               '(1 - {} families/{} included alignments)')
+        percent_dedup = 100 * (1 - (included_fam_count / included_align_count))
+        self._log.info(msg,
+                       percent_dedup,
+                       included_fam_count,
+                       included_align_count)
+
+    def close(self, log=None):
+        if self._align_filter_stats:
+            self._log_results()
+        self._base_writer.close(log)
+
+
+class BamTag(object):
+    HEADER_FORMAT = 'connor|BAM tag|{}: {}'.replace('|', '\t')
+
+    def __init__(self, tag_name, tag_type, description, get_value):
+        self._tag_name = tag_name
+        self._tag_type = tag_type
+        self._get_value = get_value
+        self._description = description
+        self.header_comment = BamTag.HEADER_FORMAT.format(tag_name,
+                                                          description)
+
+    def __lt__(self, other):
+        return (self._tag_name,
+                self._description) < (other._tag_name, other._description)
+
+    def set_tag(self, family, connor_align):
+        value = self._get_value(family, connor_align)
+        connor_align.set_tag(self._tag_name, value, self._tag_type)
+
+
 class BamFlag(object):
     PAIRED = 1
     PROPER_PAIR = 2
@@ -55,19 +281,18 @@ def _get_samtools():
 
 SAMTOOLS_UTIL = _get_samtools()
 
-
 class ConnorAlign(object):
-    # cgates: FYI, you can use dynamic delegation via __setattr__ and 
+    # cgates: FYI, you can use dynamic delegation via __setattr__ and
     # __getattr__ but it's awkward and about twice as slow
-    def __init__(self, pysam_align_segment):
+    def __init__(self, pysam_align_segment, filter_value=None):
         self.pysam_align_segment = pysam_align_segment
-        self.filter = None
+        self.filter_value = filter_value
 
     def __eq__(self, other):
         return other.__dict__ == self.__dict__
 
     def __hash__(self):
-        return hash(self.filter) + hash(self.pysam_align_segment)
+        return hash(self.filter_value) + hash(self.pysam_align_segment)
 
     @property
     def cigarstring(self):
@@ -156,8 +381,7 @@ class ConnorAlign(object):
     def template_length(self, value):
         self.pysam_align_segment.template_length = value
 
-
-def filter_alignments(alignments, log=None):
+def filter_alignments(pysam_alignments, excluded_writer=AlignWriter.NULL):
     filters = {'not in proper pair': \
                     lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
                 'secondary alignment': \
@@ -169,23 +393,13 @@ def filter_alignments(alignments, log=None):
                 'cigar unavailable': \
                     lambda a: a.cigarstring is None}
     generator = utils.FilteredGenerator(filters)
-    for alignment in generator.filter(alignments):
-        yield ConnorAlign(alignment)
-    if log:
-        total = generator.total_excluded + generator.total_included
-        log.debug(('filter_align|{}/{} ({:.2f}%) alignments passed filtering'),
-                 generator.total_included,
-                 total,
-                 100 * generator.total_included / total)
-        log.debug(('filter_align|{}/{} ({:.2f}%) alignments failed filtering '
-                  'and will be excluded (see log file)'),
-                 generator.total_excluded,
-                 total,
-                 100 * generator.total_excluded / total)
-        for filter_name, count in generator.filter_stats.items():
-            log.debug('filter_align|{:>7} alignments excluded because: {}',
-                     count,
-                     filter_name)
+    for pysam_align, filter_value in generator.filter(pysam_alignments):
+        connor_align = ConnorAlign(pysam_align, filter_value)
+        if filter_value:
+            excluded_writer.write(family=None,
+                                  connor_align=connor_align)
+        else:
+            yield connor_align
 
 def alignment_file(filename, mode, template=None):
     return pysam.AlignmentFile(filename, mode, template)
@@ -204,67 +418,3 @@ def sort_and_index_bam(bam_filename):
     sort(bam_filename, sorted_bam_filename)
     os.rename(sorted_bam_filename, bam_filename)
     index(bam_filename)
-
-
-class AlignWriter(object):
-    class _NullWriter(object):
-        def write(self, *args):
-            pass
-
-        def close(self):
-            pass
-
-    NULL= _NullWriter()
-    BAM_TAG_FORMAT = 'connor|BAM tag|{}:{}'.replace('|', '\t')
-
-    def __init__(self, header, bam_path, tags=None):
-        if tags is None:
-            self._tags = []
-        else:
-            self._tags = sorted(tags)
-        new_header = self._add_header_lines(header, self._tags)
-        self._bam_path = bam_path
-        self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=new_header)
-
-    @staticmethod
-    def _add_header_lines(original_header, tags):
-        new_header =  deepcopy(original_header)
-        if 'CO' not in new_header:
-            new_header['CO'] = []
-        new_header['CO'].extend([tag.header_comment for tag in tags])
-        return new_header
-
-    @property
-    def bam_file_path(self):
-        return self._bam_path
-
-    def _add_bam_tags(self, family, connor_align):
-        for tag in self._tags:
-            tag.set_tag(family, connor_align)
-
-    def write(self, family, connor_align):
-        self._add_bam_tags(family, connor_align)
-        self._bam_file.write(connor_align.pysam_align_segment)
-
-    def close(self):
-        self._bam_file.close()
-        sort_and_index_bam(self._bam_path)
-
-class BamTag(object):
-    HEADER_FORMAT = 'connor|BAM tag|{}: {}'.replace('|', '\t')
-
-    def __init__(self, tag_name, tag_type, description, get_value):
-        self._tag_name = tag_name
-        self._tag_type = tag_type
-        self._get_value = get_value
-        self._description = description
-        self.header_comment = BamTag.HEADER_FORMAT.format(tag_name,
-                                                          description)
-
-    def __lt__(self, other):
-        return (self._tag_name,
-                self._description) < (other._tag_name, other._description)
-
-    def set_tag(self, family, connor_align):
-        value = self._get_value(family, connor_align)
-        connor_align.set_tag(self._tag_name, value, self._tag_type)
