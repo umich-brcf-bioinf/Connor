@@ -49,7 +49,7 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
                     result = 'expected file {} not found'.format(expected_name)
                 elif not filecmp.cmp(expected_path, output_path, shallow=False):
                     msg = '{} does not match expected'
-                    result = msg.format(output_deduped_bam)
+                    result = msg.format(output_path)
                 else:
                     result = 'OK'
                 return expected_name, result

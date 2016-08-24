@@ -163,7 +163,6 @@ class _TagFamily(object):
         _TagFamily.umi_sequence += 1
         self.umt = umt
         (self.distinct_cigar_count,
-         self.minority_cigar_percentage,
          majority_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
         self.align_pairs = alignments
         self._mark_minority_cigar(majority_cigar)
@@ -244,15 +243,10 @@ class _TagFamily(object):
         top_two_cigar_count = counter.most_common(2)
         dominant_cigar = top_two_cigar_count[0][0]
         dominant_cigar_count = top_two_cigar_count[0][1]
-        if len(top_two_cigar_count) == 1:
-            minority_cigar_percentage = 0
-        elif dominant_cigar_count == top_two_cigar_count[0][1]:
+        if number_distict_cigars > 1 and dominant_cigar_count == top_two_cigar_count[1][1]:
             dominant_cigar = sorted(counter.most_common(),
                                     key=lambda x: (-x[1], x[0]))[0][0]
-            minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
-        else:
-            minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
-        return number_distict_cigars, minority_cigar_percentage, dominant_cigar
+        return number_distict_cigars, dominant_cigar
 
 
     #TODO: (cgates) tags should not assume umt is a tuple and symmetric
@@ -348,8 +342,6 @@ def _build_tag_families(tagged_paired_aligns,
                                consensus_threshold,
                                family_filter)
         tag_families.append(tag_family)
-    #Necessary to make output deterministic
-    tag_families.sort(key=lambda x: x.consensus.left.query_name)
     return tag_families
 
 def _hamming_dist(str1, str2):
@@ -415,8 +407,7 @@ def _rank_tags(tagged_paired_aligns):
     tag_count_dict = defaultdict(int)
     for paired_align in tagged_paired_aligns:
         tag_count_dict[paired_align.umt] += 1
-    tags_by_count = sorted(tag_count_dict.items(),
-                           key=lambda x: (-1 * x[1], x[0]))
+    tags_by_count = utils.sort_dict(tag_count_dict)
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
@@ -573,9 +564,9 @@ def main(command_line_args=None):
         if not args.log_file:
             args.log_file = args.output_bam + ".log"
         log = utils.Logger(args)
-        _log_environment_info(log, args)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
+        _log_environment_info(log, args)
         bam_tags = _build_bam_tags()
         base_annotated_writer = _build_writer(args.input_bam,
                                               args.annotated_output_bam,

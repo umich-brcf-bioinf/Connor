@@ -15,7 +15,6 @@ Prerequisites
 
 * cython
 * pysam
-* pandas
 
 
 Installing

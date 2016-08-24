@@ -112,18 +112,20 @@ class Logger(object):
         self._file_logger.debug(self._format(message, args),
                                extra=self._logging_dict)
 
+    def _log(self, msg_type, method, message, *args):
+        self._print(msg_type, message, args)
+        method(self._format(message, args),
+               extra=self._logging_dict)
+
     def error(self, message, *args):
-        self._print("ERROR", message, args)
-        self._file_logger.error(self._format(message, args),
-                               extra=self._logging_dict)
+        self._log("ERROR", self._file_logger.error, message, *args)
 
     def info(self, message, *args):
-        self._print("INFO", message, args)
-        self._file_logger.info(self._format(message, args),
-                              extra=self._logging_dict)
+        self._log("INFO", self._file_logger.info, message, *args)
 
     def warning(self, message, *args):
-        self._print("WARNING", message, args)
-        self._file_logger.warning(self._format(message, args),
-                                 extra=self._logging_dict)
+        self._log("WARNING", self._file_logger.warning, message, *args)
         self.warning_occurred = True
+
+def sort_dict(key_counts):
+    return sorted(key_counts.items(), key=lambda x: (-1 * x[1], x[0]))

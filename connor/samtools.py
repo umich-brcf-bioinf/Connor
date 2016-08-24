@@ -88,8 +88,7 @@ class LoggingWriter(object):
         would be filtered by multiple filters, all are listed in alpha order;
         the dict itself is ordered by descending count, filter name.
         '''
-        return OrderedDict(sorted(filter_dict.items(),
-                                  key=lambda x: (-1 * x[1], x[0])))
+        return OrderedDict(utils.sort_dict(filter_dict))
 
     @staticmethod
     def _log_line(text, count, total, filter_name):
