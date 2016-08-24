@@ -342,8 +342,6 @@ def _build_tag_families(tagged_paired_aligns,
                                consensus_threshold,
                                family_filter)
         tag_families.append(tag_family)
-    #Necessary to make output deterministic
-    tag_families.sort(key=lambda x: x.consensus.left.query_name)
     return tag_families
 
 def _hamming_dist(str1, str2):
@@ -409,8 +407,7 @@ def _rank_tags(tagged_paired_aligns):
     tag_count_dict = defaultdict(int)
     for paired_align in tagged_paired_aligns:
         tag_count_dict[paired_align.umt] += 1
-    tags_by_count = sorted(tag_count_dict.items(),
-                           key=lambda x: (-1 * x[1], x[0]))
+    tags_by_count = utils.sort_dict(tag_count_dict)
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
