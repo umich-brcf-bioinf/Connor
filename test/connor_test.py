@@ -669,8 +669,20 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual('X0', tag._tag_name)
         self.assertEqual('Z', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'filter')
-        connor_align = MicroMock(filter_value='foo')
-        self.assertEquals('foo', tag._get_value(None, connor_align))
+
+        self.assertEquals(None, tag._get_value(None, None))
+
+        family = MicroMock(filter_value=None)
+        connor_align = MicroMock(filter_value=None)
+        self.assertEquals(None, tag._get_value(family, connor_align))
+
+        family = MicroMock(filter_value='foo')
+        connor_align = MicroMock(filter_value='bar')
+        self.assertEquals('foo', tag._get_value(family, None))
+        self.assertEquals('bar', tag._get_value(None, connor_align))
+        self.assertEquals('foo;bar', tag._get_value(family, connor_align))
+
+
 
     def test_build_bam_tags_x1_unique_identifier(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X1')
