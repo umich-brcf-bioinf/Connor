@@ -743,38 +743,6 @@ class ConnorTest(BaseConnorTestCase):
         family = MicroMock(included_pair_count = 2)
         self.assertEqual('family too small (<3)', family_filter(family))
 
-
-    def test_build_annotated_aligns_writer(self):
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
-'''.replace("|", "\t")
-
-        with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
-            annotated_output_bam = os.path.join(tmp_dir.path, 'annotated.bam')
-            tags = []
-            actual_writer = connor._build_writer(input_bam,
-                                                 annotated_output_bam,
-                                                 tags)
-            actual_writer.close()
-
-            actual_output = samtools.alignment_file(annotated_output_bam, 'rb',)
-            expected_header = {'HD': {'GO': 'none',
-                                      'SO': 'coordinate',
-                                      'VN': '1.4'},
-                               'SQ': [{'SN': 'chr10', 'LN': 135534747}]}
-            self.assertEqual(expected_header, actual_output.header)
-
-    def test_build_annotated_aligns_writer_nullIfNotSpecified(self):
-        actual_writer = connor._build_writer(input_bam='foo',
-                                             output_bam='',
-                                             tags=[])
-        self.assertEqual(samtools.AlignWriter.NULL, actual_writer)
-
     def test_build_coordinate_read_name_manifest(self):
         Align = namedtuple('Align', 'name key')
         align1 = Align(name='align1', key=3)
@@ -1102,7 +1070,8 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEquals(expected_tags, actual_tags)
 
     def test_parse_command_line_args(self):
-        namespace = connor._parse_command_line_args(["input.bam",
+        namespace = connor._parse_command_line_args(["command",
+                                                     "input.bam",
                                                      "output.bam"])
         self.assertEquals("input.bam", namespace.input_bam)
         self.assertEquals("output.bam", namespace.output_bam)
@@ -1110,10 +1079,11 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
     def test_parse_command_line_args_throwsConnorUsageError(self):
         self.assertRaises(utils.UsageError,
                           connor._parse_command_line_args,
-                          ["input"])
+                          ["command", "input"])
         self.assertRaises(utils.UsageError,
                           connor._parse_command_line_args,
-                          ["input",
+                          ["command",
+                           "input",
                            "output",
                            "something else"])
 
@@ -1173,7 +1143,12 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                                                  "input.sam",
                                                  sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
-            consensus_writer = connor._build_writer(input_bam, output_bam, [])
+            args = Namespace(simplify_pg_header=True,
+                             original_command_line='foo')
+            consensus_writer = samtools.build_writer(input_bam,
+                                                     output_bam,
+                                                     tags=[],
+                                                     args=args)
             annotated_writer = samtools_test.MockAlignWriter()
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
@@ -1269,10 +1244,13 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
-                             umt_distance_threshold=1)
-            consensus_writer = connor._build_writer(input_bam,
-                                                    output_bam,
-                                                    tags=[])
+                             umt_distance_threshold=1,
+                             simplify_pg_header=False,
+                             original_command_line='foo')
+            consensus_writer = samtools.build_writer(input_bam,
+                                                     output_bam,
+                                                     [],
+                                                     args)
             annotated_writer = samtools.AlignWriter.NULL
 
             connor._dedup_alignments(args,

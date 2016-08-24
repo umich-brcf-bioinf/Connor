@@ -398,8 +398,14 @@ def _parse_command_line_args(arguments):
  combined into a single family. Lower threshold make more families with more
  consistent UMTs; 0 implies UMI must match
  exactly.""".format(DEFAULT_UMT_DISTANCE_THRESHOLD))
-
-    args = parser.parse_args(arguments)
+    parser.add_argument('--simplify_pg_header',
+                        action="store_true",
+                        default=False,
+                        help=argparse.SUPPRESS)
+    args = parser.parse_args(arguments[1:])
+    args.original_command_line = arguments
+    if not args.log_file:
+        args.log_file = args.output_bam + ".log"
     return args
 
 def _rank_tags(tagged_paired_aligns):
@@ -505,15 +511,6 @@ def _log_environment_info(log, args):
     log.debug('platform_python_version|{}', platform.python_version())
     log.debug('pysam_version|{}', pysam.__version__)
 
-def _build_writer(input_bam, output_bam, tags):
-    if not output_bam:
-        return samtools.AlignWriter.NULL
-    else:
-        input_bam = samtools.alignment_file(input_bam, "rb")
-        header = input_bam.header
-        input_bam.close()
-        return samtools.AlignWriter(header, output_bam, tags)
-
 #TODO: cgates: None checking/cyclomatic complexity could be simplified with UNPLACED/NULL family object
 def _build_bam_tags():
     def combine_filters(family, align):
@@ -559,22 +556,21 @@ def main(command_line_args=None):
         command_line_args = sys.argv
     try:
         start_time = time.time()
-        args = _parse_command_line_args(command_line_args[1:])
-        args.original_command_line = command_line_args
-        if not args.log_file:
-            args.log_file = args.output_bam + ".log"
+        args = _parse_command_line_args(command_line_args)
         log = utils.Logger(args)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
         _log_environment_info(log, args)
         bam_tags = _build_bam_tags()
-        base_annotated_writer = _build_writer(args.input_bam,
-                                              args.annotated_output_bam,
-                                              bam_tags)
+        base_annotated_writer = samtools.build_writer(args.input_bam,
+                                                      args.annotated_output_bam,
+                                                      bam_tags,
+                                                      args)
         annotated_writer = LoggingWriter(base_annotated_writer, log)
-        consensus_writer = _build_writer(args.input_bam,
-                                         args.output_bam,
-                                         bam_tags)
+        consensus_writer = samtools.build_writer(args.input_bam,
+                                                 args.output_bam,
+                                                 bam_tags,
+                                                 args)
         _dedup_alignments(args, consensus_writer, annotated_writer, log)
         annotated_writer.close(log)
         consensus_writer.close(log)

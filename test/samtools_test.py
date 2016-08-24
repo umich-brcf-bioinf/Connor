@@ -2,11 +2,13 @@
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
+from argparse import Namespace
 from copy import deepcopy
 import os
 import pysam
 from testfixtures.tempdirectory import TempDirectory
 
+import connor
 from connor.samtools import BamFlag
 from connor.samtools import BamTag
 from connor.samtools import ConnorAlign
@@ -192,6 +194,51 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
 
 
 class SamtoolsTest(utils_test.BaseConnorTestCase):
+    def test_build_writer(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+@PG|ID:bwa|VN:0.5.5
+@PG|ID:GATK|PN:foo|VN:1.0.3471
+readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+'''.replace("|", "\t")
+
+        with TempDirectory() as tmp_dir:
+            input_bam = create_bam(tmp_dir.path,
+                                   'input.sam',
+                                   sam_contents)
+            annotated_output_bam = os.path.join(tmp_dir.path, 'annotated.bam')
+            tags = []
+            args=Namespace(original_command_line=['command-line'],
+                           simplify_pg_header=False)
+            actual_writer = samtools.build_writer(input_bam,
+                                                  annotated_output_bam,
+                                                  tags,
+                                                  args)
+            actual_writer.close()
+
+            actual_output = samtools.alignment_file(annotated_output_bam, 'rb',)
+            expected_header = {'HD': {'GO': 'none',
+                                      'SO': 'coordinate',
+                                      'VN': '1.4'},
+                               'SQ': [{'SN': 'chr10', 'LN': 135534747}],
+                               'PG': [{'ID':'bwa', 'VN':'0.5.5'},
+                                      {'ID':'GATK', 'PN':'foo', 'VN':'1.0.3471'},
+                                      {'ID':'connor',
+                                       'PN':'connor',
+                                       'VN':connor.__version__,
+                                       'CL':'command-line'
+                                       },
+                                      ]}
+            self.assertEqual(expected_header, actual_output.header)
+
+    def test_build_annotated_aligns_writer_nullIfNotSpecified(self):
+        actual_writer = samtools.build_writer(input_bam='foo',
+                                              output_bam='',
+                                              tags=[],
+                                              args=Namespace())
+        self.assertEqual(samtools.AlignWriter.NULL, actual_writer)
+
     def test_sort_and_index_bam(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
