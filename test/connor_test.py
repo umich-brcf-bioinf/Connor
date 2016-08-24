@@ -8,6 +8,10 @@ from argparse import Namespace
 from collections import namedtuple
 import os
 import sys
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
 from connor import samtools
@@ -15,16 +19,12 @@ import connor.utils as utils
 from connor.connor import _build_lightweight_pairs
 from connor.samtools import ConnorAlign
 from connor.connor import _PairedAlignment
-import test.samtools_test as samtools_test
 from test.samtools_test import MockAlignWriter
 from test.samtools_test import mock_align
+import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
 
 def _mock_connor_align(query_name,
                        reference_name,

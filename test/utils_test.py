@@ -48,6 +48,9 @@ class BaseConnorTestCase(unittest.TestCase):
     def tearDown(self):
         unittest.TestCase.tearDown(self)
 
+    def ok(self):
+        #pylint: disable=redundant-unittest-assert
+        self.assertTrue(True)
 
 class FilteredGeneratorTest(BaseConnorTestCase):
     def test_filter_passesAllThroughWhenNoFilters(self):

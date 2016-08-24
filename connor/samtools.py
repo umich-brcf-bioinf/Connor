@@ -420,11 +420,12 @@ def sort_and_index_bam(bam_filename):
     index(bam_filename)
 
 CONNOR_PG_ID='connor'
+CONNOR_PG_PN='connor'
 HEADER_PG_KEY = 'PG'
 
 def _set_pg_header(header, simplify_pg_header, command_line):
     connor_header = {'ID':CONNOR_PG_ID,
-                     'PN':'connor'}
+                     'PN':CONNOR_PG_PN}
     if not simplify_pg_header:
         connor_header['CL'] = ' '.join(command_line)
         connor_header['VN'] = connor.__version__
