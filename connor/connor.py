@@ -523,11 +523,18 @@ def _build_writer(input_bam, output_bam, tags):
         input_bam.close()
         return samtools.AlignWriter(header, output_bam, tags)
 
+#TODO: cgates: None checking/cyclomatic complexity could be simplified with UNPLACED/NULL family object
 def _build_bam_tags():
+    def combine_filters(family, align):
+        filter_values = [x.filter_value for x in [family, align] if x and x.filter_value]
+        if filter_values:
+            return ";".join(filter_values)
+        else:
+            return None
     tags = [
         samtools.BamTag("X0", "Z",
                         ("filter (why the alignment was excluded)"),
-                        lambda fam, align: align.filter_value),
+                        combine_filters),
         samtools.BamTag("X1", "i",
                         "unique identifier for this alignment family",
                         lambda fam, align: fam.umi_sequence if fam else None),
