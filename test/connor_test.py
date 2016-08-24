@@ -547,47 +547,47 @@ class TagFamiliyTest(BaseConnorTestCase):
 
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
-    def test_init_noMinorityIfConsistentCigar(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3M"
-        pair3.right.cigarstring = "3S3M"
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(0, actual_tag_family.minority_cigar_percentage)
-
-    def test_init_setsMinorityPercentage(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3I"
-        pair3.right.cigarstring = "3S3I"
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(1/3, actual_tag_family.minority_cigar_percentage)
+#     def test_init_noMinorityIfConsistentCigar(self):
+#         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+#         pair1.left.cigarstring = "3S3M"
+#         pair1.right.cigarstring = "3S3M"
+#         pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+#         pair2.left.cigarstring = "3S3M"
+#         pair2.right.cigarstring = "3S3M"
+#         pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+#         pair3.left.cigarstring = "3S3M"
+#         pair3.right.cigarstring = "3S3M"
+#         alignments = [pair1, pair2, pair3]
+#         input_umts = ("nnn", "nnn")
+#         inexact_match_count = 0
+# 
+#         actual_tag_family = connor._TagFamily(input_umts,
+#                                              alignments,
+#                                              inexact_match_count,
+#                                              consensus_threshold=0.6)
+# 
+#         self.assertEquals(0, actual_tag_family.minority_cigar_percentage)
+# 
+#     def test_init_setsMinorityPercentage(self):
+#         pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+#         pair1.left.cigarstring = "3S3M"
+#         pair1.right.cigarstring = "3S3M"
+#         pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+#         pair2.left.cigarstring = "3S3M"
+#         pair2.right.cigarstring = "3S3M"
+#         pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+#         pair3.left.cigarstring = "3S3I"
+#         pair3.right.cigarstring = "3S3I"
+#         alignments = [pair1, pair2, pair3]
+#         input_umts = ("nnn", "nnn")
+#         inexact_match_count = 0
+# 
+#         actual_tag_family = connor._TagFamily(input_umts,
+#                                              alignments,
+#                                              inexact_match_count,
+#                                              consensus_threshold=0.6)
+# 
+#         self.assertEquals(1/3, actual_tag_family.minority_cigar_percentage)
 
     def test_init_addsFilterForMinority(self):
         def pair(name, c1, c2):

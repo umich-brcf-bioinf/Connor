@@ -163,7 +163,6 @@ class _TagFamily(object):
         _TagFamily.umi_sequence += 1
         self.umt = umt
         (self.distinct_cigar_count,
-         self.minority_cigar_percentage,
          majority_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
         self.align_pairs = alignments
         self._mark_minority_cigar(majority_cigar)
@@ -244,15 +243,10 @@ class _TagFamily(object):
         top_two_cigar_count = counter.most_common(2)
         dominant_cigar = top_two_cigar_count[0][0]
         dominant_cigar_count = top_two_cigar_count[0][1]
-        if len(top_two_cigar_count) == 1:
-            minority_cigar_percentage = 0
-        elif dominant_cigar_count == top_two_cigar_count[0][1]:
+        if number_distict_cigars > 1 and dominant_cigar_count == top_two_cigar_count[1][1]:
             dominant_cigar = sorted(counter.most_common(),
                                     key=lambda x: (-x[1], x[0]))[0][0]
-            minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
-        else:
-            minority_cigar_percentage = top_two_cigar_count[1][1]/len(alignments)
-        return number_distict_cigars, minority_cigar_percentage, dominant_cigar
+        return number_distict_cigars, dominant_cigar
 
 
     #TODO: (cgates) tags should not assume umt is a tuple and symmetric
@@ -573,9 +567,9 @@ def main(command_line_args=None):
         if not args.log_file:
             args.log_file = args.output_bam + ".log"
         log = utils.Logger(args)
-        _log_environment_info(log, args)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
+        _log_environment_info(log, args)
         bam_tags = _build_bam_tags()
         base_annotated_writer = _build_writer(args.input_bam,
                                               args.annotated_output_bam,

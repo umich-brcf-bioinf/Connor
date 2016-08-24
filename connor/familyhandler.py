@@ -1,6 +1,5 @@
 from __future__ import print_function, absolute_import, division
-from collections import defaultdict
-import pandas as pd
+import math
 
 def build_family_handlers(args,
                           consensus_writer,
@@ -8,8 +7,6 @@ def build_family_handlers(args,
                           logger):
     handlers = [_FamilySizeStatHandler(logger),
                 _MatchStatHandler(args, logger),
-                _CigarMinorityStatHandler(logger),
-                _CigarStatHandler(logger),
                 _WriteAnnotatedAlignsHandler(annotated_writer),
                 _WriteConsensusHandler(consensus_writer)]
     return handlers
@@ -42,158 +39,61 @@ class _WriteAnnotatedAlignsHandler(object):
         pass
 
 
-class _BaseTukeyStatHandler(object):
-    def __init__(self):
+class _FamilySizeStatHandler(object):
+    def __init__(self, logger):
         self.collection = []
         self.min = None
         self.quartile_1 = None
         self.median = None
+        self.mean = None
         self.quartile_3 = None
         self.max = None
-
-    def get_family_statistic(self, tag_family):
-        pass
+        self._log = logger
 
     def handle(self, tag_family):
-        stat = self.get_family_statistic(tag_family)
-        if stat is not None:
-            self.collection.append(stat)
+        self.collection.append(len(tag_family.align_pairs))
 
-    @property
-    def summary(self):
-        return (self.min,
-                self.quartile_1,
-                self.median,
-                self.quartile_3,
-                self.max)
-
-    def end(self):
-        summary = pd.Series(self.collection).describe()
-        self.min = summary['min']
-        self.max = summary['max']
-        self.median = summary['50%']
-        self.quartile_1 = summary['25%']
-        self.quartile_3 = summary['75%']
-
-
-class _FamilySizeStatHandler(_BaseTukeyStatHandler):
-    def __init__(self, logger):
-        super(_FamilySizeStatHandler, self).__init__()
-        self._log = logger
-
-    def get_family_statistic(self, tag_family):
-        return len(tag_family.align_pairs)
-
-    def end(self):
-        super(_FamilySizeStatHandler, self).end()
-        self._log.debug(('family_stat|family size distribution (original pair '
-                   'counts: min, 1Q, median, 3Q, max): {}'),
-                  ', '.join(map(str, self.summary)))
-
-
-class _CigarMinorityStatHandler(_BaseTukeyStatHandler):
-    def __init__(self, logger):
-        super(_CigarMinorityStatHandler, self).__init__()
-        self._log = logger
-
-    def get_family_statistic(self, tag_family):
-        stat = tag_family.minority_cigar_percentage
-        if stat:
-            return stat
-        else:
+    #TODO: cgates: given small num of distinct values, suspect there is a more
+    # memory efficient approach using dict[size] = count
+    @staticmethod
+    def _percentile(collection, percent):
+        if not collection:
             return None
-
-    def end(self):
-        super(_CigarMinorityStatHandler, self).end()
-        self._log.debug(('family_stat|cigar|family distribution of minority '
-                   'CIGAR percentages (min, 1Q, median, 3Q, max): {}'),
-                  ', '.join(map(lambda x: str(round(x,2)), self.summary)))
-
-#TODO: (cgates): Split into tukey and other stats
-class _CigarStatHandler(object):
-    def __init__(self, logger):
-        self._log = logger
-        self.distinct_cigar_counts = []
-        self.min = None
-        self.quartile_1 = None
-        self.median = None
-        self.quartile_3 = None
-        self.max = None
-        self.total_input_alignment_count = 0
-        self.total_alignment_count = 0
-        self.total_family_count = 0
-        self.families_cigar_counts = defaultdict(int)
-        self.family_cigar_minority_percentage_counts = defaultdict(list)
-
-
-    def handle(self, tag_family):
-        self.distinct_cigar_counts.append(tag_family.distinct_cigar_count)
-        self.total_input_alignment_count += len(tag_family.align_pairs)
-        self.total_alignment_count += tag_family.included_pair_count
-        self.total_family_count += 1
-        self.families_cigar_counts[tag_family.distinct_cigar_count] += 1
-        self.family_cigar_minority_percentage_counts[tag_family.distinct_cigar_count].append(tag_family.minority_cigar_percentage)
-
-
-    @property
-    def percent_deduplication(self):
-        return 1 - (self.total_family_count / self.total_input_alignment_count)
-
-
-    @property
-    def total_excluded_alignments(self):
-        return self.total_input_alignment_count - self.total_alignment_count
-
-    @property
-    def percent_excluded_alignments(self):
-        return self.total_excluded_alignments / self.total_input_alignment_count
+        fractional_index = (len(collection)-1) * percent
+        floor_index = int(math.floor(fractional_index))
+        ceiling_index = int(math.ceil(fractional_index))
+        index = int(fractional_index)
+        if floor_index == ceiling_index:
+            value = collection[index]
+        else:
+            lower = collection[floor_index] * (ceiling_index - fractional_index)
+            upper = collection[ceiling_index] * (fractional_index - floor_index)
+            value = lower + upper
+        return value
 
     @property
     def summary(self):
         return (self.min,
                 self.quartile_1,
                 self.median,
+                self.mean,
                 self.quartile_3,
                 self.max)
 
+    #TODO: cgates: add guard for empty collection
     def end(self):
-        summary = pd.Series(self.distinct_cigar_counts).describe()
-        self.min = summary['min']
-        self.max = summary['max']
-        self.median = summary['50%']
-        self.quartile_1 = summary['25%']
-        self.quartile_3 = summary['75%']
+        percentile = _FamilySizeStatHandler._percentile
+        self.collection.sort()
+        self.min = self.collection[0]
+        self.quartile_1 = percentile(self.collection, 0.25)
+        self.median = percentile(self.collection, 0.50)
+        self.quartile_3 = percentile(self.collection, 0.75)
+        self.max = self.collection[-1]
+        self.mean = sum(self.collection) / len(self.collection)
 
-        self._log.debug(('family_stat|cigar|family distribution of distinct'
-                         ' CIGAR counts (min, 1Q, median, 3Q, max): {}'),
-                        ', '.join(map(str, self.summary)))
-        ordered_cigar_counts = sorted(self.families_cigar_counts.items(),
-                                      key = lambda x: -1 * int(x[1]))
-        for num_cigars, freq in ordered_cigar_counts:
-            summary = pd.Series(self.family_cigar_minority_percentage_counts[num_cigars]).describe()
-            self._log.debug(('family_stat|cigar|{}/{} ({:.2f}%) families had '
-                             '{} CIGAR: minor % distrib '
-                             '{:.2f}, {:.2f}, {:.2f}, {:.2f}, {:.2f}'),
-                            freq,
-                            self.total_family_count,
-                            100 * freq / self.total_family_count,
-                            num_cigars,
-                            summary['min'],
-                            summary['25%'],
-                            summary['50%'],
-                            summary['75%'],
-                            summary['max'])
-        self._log.debug(('family_stat|cigar|{}/{} ({:.2f}%) pairs were '
-                         'excluded as minority CIGAR'),
-                        self.total_excluded_alignments,
-                        self.total_input_alignment_count,
-                        100 * self.percent_excluded_alignments)
-        self._log.debug(('family_stat|{} original pairs (of majority CIGAR) '
-                         'were deduplicated to {} families '
-                         '(majority CIGAR dedup rate {:.2f}%)'),
-                        self.total_alignment_count,
-                        self.total_family_count,
-                        100 * self.percent_deduplication)
+        self._log.debug(('family_stat|family size distribution (original pair '
+                   'counts: min, 1Q, median, mean, 3Q, max): {}'),
+                  ', '.join(map(lambda x: str(round(x, 2)), self.summary)))
 
 
 class _MatchStatHandler(object):
@@ -209,18 +109,18 @@ class _MatchStatHandler(object):
 
     def end(self):
         exact_count = self.total_pair_count - self.total_inexact_match_count
-        self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
+        self._log.debug(('{:.2f}% ({}/{}) original pairs matched '
                          'UMT exactly'),
+                        100 * (1 - self.percent_inexact_match),
                         exact_count,
-                        self.total_pair_count,
-                        100 * (1 - self.percent_inexact_match))
+                        self.total_pair_count)
 
-        self._log.debug(('family_stat|{}/{} ({:.2f}%) original pairs matched '
+        self._log.debug(('{:.2f}% ({}/{}) original pairs matched '
                       'by Hamming distance threshold (<={}) on '
                       'left or right UMT '),
+                     100 * self.percent_inexact_match,
                      self.total_inexact_match_count,
                      self.total_pair_count,
-                     100 * self.percent_inexact_match,
                      self.hamming_threshold)
 
     @property

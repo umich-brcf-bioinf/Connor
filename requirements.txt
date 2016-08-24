@@ -1,5 +1,4 @@
 cython==0.24
-pandas>=0.18
 pysam>=0.8.4,<0.9.1
 testfixtures>=3.0.2,<4.11
 nose
