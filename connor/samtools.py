@@ -5,6 +5,7 @@ from copy import deepcopy
 import os
 import re
 import pysam
+import connor
 import connor.utils as utils
 
 
@@ -417,3 +418,28 @@ def sort_and_index_bam(bam_filename):
     sort(bam_filename, sorted_bam_filename)
     os.rename(sorted_bam_filename, bam_filename)
     index(bam_filename)
+
+CONNOR_PG_ID='connor'
+HEADER_PG_KEY = 'PG'
+
+def _set_pg_header(header, simplify_pg_header, command_line):
+    connor_header = {'ID':CONNOR_PG_ID,
+                     'PN':'connor'}
+    if not simplify_pg_header:
+        connor_header['CL'] = ' '.join(command_line)
+        connor_header['VN'] = connor.__version__
+    pg_headers = header.get(HEADER_PG_KEY, [])
+    pg_headers.append(connor_header)
+    header[HEADER_PG_KEY]=pg_headers
+
+def build_writer(input_bam, output_bam, tags, args):
+    if not output_bam:
+        return AlignWriter.NULL
+    else:
+        input_bam = alignment_file(input_bam, "rb")
+        header = input_bam.header
+        input_bam.close()
+        _set_pg_header(header,
+                       args.simplify_pg_header,
+                       args.original_command_line)
+        return AlignWriter(header, output_bam, tags)
