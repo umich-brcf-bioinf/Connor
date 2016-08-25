@@ -9,20 +9,50 @@ from __future__ import print_function, absolute_import, division
 from collections import Counter
 import itertools
 try:
-    import itertools.izip as zip
+    #pylint: disable=redefined-builtin
+    import itertools.izip as iter_zip
 except ImportError:
-    pass
+    iter_zip = zip     #pylint: disable=invalid-name
 import os
 import connor.utils as utils
 import connor.samtools as samtools
 
 _SAMPLE_SIZE = 1000
 
+def _balanced_strand_gen(aligns, total_aligns):
+    '''given collection of random {aligns}, returns alternating pos/neg
+    strands up to {total_aligns}; will return smaller of pos/neg collection
+    if less than total_aligns'''
+    predicate=lambda align: align.is_reverse
+    gen1, gen2 = itertools.tee((predicate(align), align) for align in aligns)
+    pos_strand_gen = (align for pred, align in gen1 if not pred)
+    neg_strand_gen = (align for pred, align in gen2 if pred)
+    combined_gen = iter_zip(pos_strand_gen, neg_strand_gen)
+    interleaved_gen = (align for aligns in combined_gen for align in aligns)
+    return itertools.islice(interleaved_gen, total_aligns)
+
 def _log_force_or_raise(args, log, msg):
     if args.force:
         log.warning(msg + ' (**forcing**)')
     else:
         raise utils.UsageError(msg + ' Are you sure? (--force to proceed)')
+
+def _sample_bamfile(input_bam, extractor_function):
+    stats = {'forward': [], 'reverse': []}
+    bamfile = samtools.alignment_file(input_bam, 'rb')
+    try:
+        for align in _balanced_strand_gen(bamfile.fetch(), _SAMPLE_SIZE):
+            stats[_strand(align)].append(extractor_function(align))
+    finally:
+        bamfile.close()
+    return stats
+
+def _below_threshold(strand_stats,
+                     freq_function,
+                     threshold):
+    forward_freq = freq_function(strand_stats, 'forward')
+    reverse_freq = freq_function(strand_stats, 'reverse')
+    return min(forward_freq, reverse_freq) < threshold
 
 def _check_input_bam_exists(args, log=None): #pylint: disable=unused-argument
     if not os.path.exists(args.input_bam):
@@ -92,57 +122,32 @@ def _check_input_bam_barcoded(args, log=None):
         edge_index = -1 if align.is_reverse else 0
         return int(align.cigartuples[edge_index][0] == SOFTCLIP_OP)
 
-    softclipped = {'forward': [], 'reverse': []}
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
-    try:
-        for align in itertools.islice(bamfile.fetch(), _SAMPLE_SIZE):
-            softclipped[_strand(align)].append(is_edge_softclipped(align))
-    finally:
-        bamfile.close()
-
-    forward_freq = sum(softclipped['forward'])/len(softclipped['forward'])
-    reverse_freq = sum(softclipped['reverse'])/len(softclipped['reverse'])
-    if min(forward_freq, reverse_freq) < SOFTCLIP_THRESHOLD:
+    softclipped = _sample_bamfile(args.input_bam, is_edge_softclipped)
+    percent_true = lambda stats, strand : sum(stats[strand])/len(stats[strand])
+    if _below_threshold(softclipped, percent_true, SOFTCLIP_THRESHOLD):
         msg = ('Specified input [{}] reads do not appear to have '
-               'barcodes.').format(args.input_bam)
+                   'barcodes.').format(args.input_bam)
         _log_force_or_raise(args, log, msg)
 
 def _check_input_bam_consistent_length(args, log=None):
     #pylint: disable=invalid-name
     CONSISTENT_LENGTH_THRESHOLD = 0.90
 
-    def balanced_strand_gen(aligns, total_aligns):
-        '''given collection of random {aligns}, returns alternating pos/neg
-        strands up to {total_aligns}; will return smaller of pos/neg collection
-        if less than total_aligns'''
-        predicate=lambda align: align.is_reverse
-        a, b = itertools.tee((predicate(align), align) for align in aligns)
-        pos_strand_gen = (align for pred, align in a if not pred)
-        neg_strand_gen = (align for pred, align in b if pred)
-        combined_gen = zip(pos_strand_gen, neg_strand_gen)
-        interleaved_gen = (align for aligns in combined_gen for align in aligns)
-        return itertools.islice(interleaved_gen, total_aligns)
-
-    def freq_of_most_common_length(lengths):
+    def freq_of_most_common_length(seq_lengths, strand):
+        lengths = seq_lengths[strand]
         counter = Counter(lengths)
         most_common_length_count = counter.most_common(1)[0]
         count = most_common_length_count[1]
         return count / len(lengths)
 
-    seq_length = {'forward': [], 'reverse': []}
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
-    try:
-        for align in balanced_strand_gen(bamfile.fetch(), _SAMPLE_SIZE):
-            seq_length[_strand(align)].append(len(align.query_sequence))
-    finally:
-        bamfile.close()
-    forward_freq = freq_of_most_common_length(seq_length['forward'])
-    reverse_freq = freq_of_most_common_length(seq_length['reverse'])
-    if min(forward_freq, reverse_freq) < CONSISTENT_LENGTH_THRESHOLD:
+    seq_lengths = _sample_bamfile(args.input_bam,
+                                 lambda a: len(a.query_sequence))
+    if _below_threshold(seq_lengths,
+                        freq_of_most_common_length,
+                        CONSISTENT_LENGTH_THRESHOLD):
         msg = ('Specified input [{}] reads appear to have inconsistent '
                'sequence lengths.').format(args.input_bam)
         _log_force_or_raise(args, log, msg)
-
 
 _VALIDATIONS = [_check_input_bam_exists,
                 _check_input_bam_valid,
