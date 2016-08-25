@@ -20,9 +20,9 @@ import connor.samtools as samtools
 _SAMPLE_SIZE = 1000
 
 def _balanced_strand_gen(aligns, total_aligns):
-    '''given collection of random {aligns}, returns alternating pos/neg
-    strands up to {total_aligns}; will return smaller of pos/neg collection
-    if less than total_aligns'''
+    '''given collection of random {aligns}, returns alternating forward/reverse
+    strands up to {total_aligns}; will return smaller of forward/reverse
+    collection if less than total_aligns'''
     predicate=lambda align: align.is_reverse
     gen1, gen2 = itertools.tee((predicate(align), align) for align in aligns)
     pos_strand_gen = (align for pred, align in gen1 if not pred)
@@ -30,6 +30,19 @@ def _balanced_strand_gen(aligns, total_aligns):
     combined_gen = iter_zip(pos_strand_gen, neg_strand_gen)
     interleaved_gen = (align for aligns in combined_gen for align in aligns)
     return itertools.islice(interleaved_gen, total_aligns)
+
+def _check_stat_below_threshold(args,
+                                extractor_function,
+                                freq_function,
+                                threshold,
+                                msg,
+                                log):
+    stats = _sample_bamfile(args.input_bam,
+                            extractor_function)
+    if _below_threshold(stats,
+                    freq_function,
+                    threshold):
+        _log_force_or_raise(args, log, msg)
 
 def _log_force_or_raise(args, log, msg):
     if args.force:
@@ -122,12 +135,15 @@ def _check_input_bam_barcoded(args, log=None):
         edge_index = -1 if align.is_reverse else 0
         return int(align.cigartuples[edge_index][0] == SOFTCLIP_OP)
 
-    softclipped = _sample_bamfile(args.input_bam, is_edge_softclipped)
     percent_true = lambda stats, strand : sum(stats[strand])/len(stats[strand])
-    if _below_threshold(softclipped, percent_true, SOFTCLIP_THRESHOLD):
-        msg = ('Specified input [{}] reads do not appear to have '
-                   'barcodes.').format(args.input_bam)
-        _log_force_or_raise(args, log, msg)
+    msg = ('Specified input [{}] reads do not appear to have '
+               'barcodes.').format(args.input_bam)
+    _check_stat_below_threshold(args,
+                                is_edge_softclipped,
+                                percent_true,
+                                SOFTCLIP_THRESHOLD,
+                                msg,
+                                log)
 
 def _check_input_bam_consistent_length(args, log=None):
     #pylint: disable=invalid-name
@@ -140,14 +156,14 @@ def _check_input_bam_consistent_length(args, log=None):
         count = most_common_length_count[1]
         return count / len(lengths)
 
-    seq_lengths = _sample_bamfile(args.input_bam,
-                                 lambda a: len(a.query_sequence))
-    if _below_threshold(seq_lengths,
-                        freq_of_most_common_length,
-                        CONSISTENT_LENGTH_THRESHOLD):
-        msg = ('Specified input [{}] reads appear to have inconsistent '
-               'sequence lengths.').format(args.input_bam)
-        _log_force_or_raise(args, log, msg)
+    msg = ('Specified input [{}] reads appear to have inconsistent '
+           'sequence lengths.').format(args.input_bam)
+    _check_stat_below_threshold(args,
+                                lambda a: len(a.query_sequence),
+                                freq_of_most_common_length,
+                                CONSISTENT_LENGTH_THRESHOLD,
+                                msg,
+                                log)
 
 _VALIDATIONS = [_check_input_bam_exists,
                 _check_input_bam_valid,
