@@ -17,6 +17,12 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
+try:
+    from builtins import range as iter_range
+except ImportError:
+    from __builtin__ import xrange as iter_range
+
+# from past.builtins import xrange #pylint: disable=redefined-builtin
 from collections import defaultdict, Counter
 from copy import deepcopy
 import operator
@@ -213,7 +219,7 @@ class _TagFamily(object):
 
     def _complex_consensus_sequence(self, alignments):
         consensus = []
-        for i in utils.zrange(0, len(alignments[0].query_sequence)):
+        for i in iter_range(0, len(alignments[0].query_sequence)):
             counter = Counter([s.query_sequence[i:i+1] for s in alignments])
             base = counter.most_common(1)[0][0]
             freq = counter[base] / sum(counter.values())

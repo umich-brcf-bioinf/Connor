@@ -2,22 +2,14 @@ from __future__ import print_function, absolute_import, division
 
 from datetime import datetime
 import getpass
-import itertools
+try:
+    #pylint: disable=unused-import
+    import itertools.map as iter_map
+except ImportError:
+    iter_map = map  #pylint: disable=invalid-name
 import logging
 import socket
 import sys
-
-def zrange(*args):
-    try:
-        return xrange(*args)
-    except NameError:
-        return range(*args)
-
-def iter_map(*args):
-    try:
-        return itertools.imap(*args)
-    except AttributeError:
-        return map(*args)
 
 
 class UsageError(Exception):
