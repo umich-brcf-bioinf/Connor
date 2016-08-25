@@ -1067,14 +1067,28 @@ class ConnorTest(BaseConnorTestCase):
         actual_tags = connor._rank_tags(input_aligns)
 
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
-        self.assertEquals(expected_tags, actual_tags)
+        self.assertEqual(expected_tags, actual_tags)
 
     def test_parse_command_line_args(self):
         namespace = connor._parse_command_line_args(["command",
                                                      "input.bam",
                                                      "output.bam"])
-        self.assertEquals("input.bam", namespace.input_bam)
-        self.assertEquals("output.bam", namespace.output_bam)
+        self.assertEqual("input.bam", namespace.input_bam)
+        self.assertEqual("output.bam", namespace.output_bam)
+        self.assertEqual(False, namespace.force)
+        self.assertEqual(False, namespace.simplify_pg_header)
+        self.assertEqual(False, namespace.verbose)
+        self.assertEqual("output.bam.log", namespace.log_file)
+        self.assertEqual(None, namespace.annotated_output_bam)
+        self.assertEqual(connor.DEFAULT_CONSENSUS_FREQ_THRESHOLD,
+                         namespace.consensus_freq_threshold)
+        self.assertEqual(connor.DEFAULT_MIN_FAMILY_SIZE_THRESHOLD,
+                         namespace.min_family_size_threshold)
+        self.assertEqual(connor.DEFAULT_UMT_DISTANCE_THRESHOLD,
+                         namespace.umt_distance_threshold)
+        self.assertEquals(['command', 'input.bam', 'output.bam'],
+                          namespace.original_command_line)
+        self.assertEqual(11, len(vars(namespace)))
 
     def test_parse_command_line_args_throwsConnorUsageError(self):
         self.assertRaises(utils.UsageError,
