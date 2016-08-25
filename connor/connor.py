@@ -30,6 +30,7 @@ import time
 import pysam
 
 import connor
+import connor.command_validator as command_validator
 import connor.samtools as samtools
 import connor.familyhandler as familyhandler
 import connor.utils as utils
@@ -368,6 +369,10 @@ def _parse_command_line_args(arguments):
                         help="path to input BAM")
     parser.add_argument('output_bam',
                         help="path to deduplicated output BAM")
+    parser.add_argument('--force',
+                        action="store_true",
+                        default=False,
+                        help="=False. Override validation warnings")
     parser.add_argument('--log_file',
                         type=str,
                         help="={output_filename}.log. Path to verbose log file")
@@ -558,6 +563,7 @@ def main(command_line_args=None):
         start_time = time.time()
         args = _parse_command_line_args(command_line_args)
         log = utils.Logger(args)
+        command_validator.preflight(args, log)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
         _log_environment_info(log, args)

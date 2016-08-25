@@ -163,6 +163,13 @@ class LoggingWriter(object):
                    total,
                    text)
 
+    @staticmethod
+    def _log_filter_counts(filter_counts, log_method, msg_format, total):
+        for name, count in filter_counts.items():
+            LoggingWriter._log_stat(log_method,
+                                    msg_format.format(name),
+                                    count,
+                                    total)
     def _log_results(self):
         (included_align_count,
          excluded_align_count,
@@ -176,23 +183,20 @@ class LoggingWriter(object):
                                 excluded_align_count,
                                 total_align_count)
 
-        for name, count in self._unplaced_aligns.items():
-            LoggingWriter._log_stat(self._log.debug,
-                                    'alignments unplaced: {}'.format(name),
-                                    count,
-                                    total_align_count)
+        LoggingWriter._log_filter_counts(self._unplaced_aligns,
+                                         self._log.debug,
+                                         'alignments unplaced: {}',
+                                         total_align_count)
 
-        for name, count in self._discarded_aligns.items():
-            LoggingWriter._log_stat(self._log.debug,
-                                    'alignments discarded: {}'.format(name),
-                                    count,
-                                    total_align_count)
+        LoggingWriter._log_filter_counts(self._discarded_aligns,
+                                         self._log.debug,
+                                         'alignments discarded: {}',
+                                         total_align_count)
 
-        for name, count in discarded_fam_filter_counts.items():
-            LoggingWriter._log_stat(self._log.info,
-                                    'families discarded: {}'.format(name),
-                                    count,
-                                    total_fam_count)
+        LoggingWriter._log_filter_counts(discarded_fam_filter_counts,
+                                         self._log.info,
+                                         'families discarded: {}',
+                                         total_fam_count)
 
         LoggingWriter._log_stat(self._log.info,
                                 ('alignments included in '
@@ -420,11 +424,12 @@ def sort_and_index_bam(bam_filename):
     index(bam_filename)
 
 CONNOR_PG_ID='connor'
+CONNOR_PG_PN='connor'
 HEADER_PG_KEY = 'PG'
 
 def _set_pg_header(header, simplify_pg_header, command_line):
     connor_header = {'ID':CONNOR_PG_ID,
-                     'PN':'connor'}
+                     'PN':CONNOR_PG_PN}
     if not simplify_pg_header:
         connor_header['CL'] = ' '.join(command_line)
         connor_header['VN'] = connor.__version__

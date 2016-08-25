@@ -39,7 +39,8 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
                           "--annotated_output_bam",
                           output_annotated_bam_path,
                           "--verbose",
-                          "--simplify_pg_header"])
+                          "--simplify_pg_header",
+                          "--force"])
 
             def compare_files(expected_path, output_path):
                 expected_name = os.path.basename(expected_path)

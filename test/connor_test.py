@@ -8,6 +8,10 @@ from argparse import Namespace
 from collections import namedtuple
 import os
 import sys
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
 from connor import samtools
@@ -15,16 +19,12 @@ import connor.utils as utils
 from connor.connor import _build_lightweight_pairs
 from connor.samtools import ConnorAlign
 from connor.connor import _PairedAlignment
-import test.samtools_test as samtools_test
 from test.samtools_test import MockAlignWriter
 from test.samtools_test import mock_align
+import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
 
 def _mock_connor_align(query_name,
                        reference_name,
@@ -1067,14 +1067,28 @@ class ConnorTest(BaseConnorTestCase):
         actual_tags = connor._rank_tags(input_aligns)
 
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
-        self.assertEquals(expected_tags, actual_tags)
+        self.assertEqual(expected_tags, actual_tags)
 
     def test_parse_command_line_args(self):
         namespace = connor._parse_command_line_args(["command",
                                                      "input.bam",
                                                      "output.bam"])
-        self.assertEquals("input.bam", namespace.input_bam)
-        self.assertEquals("output.bam", namespace.output_bam)
+        self.assertEqual("input.bam", namespace.input_bam)
+        self.assertEqual("output.bam", namespace.output_bam)
+        self.assertEqual(False, namespace.force)
+        self.assertEqual(False, namespace.simplify_pg_header)
+        self.assertEqual(False, namespace.verbose)
+        self.assertEqual("output.bam.log", namespace.log_file)
+        self.assertEqual(None, namespace.annotated_output_bam)
+        self.assertEqual(connor.DEFAULT_CONSENSUS_FREQ_THRESHOLD,
+                         namespace.consensus_freq_threshold)
+        self.assertEqual(connor.DEFAULT_MIN_FAMILY_SIZE_THRESHOLD,
+                         namespace.min_family_size_threshold)
+        self.assertEqual(connor.DEFAULT_UMT_DISTANCE_THRESHOLD,
+                         namespace.umt_distance_threshold)
+        self.assertEquals(['command', 'input.bam', 'output.bam'],
+                          namespace.original_command_line)
+        self.assertEqual(11, len(vars(namespace)))
 
     def test_parse_command_line_args_throwsConnorUsageError(self):
         self.assertRaises(utils.UsageError,
