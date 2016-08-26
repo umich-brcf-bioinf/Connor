@@ -680,7 +680,7 @@ class ConnorTest(BaseConnorTestCase):
         connor_align = MicroMock(filter_value='bar')
         self.assertEquals('foo', tag._get_value(family, None))
         self.assertEquals('bar', tag._get_value(None, connor_align))
-        self.assertEquals('foo; bar', tag._get_value(family, connor_align))
+        self.assertEquals('foo;bar', tag._get_value(family, connor_align))
 
 
 
