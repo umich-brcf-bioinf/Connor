@@ -62,6 +62,8 @@ For more information see:
 Connor help
 -----------
 
+::
+
   $ connor --help
    usage: connor input_bam output_bam
    
