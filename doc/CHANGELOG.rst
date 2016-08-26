@@ -1,6 +1,18 @@
 Changelog
 =========
 
+0.4 (8/26/2016)
+---------------
+- Added input/command validations
+- Added annotated bam option
+- Revised QUICKSTART, METHODS
+- Added PG line in BAM header
+- Improved logging of filtered aligns and progress
+- Removed some logged stats to focused logging results
+- Removed dependency on pandas/numpy
+- Moderate performance (speed) improvements in calculating consensus sequence
+- Switched consensus quality to be the max mapping quality
+
 0.3 (8/8/2016)
 ---------------
 - Added filters to exclude low quality, unmapped, or unpaired alignments
