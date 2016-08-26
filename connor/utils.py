@@ -3,10 +3,9 @@ from __future__ import print_function, absolute_import, division
 from datetime import datetime
 import getpass
 try:
-    #pylint: disable=unused-import
-    import itertools.map as iter_map
+    from itertools import map as iter_map
 except ImportError:
-    iter_map = map  #pylint: disable=invalid-name
+    iter_map = map
 import logging
 import socket
 import sys
@@ -45,7 +44,7 @@ class FilteredGenerator(object):
                 if exclude(item):
                     excluded.append(name)
             if excluded:
-                filter_value = ";".join(excluded)
+                filter_value = "; ".join(excluded)
             else:
                 filter_value = None
             yield item, filter_value

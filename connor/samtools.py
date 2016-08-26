@@ -118,7 +118,7 @@ class LoggingWriter(object):
                 filter_values.append(fam_filter)
             if align_filter:
                 filter_values.append(align_filter)
-            return ";".join(filter_values)
+            return "; ".join(filter_values)
 
     @property
     def _discarded_aligns(self):
@@ -155,21 +155,25 @@ class LoggingWriter(object):
         total_count = included_count + excluded_count
         return included_count, excluded_count, total_count
 
+#     @staticmethod
+#     def _log_stat(log_method, text, count, total):
+#         log_method('{:.2f}% ({}/{}) {}',
+#                    100 * count / total,
+#                    count,
+#                    total,
+#                    text)
+
     @staticmethod
-    def _log_stat(log_method, text, count, total):
-        log_method('{:.2f}% ({}/{}) {}',
-                   100 * count / total,
-                   count,
-                   total,
-                   text)
+    def _percent_stat_str(count, total):
+        return '{:.2f}% ({}/{})'.format(100 * count / total, count, total)
 
     @staticmethod
     def _log_filter_counts(filter_counts, log_method, msg_format, total):
         for name, count in filter_counts.items():
-            LoggingWriter._log_stat(log_method,
-                                    msg_format.format(name),
-                                    count,
-                                    total)
+            percent = LoggingWriter._percent_stat_str(count, total)
+            log_method(msg_format.format(filter_name=name,
+                                         percent_stat=percent))
+
     def _log_results(self):
         (included_align_count,
          excluded_align_count,
@@ -178,31 +182,30 @@ class LoggingWriter(object):
          total_fam_count,
          discarded_fam_filter_counts) = self._family_stats
 
-        LoggingWriter._log_stat(self._log.info,
-                                'alignments unplaced or discarded',
-                                excluded_align_count,
-                                total_align_count)
-
+        self._log.info('{} alignments unplaced or discarded',
+                       LoggingWriter._percent_stat_str(excluded_align_count,
+                                                       total_align_count))
+ 
         LoggingWriter._log_filter_counts(self._unplaced_aligns,
                                          self._log.debug,
-                                         'alignments unplaced: {}',
+                                         'alignments unplaced: {percent_stat} {filter_name}',
                                          total_align_count)
 
         LoggingWriter._log_filter_counts(self._discarded_aligns,
                                          self._log.debug,
-                                         'alignments discarded: {}',
+                                         'alignments discarded: {percent_stat} {filter_name}',
                                          total_align_count)
 
         LoggingWriter._log_filter_counts(discarded_fam_filter_counts,
                                          self._log.info,
-                                         'families discarded: {}',
+                                         'families discarded: {percent_stat} {filter_name}',
                                          total_fam_count)
 
-        LoggingWriter._log_stat(self._log.info,
-                                ('alignments included in '
-                                 '{} families').format(included_fam_count),
-                                included_align_count,
-                                total_align_count)
+        percent_stat = LoggingWriter._percent_stat_str(included_align_count,
+                                                       total_align_count)
+        self._log.info('{} alignments included in {} families',
+                       percent_stat,
+                       included_fam_count),
 
         msg = ('{:.2f}% deduplication rate '
                '(1 - {} families/{} included alignments)')
