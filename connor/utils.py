@@ -1,27 +1,14 @@
 from __future__ import print_function, absolute_import, division
 
-from collections import defaultdict
-from collections import OrderedDict
 from datetime import datetime
-import errno
 import getpass
-import itertools
+try:
+    from itertools import map as iter_map
+except ImportError:
+    iter_map = map
 import logging
-import os
 import socket
 import sys
-
-def zrange(*args):
-    try:
-        return xrange(*args)
-    except NameError:
-        return range(*args)
-
-def iter_map(*args):
-    try:
-        return itertools.imap(*args)
-    except AttributeError:
-        return map(*args)
 
 
 class UsageError(Exception):
@@ -29,9 +16,17 @@ class UsageError(Exception):
     def __init__(self, msg, *args):
         super(UsageError, self).__init__(msg, *args)
 
+class CountingGenerator(object):
+    def __init__(self):
+        self.item_count = 0
+
+    def count(self, generator):
+        for i in generator:
+            self.item_count += 1
+            yield i
 
 class FilteredGenerator(object):
-    '''Filters a base collection/collection capturing filtered stats'''
+    '''Applies filters to a base collection yielding the item and its filter'''
     def __init__(self, filter_dict):
         '''
         Args:
@@ -40,9 +35,6 @@ class FilteredGenerator(object):
                 be excluded. For example: {"div by 2": lambda x: x % 2 == 0}
         '''
         self._filters = sorted(filter_dict.items(), key=lambda x: x[0])
-        self._filter_stats = defaultdict(int)
-        self.total_included = 0
-        self.total_excluded = 0
 
     def filter(self, base_collection):
         '''Yields subset of base_collection/generator based on filters.'''
@@ -52,20 +44,10 @@ class FilteredGenerator(object):
                 if exclude(item):
                     excluded.append(name)
             if excluded:
-                self._filter_stats[";".join(excluded)] += 1
-                self.total_excluded += 1
+                filter_value = "; ".join(excluded)
             else:
-                self.total_included += 1
-                yield item
-
-    @property
-    def filter_stats(self):
-        '''Returns an immutable ordered dict of filter:counts; when an item
-        would be filtered by multiple filters, all are listed in alpha order;
-        the dict itself is ordered by descending count, filter name.
-        '''
-        return OrderedDict(sorted(self._filter_stats.items(),
-                                   key=lambda x: (-1 * x[1], x[0])))
+                filter_value = None
+            yield item, filter_value
 
 
 class Logger(object):
@@ -121,18 +103,20 @@ class Logger(object):
         self._file_logger.debug(self._format(message, args),
                                extra=self._logging_dict)
 
+    def _log(self, msg_type, method, message, *args):
+        self._print(msg_type, message, args)
+        method(self._format(message, args),
+               extra=self._logging_dict)
+
     def error(self, message, *args):
-        self._print("ERROR", message, args)
-        self._file_logger.error(self._format(message, args),
-                               extra=self._logging_dict)
+        self._log("ERROR", self._file_logger.error, message, *args)
 
     def info(self, message, *args):
-        self._print("INFO", message, args)
-        self._file_logger.info(self._format(message, args),
-                              extra=self._logging_dict)
+        self._log("INFO", self._file_logger.info, message, *args)
 
     def warning(self, message, *args):
-        self._print("WARNING", message, args)
-        self._file_logger.warning(self._format(message, args),
-                                 extra=self._logging_dict)
+        self._log("WARNING", self._file_logger.warning, message, *args)
         self.warning_occurred = True
+
+def sort_dict(key_counts):
+    return sorted(key_counts.items(), key=lambda x: (-1 * x[1], x[0]))

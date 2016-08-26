@@ -2,7 +2,7 @@
 Connor
 ======
 
-Command-line tool to deduplicate bam files based on custom, inline barcoding.
+A command-line tool to deduplicate bam files based on custom, inline barcoding.
 
 .. image:: https://travis-ci.org/umich-brcf-bioinf/Connor.svg?branch=develop
     :target: https://travis-ci.com/umich-brcf-bioinf/Connor
@@ -24,52 +24,46 @@ https://github.com/umich-brcf-bioinf/Connor
 Overview
 --------
 
-Connor de-duplicates a barcoded BAM and emits a BAM of consensus alignment pairs
-that represent the sequences of original biological molecules. In terms of data
-workflow, Connor is similar to Picard MarkDuplicates (ref)).
+When analyzing deep-sequence NGS data it is sometimes difficult to distinguish
+sequencing and PCR errors from rare variants; as a result some variants may
+be missed and some will be identified with an inaccurate variant frequency. To
+address this, researchers can attach random barcode sequences during sample
+preparation. Upon sequencing, the barcodes act as a signature to trace the set 
+of PCR amplified molecules back to the original biological molecules of
+interest thereby differentiating rare variants in the original molecule from
+errors introduced downstream.
 
-Sequencing [FASTQ 1/2] -> Aligner [BAM] -> Connor [BAM] -> Variant Detection [VCF]
+Connor accepts a barcoded, paired alignment file (BAM), groups those input
+alignments into families, combines each family into a consensus alignment, and
+emits the set of deduplicated, consensus alignments (BAM). 
 
-Consensus output BAM tags:
+   *Connor workflow:*
+   
+   *Sequencing [FASTQ 1/2] -> Aligner [BAM] -> Connor [BAM] -> Variant Detection [VCF]*
 
-* X0: filter (rationale explaining why the align was excluded)
-* X1: unique identifier for this alignment family
-* X2: L~R UMI barcodes for this alignment family; because of fuzzy matching the
-  family UMI may be distinct from the UMI of the original alignment
-* X3: family size (number of align pairs in this family)
-* X4: presence of this tag signals that this alignment would be the template
-  for the consensus alignment
+Connor first groups original alignments into **alignment families** based on their
+alignment position and **Universal Molecular Tag (UMT)** barcode. (Connor assumes
+the incoming aligned sequences begin with the UMT barcode.) Each family of
+alignments is then combined into a single **consensus alignment**; discrepancies
+in base-calls and qualities are resolved by majority vote across family members.
+By default, smaller families (<3 align pairs) are excluded.
 
------------
-Quick Start
------------
+For more information see:
 
-1. **Install Connor (see INSTALL.rst):**
-::
-  $ pip install git+https://github.com/umich-brcf-bioinf/Connor
+* `QUICKSTART`_ : get started deduplicating bacoded BAMs.
 
-2. **Get the examples directory:**
-::
-  $ git clone https://github.com/umich-brcf-bioinf/Connor
+* `INSTALL`_ : alternative ways to install.
 
-3. **Run Connor:**
-::
-  $ connor Connor/examples/PIK3CA-original.bam PIK3CA-deduped.bam
-
-This will read PIK3CA-original.bam and produce PIK3CA-deduped.bam (in your
-working directory). 
+* `METHODS`_ : details on UMT barcode structure, suggestions on
+  alignment parameters, details on family grouping, and examples.
 
 
 -----------
 Connor help
 -----------
-::
+
   $ connor --help
    usage: connor input_bam output_bam
-   
-   Deduplicates BAM file based on custom inline DNA barcodes.
-   Emits a new BAM file reduced to a single consensus read for each family of
-   original reads.
    
    positional arguments:
      input_bam             path to input BAM
@@ -91,10 +85,10 @@ Connor help
                            =3 (>=0): families with count of original reads < threshold are excluded
                             from the deduplicated output. (Higher threshold is more
                             stringent.)
-     -d UMI_DISTANCE_THRESHOLD, --umi_distance_threshold UMI_DISTANCE_THRESHOLD
-                           =1 (>=0); UMIs equal to or closer than this Hamming distance will be
+     -d UMT_DISTANCE_THRESHOLD, --umt_distance_threshold UMT_DISTANCE_THRESHOLD
+                           =1 (>=0); UMTs equal to or closer than this Hamming distance will be
                             combined into a single family. Lower threshold make more families with more
-                            consistent UMIs; 0 implies UMI must match
+                            consistent UMTs; 0 implies UMT must match
                             exactly.
 
 ====
@@ -102,3 +96,8 @@ Connor help
 Email bfx-connor@umich.edu for support and questions.
 
 UM BRCF Bioinformatics Core
+
+.. _INSTALL: doc/INSTALL.rst
+.. _METHODS: doc/METHODS.rst
+.. _QUICKSTART : doc/QUICKSTART.rst
+
