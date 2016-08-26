@@ -9,27 +9,26 @@ from __future__ import print_function, absolute_import, division
 from collections import Counter
 import itertools
 try:
-    #pylint: disable=redefined-builtin
-    import itertools.izip as iter_zip
+    from itertools import izip as iter_zip
 except ImportError:
-    iter_zip = zip     #pylint: disable=invalid-name
+    iter_zip = zip
 import os
 import connor.utils as utils
 import connor.samtools as samtools
 
 _SAMPLE_SIZE = 1000
 
-def _balanced_strand_gen(aligns, total_aligns):
+def _balanced_strand_gen(base_aligns, limit):
     '''given collection of random {aligns}, returns alternating forward/reverse
     strands up to {total_aligns}; will return smaller of forward/reverse
     collection if less than total_aligns'''
     predicate=lambda align: align.is_reverse
-    gen1, gen2 = itertools.tee((predicate(align), align) for align in aligns)
-    pos_strand_gen = (align for pred, align in gen1 if not pred)
-    neg_strand_gen = (align for pred, align in gen2 if pred)
-    combined_gen = iter_zip(pos_strand_gen, neg_strand_gen)
-    interleaved_gen = (align for aligns in combined_gen for align in aligns)
-    return itertools.islice(interleaved_gen, total_aligns)
+    gen1, gen2 = itertools.tee((predicate(align), align) for align in base_aligns)
+    for_strand_gen = (align for pred, align in gen1 if not pred)
+    rev_strand_gen = (align for pred, align in gen2 if pred)
+    combined_gen = iter_zip(for_strand_gen, rev_strand_gen)
+    interleaved_gen = (align for for_rev_aligns in combined_gen for align in for_rev_aligns)
+    return itertools.islice(interleaved_gen, limit)
 
 def _check_stat_below_threshold(args,
                                 extractor_function,
@@ -165,13 +164,25 @@ def _check_input_bam_consistent_length(args, log=None):
                                 msg,
                                 log)
 
+def _check_overwrite_output(args, log=None):
+    output_collisions = []
+    if os.path.exists(args.output_bam):
+        output_collisions.append(args.output_bam)
+    if args.annotated_output_bam and os.path.exists(args.annotated_output_bam):
+        output_collisions.append(args.annotated_output_bam)
+    if output_collisions:
+        output_collision_str = ', '.join(output_collisions)
+        msg = 'One or more outputs [{}] exist.'.format(output_collision_str)
+        _log_force_or_raise(args, log, msg)
+
 _VALIDATIONS = [_check_input_bam_exists,
                 _check_input_bam_valid,
                 _check_input_bam_indexed,
                 _check_input_bam_not_deduped,
                 _check_input_bam_not_empty,
                 _check_input_bam_paired,
-                _check_input_bam_consistent_length]
+                _check_input_bam_consistent_length,
+                _check_overwrite_output]
 
 
 def preflight(args, log):

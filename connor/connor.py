@@ -21,8 +21,6 @@ try:
     from builtins import range as iter_range
 except ImportError:
     from __builtin__ import xrange as iter_range
-
-# from past.builtins import xrange #pylint: disable=redefined-builtin
 from collections import defaultdict, Counter
 from copy import deepcopy
 import operator
@@ -444,7 +442,7 @@ def _build_lightweight_pairs(aligned_segments):
             lightweight_pairs.append(new_pair)
     return lightweight_pairs
 
-
+#TODO: cgates: improve how this is tested
 def _progress_logger(base_generator, total_rows, log):
     row_count = 0
     next_breakpoint = 0
@@ -456,9 +454,11 @@ def _progress_logger(base_generator, total_rows, log):
                      next_breakpoint,
                      row_count,
                      total_rows)
+            log.debug("{}mb peak memory", _peak_memory())
             next_breakpoint = 10 * int(progress/10) + 10
         yield item
     log.info("100% ({}/{}) alignments processed", row_count, total_rows)
+    log.debug("{}mb peak memory", _peak_memory())
 
 def _build_family_filter(args):
     min_family_size = args.min_family_size_threshold

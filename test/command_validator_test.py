@@ -39,7 +39,8 @@ class CommandValidatorTest(BaseConnorTestCase):
                           '_check_input_bam_not_deduped',
                           '_check_input_bam_not_empty',
                           '_check_input_bam_paired',
-                          '_check_input_bam_consistent_length'],
+                          '_check_input_bam_consistent_length',
+                          '_check_overwrite_output'],
                          function_names)
 
     def test_preflight_runsAllValidations(self):
@@ -58,8 +59,7 @@ class CommandValidatorTest(BaseConnorTestCase):
         self.assertEqual(task2.args, args)
         self.assertEqual(task2.log, log)
 
-
-    def test_input_bam_exists_ok(self):
+    def test_check_input_bam_exists_ok(self):
         with TempDirectory() as tmp_dir:
             tmp_dir.write('input.bam', b'foo')
             input_bam_path = os.path.join(tmp_dir.path, 'input.bam')
@@ -67,7 +67,7 @@ class CommandValidatorTest(BaseConnorTestCase):
             validator._check_input_bam_exists(args)
             self.ok()
 
-    def test_input_bam_exists_raisesUsageError(self):
+    def test_check_input_bam_exists_raisesUsageError(self):
         with TempDirectory() as tmp_dir:
             input_bam_path = os.path.join(tmp_dir.path, 'input.bam')
             args = Namespace(input_bam=input_bam_path)
@@ -592,3 +592,76 @@ readNameA0|147|chr10|100|20|3M|=|300|200|AAA|>>>
                  r'sequence lengths\..*forcing')
         self.assertRegexpMatches(warnings[0], regex)
 
+    def test_check_overwrite_output_ok(self):
+        with TempDirectory() as tmp_dir:
+#            tmp_dir.write('input.bam', b'foo')
+            deduped_bam_path = os.path.join(tmp_dir.path, 'deduped.bam')
+            annotated_bam_path = os.path.join(tmp_dir.path, 'annotated.bam')
+            args = Namespace(output_bam=deduped_bam_path,
+                             annotated_output_bam=annotated_bam_path,
+                             force=False)
+            validator._check_overwrite_output(args, self.mock_logger)
+        self.ok()
+        self.assertEqual(0, len(self.mock_logger._log_calls))
+
+    def test_check_overwrite_output_raisesUsageErrorIfDedupedPresent(self):
+        with TempDirectory() as tmp_dir:
+            tmp_dir.write('deduped.bam', b'foo')
+            deduped_bam_path = os.path.join(tmp_dir.path, 'deduped.bam')
+            annotated_bam_path = os.path.join(tmp_dir.path, 'annotated.bam')
+            args = Namespace(output_bam=deduped_bam_path,
+                             annotated_output_bam=annotated_bam_path,
+                             force=False)
+            self.assertRaisesRegexp(utils.UsageError,
+                                    r'\[.*deduped.bam\] exist.*force',
+                                    validator._check_overwrite_output,
+                                    args,
+                                    self.mock_logger)
+            self.assertEqual(0, len(self.mock_logger._log_calls))
+
+    def test_check_overwrite_output_raisesUsageErrorIfAnnotatedPresent(self):
+        with TempDirectory() as tmp_dir:
+            tmp_dir.write('annotated.bam', b'foo')
+            deduped_bam_path = os.path.join(tmp_dir.path, 'deduped.bam')
+            annotated_bam_path = os.path.join(tmp_dir.path, 'annotated.bam')
+            args = Namespace(output_bam=deduped_bam_path,
+                             annotated_output_bam=annotated_bam_path,
+                             force=False)
+            self.assertRaisesRegexp(utils.UsageError,
+                                    r'\[.*annotated.bam\] exist.*force',
+                                    validator._check_overwrite_output,
+                                    args,
+                                    self.mock_logger)
+            self.assertEqual(0, len(self.mock_logger._log_calls))
+
+    def test_check_overwrite_output_raisesUsageErrorIfBothPresent(self):
+        with TempDirectory() as tmp_dir:
+            tmp_dir.write('deduped.bam', b'foo')
+            tmp_dir.write('annotated.bam', b'bar')
+            deduped_bam_path = os.path.join(tmp_dir.path, 'deduped.bam')
+            annotated_bam_path = os.path.join(tmp_dir.path, 'annotated.bam')
+            args = Namespace(output_bam=deduped_bam_path,
+                             annotated_output_bam=annotated_bam_path,
+                             force=False)
+            regex = r'\[.*deduped.bam, .*annotated.bam\] exist.*force'
+            self.assertRaisesRegexp(utils.UsageError,
+                                    regex,
+                                    validator._check_overwrite_output,
+                                    args,
+                                    self.mock_logger)
+            self.assertEqual(0, len(self.mock_logger._log_calls))
+
+    def test_check_overwrite_output_warnIfForced(self):
+        with TempDirectory() as tmp_dir:
+            tmp_dir.write('deduped.bam', b'foo')
+            tmp_dir.write('annotated.bam', b'bar')
+            deduped_bam_path = os.path.join(tmp_dir.path, 'deduped.bam')
+            annotated_bam_path = os.path.join(tmp_dir.path, 'annotated.bam')
+            args = Namespace(output_bam=deduped_bam_path,
+                             annotated_output_bam=annotated_bam_path,
+                             force=True)
+            validator._check_overwrite_output(args, self.mock_logger)
+        warnings = self.mock_logger._log_calls['WARNING']
+        regex = r'\[.*deduped.bam, .*annotated.bam\] exist.*forcing'
+        self.assertEqual(1, len(warnings))
+        self.assertRegexpMatches(warnings[0], regex)
