@@ -101,7 +101,7 @@ class FilteredGeneratorTest(BaseConnorTestCase):
                           (7, None),
                           (8, 'div by 2'),
                           (9, None),
-                          (10, 'div by 2;div by 5')],
+                          (10, 'div by 2; div by 5')],
                          actual_collection)
 
     def test_filter_multipleFilterAreSortedByName(self):
@@ -113,7 +113,7 @@ class FilteredGeneratorTest(BaseConnorTestCase):
         actual_collection  = [x for x in generator.filter(base_collection)]
 
         self.assertEqual([(1, None),
-                          (10, 'div by 2;div by 5')], actual_collection)
+                          (10, 'div by 2; div by 5')], actual_collection)
 
     def test_filter_returnsEmptyIfBaseEmpty(self):
         generator = utils.FilteredGenerator({})

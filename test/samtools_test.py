@@ -707,7 +707,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         log_lines = self.mock_logger._log_calls['INFO']
         self.assertEqual('70.00% (7/10) alignments unplaced or discarded',
                          log_lines[0])
-        self.assertEqual('33.33% (1/3) families discarded: small family',
+        self.assertEqual('families discarded: 33.33% (1/3) small family',
                          log_lines[1])
         self.assertEqual('30.00% (3/10) alignments included in 2 families',
                          log_lines[2])
@@ -716,13 +716,13 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual(4, len(log_lines))
 
         log_lines = self.mock_logger._log_calls['DEBUG']
-        self.assertEqual('20.00% (2/10) alignments unplaced: low mapping qual',
+        self.assertEqual('alignments unplaced: 20.00% (2/10) low mapping qual',
                          log_lines[0])
-        self.assertEqual('20.00% (2/10) alignments unplaced: unpaired read',
+        self.assertEqual('alignments unplaced: 20.00% (2/10) unpaired read',
                          log_lines[1])
-        self.assertEqual('20.00% (2/10) alignments discarded: small family',
+        self.assertEqual('alignments discarded: 20.00% (2/10) small family',
                          log_lines[2])
-        self.assertEqual('10.00% (1/10) alignments discarded: minority CIGAR',
+        self.assertEqual('alignments discarded: 10.00% (1/10) minority CIGAR',
                          log_lines[3])
         self.assertEqual(4, len(log_lines))
 

@@ -44,7 +44,7 @@ class FilteredGenerator(object):
                 if exclude(item):
                     excluded.append(name)
             if excluded:
-                filter_value = ";".join(excluded)
+                filter_value = "; ".join(excluded)
             else:
                 filter_value = None
             yield item, filter_value

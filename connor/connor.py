@@ -115,7 +115,6 @@ class _PairedAlignment(object):
         else:
             return None
 
-
     def replace_umt(self, umt):
         def _byte_array_to_string(sequence):
             if isinstance(sequence, str):
@@ -527,7 +526,7 @@ def _build_bam_tags():
     def combine_filters(family, align):
         filter_values = [x.filter_value for x in [family, align] if x and x.filter_value]
         if filter_values:
-            return ";".join(filter_values)
+            return ";".join(filter_values).replace('; ', ';')
         else:
             return None
     tags = [
