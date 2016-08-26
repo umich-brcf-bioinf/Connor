@@ -647,6 +647,79 @@ class ConnorTest(BaseConnorTestCase):
                 return tag
         return None
 
+    def test_build_coordinate_pairs_deux_singlePair(self):
+        align1L = ConnorAlign(mock_align(query_name='1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align1R = ConnorAlign(mock_align(query_name='1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        aligns = [align1L, align1R]
+
+        coord_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns)]
+
+        self.assertEqual(1, len(coord_pairs))
+        coordinate = coord_pairs[0]
+        actual_pairs = dict([(pair.query_name, pair) for pair in coordinate])
+        self.assertEqual(1, len(actual_pairs))
+        self.assertEqual(align1L, actual_pairs['1'].left)
+        self.assertEqual(align1R, actual_pairs['1'].right)
+
+    def test_build_coordinate_pairs_deux_oneCoordinate(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align2L = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        aligns = [align1L, align2L, align1R, align2R]
+
+        coord_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns)]
+
+        self.assertEqual(1, len(coord_pairs))
+        coordinate = coord_pairs[0]
+        actual_pairs = dict([(pair.query_name, pair) for pair in coordinate])
+        self.assertEqual(2, len(actual_pairs))
+        self.assertEqual(align1L, actual_pairs['1'].left)
+        self.assertEqual(align1R, actual_pairs['1'].right)
+        self.assertEqual(align2L, actual_pairs['2'].left)
+        self.assertEqual(align2R, actual_pairs['2'].right)
+
+    def test_build_coordinate_pairs_deux_twoCoordinatesSameRight(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align2L = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align3L = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=125,
+                                         next_reference_start=200))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        align3R = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=200,
+                                         next_reference_start=125))
+        aligns = [align1L, align2L, align3L, align1R, align2R, align3R]
+
+        coord_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns)]
+
+        self.assertEqual(1, len(coord_pairs))
+        coordinate = coord_pairs[0]
+        actual_pair_names = set([pair.query_name for pair in coordinate])
+        self.assertEqual(set(['1','2', '3']), actual_pair_names)
+
+
     def test_log_environment(self):
         args = Namespace(original_command_line=['foo', 'bar'],
                          other_stuff='baz')

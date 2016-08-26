@@ -192,6 +192,26 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         connor_align.filter_value = 'foo'
         self.assertEqual('foo', connor_align.filter_value)
 
+    def test_orientation_left(self):
+        pysam_align = mock_align(reference_start=100, next_reference_start=200)
+        self.assertEqual('left', ConnorAlign(pysam_align).orientation)
+
+    def test_orientation_right(self):
+        pysam_align = mock_align(reference_start=200, next_reference_start=100)
+        self.assertEqual('right', ConnorAlign(pysam_align).orientation)
+
+    def test_orientation_samePositiveIsLeft(self):
+        pysam_align = mock_align(flag=1,
+                                 reference_start=100,
+                                 next_reference_start=100)
+        self.assertEqual('left', ConnorAlign(pysam_align).orientation)
+
+    def test_orientation_sameNegativeIsRight(self):
+        pysam_align = mock_align(flag=17,
+                                 reference_start=100,
+                                 next_reference_start=100)
+        self.assertEqual('right', ConnorAlign(pysam_align).orientation)
+
 
 class SamtoolsTest(utils_test.BaseConnorTestCase):
     def test_build_writer(self):

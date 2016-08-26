@@ -17,6 +17,7 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
+from openpyxl.cell.cell import coordinate_from_string
 try:
     from builtins import range as iter_range
 except ImportError:
@@ -93,7 +94,8 @@ class _LightweightPair(object):
 
 class _PairedAlignment(object):
     '''Represents the left and right align pairs from an single sequence.'''
-    def __init__(self, left_alignment,
+    def __init__(self,
+                 left_alignment,
                  right_alignment,
                  tag_length=DEFAULT_TAG_LENGTH):
         if left_alignment.query_name != right_alignment.query_name:
@@ -310,6 +312,21 @@ def _build_coordinate_families(aligned_segments,
     for align in sorted(pairing_dict.values(), key=lambda a:a.query_name):
         align.filter_value = 'read mate was missing or excluded'
         excluded_writer.write(None, align)
+
+def _build_coordinate_pairs_deux(connor_alignments):
+    coordinate_pairs = []
+    coords = defaultdict(dict)
+    for alignment in connor_alignments:
+        if alignment.orientation == 'left':
+            key = (alignment.reference_id, alignment.next_reference_start)
+            coords[key][alignment.query_name] = alignment
+        else:
+            key = (alignment.reference_id,alignment.reference_start)
+            l_align = coords[key][alignment.query_name]
+            alignment_pair = _PairedAlignment(l_align, alignment)
+            coordinate_pairs.append(alignment_pair)
+    return [coordinate_pairs]
+
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
