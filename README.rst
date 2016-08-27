@@ -5,7 +5,7 @@ Connor
 A command-line tool to deduplicate bam files based on custom, inline barcoding.
 
 .. image:: https://travis-ci.org/umich-brcf-bioinf/Connor.svg?branch=develop
-    :target: https://travis-ci.com/umich-brcf-bioinf/Connor
+    :target: https://travis-ci.org/umich-brcf-bioinf/Connor
     :alt: Build Status
 
 .. image:: https://codeclimate.com/repos/5793a84516ba097bda009574/badges/28ae96f1f3179a08413e/coverage.svg
