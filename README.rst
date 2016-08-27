@@ -5,17 +5,24 @@ Connor
 A command-line tool to deduplicate bam files based on custom, inline barcoding.
 
 .. image:: https://travis-ci.org/umich-brcf-bioinf/Connor.svg?branch=develop
-    :target: https://travis-ci.com/umich-brcf-bioinf/Connor
+    :target: https://travis-ci.org/umich-brcf-bioinf/Connor
     :alt: Build Status
 
 .. image:: https://codeclimate.com/repos/5793a84516ba097bda009574/badges/28ae96f1f3179a08413e/coverage.svg
-   :target: https://codeclimate.com/repos/5793a84516ba097bda009574/coverage
-   :alt: Test Coverage
+    :target: https://codeclimate.com/repos/5793a84516ba097bda009574/coverage
+    :alt: Test Coverage
 
 .. image:: https://codeclimate.com/repos/5793a84516ba097bda009574/badges/28ae96f1f3179a08413e/gpa.svg
-   :target: https://codeclimate.com/repos/5793a84516ba097bda009574/feed
-   :alt: Code Climate
+    :target: https://codeclimate.com/repos/5793a84516ba097bda009574/feed
+    :alt: Code Climate
 
+.. image:: https://img.shields.io/badge/license-Apache-blue.svg
+    :target: https://pypi.python.org/pypi/connor/
+    :alt: License
+
+.. image:: http://img.shields.io/pypi/v/connor.svg
+    :target: https://pypi.python.org/pypi/connor/
+    :alt: Latest PyPI version
 
 The official repository is at:
 https://github.com/umich-brcf-bioinf/Connor

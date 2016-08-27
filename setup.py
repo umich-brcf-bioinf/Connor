@@ -13,18 +13,19 @@ setup(name='Connor',
       description=('Command-line tool to deduplicate reads in bam files based '
                    'on custom inline barcoding.'),
       long_description=(read('README.rst') + '\n\n' +
-                        read('CHANGELOG.rst') + '\n\n' +
-                        read('AUTHORS.rst')),
+                        read('doc/CHANGELOG.rst') + '\n\n' +
+                        read('doc/AUTHORS.rst')),
       url='https://github.com/umich-brcf-bioinf/Connor',
       author='University of Michigan Bioinformatics Core',
       author_email='bfx-connor@umich.edu',
       license='Apache',
       packages=find_packages(exclude=['test*']),
-      classifiers=['Development Status :: 4 - Beta',
+      classifiers=['Development Status :: 5 - Production/Stable',
                    'Environment :: Console',
                    'Intended Audience :: Science/Research',
                    'License :: OSI Approved :: Apache Software License',
                    'Operating System :: Unix',
+                   'Operating System :: MacOS',
                    'Programming Language :: Python :: 2.7',
                    'Programming Language :: Python :: 3',
                    'Topic :: Scientific/Engineering :: Bio-Informatics'],
