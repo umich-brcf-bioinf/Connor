@@ -720,6 +720,146 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual(set(['1','2', '3']), actual_pair_names)
 
 
+    def test_build_coordinate_families_deux_3families(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=400))
+        align2L = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=100,
+                                         next_reference_start=400))
+        align3L = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=200,
+                                         next_reference_start=400))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=400,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=400,
+                                         next_reference_start=100))
+        align3R = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=400,
+                                         next_reference_start=200))
+        pair1 = connor._PairedAlignment(align1L, align1R)
+        pair2 = connor._PairedAlignment(align2L, align2R)
+        pair3 = connor._PairedAlignment(align3L, align3R)
+        coord_paired_alignments = [pair1, pair2, pair3]
+
+        expected_coord_families = [[pair1, pair2], [pair3]]
+        actual_coord_families = []
+        for coord_family in connor._build_coordinate_families_deux(coord_paired_alignments):
+            actual_coord_families.append(coord_family)
+        self.assertEqual(sorted(expected_coord_families), sorted(actual_coord_families))
+
+
+    def test_build_coordinate_families_deux_6families(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=400))
+        align2L = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=100,
+                                         next_reference_start=400))
+        align3L = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=200,
+                                         next_reference_start=400))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=400,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=400,
+                                         next_reference_start=100))
+        align3R = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=400,
+                                         next_reference_start=200))
+        align4L = ConnorAlign(mock_align(query_name = '4',
+                                         reference_start=200,
+                                         next_reference_start=400))
+        align5L = ConnorAlign(mock_align(query_name = '5',
+                                         reference_start=200,
+                                         next_reference_start=500))
+        align6L = ConnorAlign(mock_align(query_name = '6',
+                                         reference_start=300,
+                                         next_reference_start=600))
+        align4R = ConnorAlign(mock_align(query_name = '4',
+                                         reference_start=400,
+                                         next_reference_start=200))
+        align5R = ConnorAlign(mock_align(query_name = '5',
+                                         reference_start=500,
+                                         next_reference_start=200))
+        align6R = ConnorAlign(mock_align(query_name = '6',
+                                         reference_start=600,
+                                         next_reference_start=300))
+        pair1 = connor._PairedAlignment(align1L, align1R)
+        pair2 = connor._PairedAlignment(align2L, align2R)
+        pair3 = connor._PairedAlignment(align3L, align3R)
+        pair4 = connor._PairedAlignment(align4L, align4R)
+        pair5 = connor._PairedAlignment(align5L, align5R)
+        pair6 = connor._PairedAlignment(align6L, align6R)
+        coord_paired_alignments = [pair1, pair2, pair3, pair4, pair5, pair6]
+
+        expected_coord_families = [[pair1, pair2], [pair3, pair4], [pair5], [pair6]]
+        actual_coord_families = []
+        for coord_family in connor._build_coordinate_families_deux(coord_paired_alignments):
+            actual_coord_families.append(coord_family)
+        self.assertEqual(sorted(expected_coord_families), sorted(actual_coord_families))
+
+
+    def test_build_coordinate_families_deux_no_yield(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=400))
+        align2L = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=100,
+                                         next_reference_start=400))
+        align3L = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=200,
+                                         next_reference_start=400))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=400,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=400,
+                                         next_reference_start=100))
+        align3R = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=400,
+                                         next_reference_start=200))
+        align4L = ConnorAlign(mock_align(query_name = '4',
+                                         reference_start=200,
+                                         next_reference_start=400))
+        align5L = ConnorAlign(mock_align(query_name = '5',
+                                         reference_start=410,
+                                         next_reference_start=500))
+        align4R = ConnorAlign(mock_align(query_name = '4',
+                                         reference_start=400,
+                                         next_reference_start=200))
+        align5R = ConnorAlign(mock_align(query_name = '5',
+                                         reference_start=500,
+                                         next_reference_start=410))
+        pair1 = connor._PairedAlignment(align1L, align1R)
+        pair2 = connor._PairedAlignment(align2L, align2R)
+        pair3 = connor._PairedAlignment(align3L, align3R)
+        pair4 = connor._PairedAlignment(align4L, align4R)
+        pair5 = connor._PairedAlignment(align5L, align5R)
+
+        class AngryError(ValueError):
+            pass
+
+        class AngryPair(object):
+            @property
+            def right(self):
+                raise AngryError("I'm angry")
+        pair6 = AngryPair()
+
+        pair_list1 = [pair1, pair3, pair2, pair4, pair5, pair6]
+        actual_coord_families1 = []
+        expected_coord_families1 = [[pair1, pair2], [pair3, pair4]]
+        try:
+            for coord_family in connor._build_coordinate_families_deux(pair_list1):
+                actual_coord_families1.append(coord_family)
+        except AngryError:
+            pass
+        self.assertEqual(sorted(expected_coord_families1), sorted(actual_coord_families1))
+
+
     def test_log_environment(self):
         args = Namespace(original_command_line=['foo', 'bar'],
                          other_stuff='baz')

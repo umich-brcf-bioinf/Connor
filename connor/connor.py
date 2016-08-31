@@ -17,7 +17,6 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
-from openpyxl.cell.cell import coordinate_from_string
 try:
     from builtins import range as iter_range
 except ImportError:
@@ -327,6 +326,22 @@ def _build_coordinate_pairs_deux(connor_alignments):
             coordinate_pairs.append(alignment_pair)
     return [coordinate_pairs]
 
+
+def _build_coordinate_families_deux(paired_alignments):
+    coordinate_family = defaultdict(list)
+    rightmost_coord = -1
+    for pair in paired_alignments:
+        rightmost_coord = max(rightmost_coord, pair.right.reference_start)
+        right = pair.right.reference_end
+        left = pair.left.reference_start
+        coordinate_family[(right, left)].append(pair)
+        for coord in dict(coordinate_family):
+            if coord[0] < rightmost_coord:
+                family = coordinate_family.pop(coord)
+                yield family
+
+    for family in coordinate_family.values():
+        yield family
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
