@@ -23,6 +23,7 @@ except ImportError:
     from __builtin__ import xrange as iter_range
 from collections import defaultdict, Counter
 from copy import deepcopy
+from functools import partial
 import operator
 import os
 import platform
@@ -32,6 +33,7 @@ import resource
 import time
 
 import pysam
+from sortedcontainers import SortedSet
 
 import connor
 import connor.command_validator as command_validator
@@ -312,6 +314,7 @@ def _build_coordinate_families(aligned_segments,
         align.filter_value = 'read mate was missing or excluded'
         excluded_writer.write(None, align)
 
+#TODO: cgates: make into a generator
 def _build_coordinate_pairs_deux(connor_alignments):
     coordinate_pairs = []
     coords = defaultdict(dict)
@@ -327,21 +330,58 @@ def _build_coordinate_pairs_deux(connor_alignments):
     return [coordinate_pairs]
 
 
-def _build_coordinate_families_deux(paired_alignments):
-    coordinate_family = defaultdict(list)
-    rightmost_coord = -1
-    for pair in paired_alignments:
-        rightmost_coord = max(rightmost_coord, pair.right.reference_start)
+#TODO: cgates: wrongly assumes a single chromosome
+class _CoordinateFamilyHolder(object):
+    '''Encapsulates how stream of paired aligns are iteratively released as
+    sets of pairs which share the same coordinate (coordinate families)'''
+    def __init__(self):
+        self.coordinate_family = defaultdict(partial(defaultdict, list))
+        self.right_coords_in_progress = SortedSet()
+
+    def _add(self, pair):
         right = pair.right.reference_end
         left = pair.left.reference_start
-        coordinate_family[(right, left)].append(pair)
-        for coord in dict(coordinate_family):
-            if coord[0] < rightmost_coord:
-                family = coordinate_family.pop(coord)
+        self.right_coords_in_progress.add(right)
+        self.coordinate_family[right][left].append(pair)
+
+    def _completed_families(self, rightmost_boundary):
+        '''returns one or more families whose end is left of the
+        rightmost boundary'''
+        while len(self.right_coords_in_progress):
+            right_coord = self.right_coords_in_progress[0]
+            if right_coord < rightmost_boundary:
+                self.right_coords_in_progress.pop(0)
+                left_families = self.coordinate_family.pop(right_coord)
+                for family in left_families.values():
+                    yield family
+            else:
+                break
+
+    def _remaining_families(self):
+        for left_families in self.coordinate_family.values():
+            for family in left_families.values():
                 yield family
 
-    for family in coordinate_family.values():
+    def build_coordinate_families(self, paired_aligns):
+        rightmost_start = -1
+        for pair in paired_aligns:
+            if pair.right.reference_start != rightmost_start:
+                rightmost_start = pair.right.reference_start
+                for family in self._completed_families(rightmost_start):
+                    yield family
+            self._add(pair)
+
+        for family in self._remaining_families():
+            yield family
+
+
+
+#TODO: cgates: wrongly assumes a single chromosome
+def _build_coordinate_families_deux(paired_aligns):
+    family_holder = _CoordinateFamilyHolder()
+    for family in family_holder.build_coordinate_families(paired_aligns):
         yield family
+
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,

@@ -15,6 +15,7 @@ Prerequisites
 
 * cython
 * pysam
+* sortedcontainters
 
 
 Installing
