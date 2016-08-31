@@ -330,7 +330,6 @@ def _build_coordinate_pairs_deux(connor_alignments):
     return [coordinate_pairs]
 
 
-#TODO: cgates: wrongly assumes a single chromosome
 class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
     sets of pairs which share the same coordinate (coordinate families)'''
@@ -345,8 +344,7 @@ class _CoordinateFamilyHolder(object):
         self.coordinate_family[right][left].append(pair)
 
     def _completed_families(self, rightmost_boundary):
-        '''returns one or more families whose end is left of the
-        rightmost boundary'''
+        '''returns one or more families whose end < rightmost boundary'''
         while len(self.right_coords_in_progress):
             right_coord = self.right_coords_in_progress[0]
             if right_coord < rightmost_boundary:
@@ -361,11 +359,32 @@ class _CoordinateFamilyHolder(object):
         for left_families in self.coordinate_family.values():
             for family in left_families.values():
                 yield family
+            left_families.clear()
+        self.coordinate_family.clear()
 
+    #TODO: cgates: can we reduce the complexity here?
     def build_coordinate_families(self, paired_aligns):
-        rightmost_start = -1
+        '''Given a stream of paired aligns, return a list of pairs that share
+        same coordinates (coordinate family).  Flushes families in progress
+        when any of:
+        a) incoming right start > family end
+        b) incoming chrom != current chrom
+        c) incoming align stream is exhausted'''
+        rightmost_start = None
+        current_chrom = None
+        def _new_coordinate(pair):
+            return pair.right.reference_start != rightmost_start
+        def _new_chrom(pair):
+            return current_chrom != pair.right.reference_name
+
         for pair in paired_aligns:
-            if pair.right.reference_start != rightmost_start:
+            if rightmost_start is None:
+                rightmost_start = pair.right.reference_start
+                current_chrom = pair.right.reference_name
+            if _new_chrom(pair):
+                for family in self._remaining_families():
+                    yield family
+            elif _new_coordinate(pair):
                 rightmost_start = pair.right.reference_start
                 for family in self._completed_families(rightmost_start):
                     yield family
@@ -375,8 +394,6 @@ class _CoordinateFamilyHolder(object):
             yield family
 
 
-
-#TODO: cgates: wrongly assumes a single chromosome
 def _build_coordinate_families_deux(paired_aligns):
     family_holder = _CoordinateFamilyHolder()
     for family in family_holder.build_coordinate_families(paired_aligns):

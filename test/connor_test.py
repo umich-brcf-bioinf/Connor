@@ -16,7 +16,7 @@ from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
 from connor import samtools
 import connor.utils as utils
-from connor.connor import _build_lightweight_pairs
+from connor.connor import _build_lightweight_pairs, _CoordinateFamilyHolder
 from connor.samtools import ConnorAlign
 from connor.connor import _PairedAlignment
 from test.samtools_test import MockAlignWriter
@@ -639,6 +639,110 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals(2, actual_tag_family.included_pair_count)
 
 
+class CoordinateFamilyHolder(BaseConnorTestCase):
+    #pylint: disable=no-self-use
+    def _pair(self, name, left_pos, right_pos, right_end, reference_name='1'):
+        alignL = ConnorAlign(MicroMock(query_name=name,
+                                       reference_start=left_pos,
+                                       next_reference_start=right_pos,
+                                       query_sequence='AAATTTT',
+                                       reference_end=0,
+                                       reference_name=reference_name))
+        alignR = ConnorAlign(MicroMock(query_name=name,
+                                       reference_start=right_pos,
+                                       next_reference_start=left_pos,
+                                       query_sequence='AAATTTT',
+                                       reference_end=right_end,
+                                       reference_name=reference_name))
+        return _PairedAlignment(alignL, alignR)
+
+    def test_build_coordinate_families_noFamilies(self):
+        holder = _CoordinateFamilyHolder()
+        pairs = []
+        actual_families = [f for f in holder.build_coordinate_families(pairs)]
+        self.assertEquals([], actual_families)
+
+    def test_build_coordinate_families_gathersSimilarCoordinates(self):
+        pair1 = self._pair('1', 100, 200, 205)
+        pair2 = self._pair('2', 100, 200, 205)
+        pair3 = self._pair('3', 100, 300, 305)
+        pair4 = self._pair('4', 100, 300, 305)
+        pairs = [pair1, pair2, pair3, pair4]
+        holder = _CoordinateFamilyHolder()
+        actual_families = set()
+        for family in holder.build_coordinate_families(pairs):
+            actual_families.add(tuple(family))
+        expected_families = set([(pair1, pair2), (pair3, pair4)])
+        self.assertEquals(expected_families, actual_families)
+
+    def test_build_coordinate_families_flushesRemaining(self):
+        pair1 = self._pair('1', 100, 200, 205)
+        pair2 = self._pair('2', 100, 300, 305)
+        pair3 = self._pair('3', 200, 400, 405)
+        pairs = [pair1, pair3, pair2]
+        holder = _CoordinateFamilyHolder()
+        actual_families = set()
+        for family in holder.build_coordinate_families(pairs):
+            actual_families.add(tuple(family))
+        expected_families = set([(pair1,), (pair2,), (pair3,)])
+        self.assertEquals(expected_families, actual_families)
+
+    def test_build_coordinate_families_streamsPartialResults(self):
+        pair1 = self._pair('1', 100, 200, 205)
+        pair2 = self._pair('2', 100, 300, 305)
+
+        class AngryError(ValueError):
+            pass
+
+        class AngryPair(object):
+            @property
+            def right(self):
+                raise AngryError("I'm angry")
+        pair3 = AngryPair()
+
+        pairs = [pair1, pair2, pair3]
+        holder = _CoordinateFamilyHolder()
+        actual_families = set()
+        try:
+            for family in holder.build_coordinate_families(pairs):
+                actual_families.add(tuple(family))
+            self.fail("Expected AngryError")
+        except AngryError:
+            pass
+        expected_families = set([(pair1,),])
+        self.assertEquals(expected_families, actual_families)
+
+    def test_build_coordinate_families_6families(self):
+        pair1 = self._pair('1', 100, 400, 405)
+        pair2 = self._pair('2', 100, 400, 405)
+        pair3 = self._pair('3', 200, 400, 405)
+        pair4 = self._pair('4', 200, 400, 405)
+        pair5 = self._pair('5', 200, 500, 505)
+        pair6 = self._pair('6', 300, 600, 605)
+        pairs = [pair1, pair2, pair3, pair4, pair5, pair6]
+
+        actual_coord_families = set()
+        for coord_family in connor._build_coordinate_families_deux(pairs):
+            actual_coord_families.add(tuple(coord_family))
+        expected_coord_families = set([(pair1, pair2),
+                                       (pair3, pair4),
+                                       (pair5,),
+                                       (pair6,)])
+        self.assertEqual(expected_coord_families, actual_coord_families)
+
+    def test_build_coordinate_families_flushesInProgressForNewChromosome(self):
+        pair1 = self._pair('1', 100, 200, 205, reference_name='1')
+        pair2 = self._pair('2', 100, 200, 205, reference_name='2')
+        pair3 = self._pair('3', 100, 200, 205, reference_name='3')
+        pairs = [pair1, pair2, pair3]
+        holder = _CoordinateFamilyHolder()
+        actual_families = set()
+        for family in holder.build_coordinate_families(pairs):
+            actual_families.add(tuple(family))
+        expected_families = set([(pair1,), (pair2,), (pair3,)])
+        self.assertEquals(expected_families, actual_families)
+
+
 class ConnorTest(BaseConnorTestCase):
     @staticmethod
     def get_tag(tags, name):
@@ -718,150 +822,6 @@ class ConnorTest(BaseConnorTestCase):
         coordinate = coord_pairs[0]
         actual_pair_names = set([pair.query_name for pair in coordinate])
         self.assertEqual(set(['1','2', '3']), actual_pair_names)
-
-
-    def test_build_coordinate_families_deux_3families(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=400))
-        align2L = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=100,
-                                         next_reference_start=400))
-        align3L = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=200,
-                                         next_reference_start=400))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=400,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=400,
-                                         next_reference_start=100))
-        align3R = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=400,
-                                         next_reference_start=200))
-        pair1 = connor._PairedAlignment(align1L, align1R)
-        pair2 = connor._PairedAlignment(align2L, align2R)
-        pair3 = connor._PairedAlignment(align3L, align3R)
-        pairs = [pair1, pair2, pair3]
-
-        actual_coord_families = set()
-        for coord_family in connor._build_coordinate_families_deux(pairs):
-            actual_coord_families.add(tuple(coord_family))
-        expected_coord_families = set([(pair1, pair2), (pair3,)])
-        self.assertEqual(expected_coord_families, actual_coord_families)
-
-
-    def test_build_coordinate_families_deux_6families(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=400))
-        align2L = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=100,
-                                         next_reference_start=400))
-        align3L = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=200,
-                                         next_reference_start=400))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=400,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=400,
-                                         next_reference_start=100))
-        align3R = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=400,
-                                         next_reference_start=200))
-        align4L = ConnorAlign(mock_align(query_name = '4',
-                                         reference_start=200,
-                                         next_reference_start=400))
-        align5L = ConnorAlign(mock_align(query_name = '5',
-                                         reference_start=200,
-                                         next_reference_start=500))
-        align6L = ConnorAlign(mock_align(query_name = '6',
-                                         reference_start=300,
-                                         next_reference_start=600))
-        align4R = ConnorAlign(mock_align(query_name = '4',
-                                         reference_start=400,
-                                         next_reference_start=200))
-        align5R = ConnorAlign(mock_align(query_name = '5',
-                                         reference_start=500,
-                                         next_reference_start=200))
-        align6R = ConnorAlign(mock_align(query_name = '6',
-                                         reference_start=600,
-                                         next_reference_start=300))
-        pair1 = connor._PairedAlignment(align1L, align1R)
-        pair2 = connor._PairedAlignment(align2L, align2R)
-        pair3 = connor._PairedAlignment(align3L, align3R)
-        pair4 = connor._PairedAlignment(align4L, align4R)
-        pair5 = connor._PairedAlignment(align5L, align5R)
-        pair6 = connor._PairedAlignment(align6L, align6R)
-        pairs = [pair1, pair2, pair3, pair4, pair5, pair6]
-
-        actual_coord_families = set()
-        for coord_family in connor._build_coordinate_families_deux(pairs):
-            actual_coord_families.add(tuple(coord_family))
-        expected_coord_families = set([(pair1, pair2),
-                                       (pair3, pair4),
-                                       (pair5,),
-                                       (pair6,)])
-        self.assertEqual(expected_coord_families, actual_coord_families)
-
-
-    def test_build_coordinate_families_deux_yields_partial_results(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=400))
-        align2L = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=100,
-                                         next_reference_start=400))
-        align3L = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=200,
-                                         next_reference_start=400))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=400,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=400,
-                                         next_reference_start=100))
-        align3R = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=400,
-                                         next_reference_start=200))
-        align4L = ConnorAlign(mock_align(query_name = '4',
-                                         reference_start=200,
-                                         next_reference_start=400))
-        align5L = ConnorAlign(mock_align(query_name = '5',
-                                         reference_start=410,
-                                         next_reference_start=500))
-        align4R = ConnorAlign(mock_align(query_name = '4',
-                                         reference_start=400,
-                                         next_reference_start=200))
-        align5R = ConnorAlign(mock_align(query_name = '5',
-                                         reference_start=500,
-                                         next_reference_start=410))
-        pair1 = connor._PairedAlignment(align1L, align1R)
-        pair2 = connor._PairedAlignment(align2L, align2R)
-        pair3 = connor._PairedAlignment(align3L, align3R)
-        pair4 = connor._PairedAlignment(align4L, align4R)
-        pair5 = connor._PairedAlignment(align5L, align5R)
-
-        class AngryError(ValueError):
-            pass
-
-        class AngryPair(object):
-            @property
-            def right(self):
-                raise AngryError("I'm angry")
-        pair6 = AngryPair()
-
-        pairs = [pair1, pair3, pair2, pair4, pair5, pair6]
-        actual_coord_families1 = set()
-        try:
-            for coord_family in connor._build_coordinate_families_deux(pairs):
-                actual_coord_families1.add(tuple(coord_family))
-            self.fail('Should have raised AngryError')
-        except AngryError:
-            pass
-        expected_coord_families1 = set([(pair1, pair2), (pair3, pair4)])
-        self.assertEqual(expected_coord_families1, actual_coord_families1)
 
 
     def test_log_environment(self):
