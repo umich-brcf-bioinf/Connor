@@ -314,21 +314,18 @@ def _build_coordinate_families(aligned_segments,
         align.filter_value = 'read mate was missing or excluded'
         excluded_writer.write(None, align)
 
-#TODO: cgates: make into a generator
 def _build_coordinate_pairs_deux(connor_alignments):
-    coordinate_pairs = []
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
             key = (alignment.reference_id, alignment.next_reference_start)
             coords[key][alignment.query_name] = alignment
         else:
-            key = (alignment.reference_id,alignment.reference_start)
-            l_align = coords[key][alignment.query_name]
-            alignment_pair = _PairedAlignment(l_align, alignment)
-            coordinate_pairs.append(alignment_pair)
-    return [coordinate_pairs]
-
+            key = (alignment.reference_id, alignment.reference_start)
+            #TODO: cgates: this line will raise on orphaned right read
+            l_align = coords[key].pop(alignment.query_name)
+            yield _PairedAlignment(l_align, alignment)
+    #TODO: cgates: write orphaned pairs to excluded writer
 
 class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
