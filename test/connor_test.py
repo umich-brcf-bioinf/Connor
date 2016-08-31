@@ -742,13 +742,13 @@ class ConnorTest(BaseConnorTestCase):
         pair1 = connor._PairedAlignment(align1L, align1R)
         pair2 = connor._PairedAlignment(align2L, align2R)
         pair3 = connor._PairedAlignment(align3L, align3R)
-        coord_paired_alignments = [pair1, pair2, pair3]
+        pairs = [pair1, pair2, pair3]
 
-        expected_coord_families = [[pair1, pair2], [pair3]]
-        actual_coord_families = []
-        for coord_family in connor._build_coordinate_families_deux(coord_paired_alignments):
-            actual_coord_families.append(coord_family)
-        self.assertEqual(sorted(expected_coord_families), sorted(actual_coord_families))
+        actual_coord_families = set()
+        for coord_family in connor._build_coordinate_families_deux(pairs):
+            actual_coord_families.add(tuple(coord_family))
+        expected_coord_families = set([(pair1, pair2), (pair3,)])
+        self.assertEqual(expected_coord_families, actual_coord_families)
 
 
     def test_build_coordinate_families_deux_6families(self):
@@ -794,16 +794,19 @@ class ConnorTest(BaseConnorTestCase):
         pair4 = connor._PairedAlignment(align4L, align4R)
         pair5 = connor._PairedAlignment(align5L, align5R)
         pair6 = connor._PairedAlignment(align6L, align6R)
-        coord_paired_alignments = [pair1, pair2, pair3, pair4, pair5, pair6]
+        pairs = [pair1, pair2, pair3, pair4, pair5, pair6]
 
-        expected_coord_families = [[pair1, pair2], [pair3, pair4], [pair5], [pair6]]
-        actual_coord_families = []
-        for coord_family in connor._build_coordinate_families_deux(coord_paired_alignments):
-            actual_coord_families.append(coord_family)
-        self.assertEqual(sorted(expected_coord_families), sorted(actual_coord_families))
+        actual_coord_families = set()
+        for coord_family in connor._build_coordinate_families_deux(pairs):
+            actual_coord_families.add(tuple(coord_family))
+        expected_coord_families = set([(pair1, pair2),
+                                       (pair3, pair4),
+                                       (pair5,),
+                                       (pair6,)])
+        self.assertEqual(expected_coord_families, actual_coord_families)
 
 
-    def test_build_coordinate_families_deux_no_yield(self):
+    def test_build_coordinate_families_deux_yields_partial_results(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=400))
@@ -849,15 +852,16 @@ class ConnorTest(BaseConnorTestCase):
                 raise AngryError("I'm angry")
         pair6 = AngryPair()
 
-        pair_list1 = [pair1, pair3, pair2, pair4, pair5, pair6]
-        actual_coord_families1 = []
-        expected_coord_families1 = [[pair1, pair2], [pair3, pair4]]
+        pairs = [pair1, pair3, pair2, pair4, pair5, pair6]
+        actual_coord_families1 = set()
         try:
-            for coord_family in connor._build_coordinate_families_deux(pair_list1):
-                actual_coord_families1.append(coord_family)
+            for coord_family in connor._build_coordinate_families_deux(pairs):
+                actual_coord_families1.add(tuple(coord_family))
+            self.fail('Should have raised AngryError')
         except AngryError:
             pass
-        self.assertEqual(sorted(expected_coord_families1), sorted(actual_coord_families1))
+        expected_coord_families1 = set([(pair1, pair2), (pair3, pair4)])
+        self.assertEqual(expected_coord_families1, actual_coord_families1)
 
 
     def test_log_environment(self):
