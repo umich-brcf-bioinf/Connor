@@ -336,6 +336,17 @@ class ConnorAlign(object):
         self.pysam_align_segment.next_reference_start = value
 
     @property
+    def orientation(self):
+        if self.reference_start < self.next_reference_start:
+            return 'left'
+        elif self.reference_start > self.next_reference_start:
+            return 'right'
+        elif self.pysam_align_segment.is_reverse:
+            return 'right'
+        else:
+            return 'left'
+
+    @property
     def query_name(self):
         return self.pysam_align_segment.query_name
     @query_name.setter
