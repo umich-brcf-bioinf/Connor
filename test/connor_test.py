@@ -721,9 +721,10 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
         pair6 = self._pair('6', 300, 600, 605)
         pairs = [pair1, pair2, pair3, pair4, pair5, pair6]
 
+        holder = _CoordinateFamilyHolder()
         actual_coord_families = set()
-        for coord_family in connor._build_coordinate_families_deux(pairs):
-            actual_coord_families.add(tuple(coord_family))
+        for family in holder.build_coordinate_families(pairs):
+            actual_coord_families.add(tuple(family))
         expected_coord_families = set([(pair1, pair2),
                                        (pair3, pair4),
                                        (pair5,),
@@ -818,6 +819,105 @@ class ConnorTest(BaseConnorTestCase):
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
         self.assertEqual(set(['1', '2', '3']), actual_pair_names)
 
+    def test_build_coordinate_pairs_deux_orphanedRightIsSafe(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        aligns = [align1L, align1R, align2R]
+        writer = MockAlignWriter()
+        actual_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns,
+                                                                       writer)]
+
+        self.assertEqual(1, len(actual_pairs))
+        actual_pair_names = set([pair.query_name for pair in actual_pairs])
+        self.assertEqual(set(['1']), actual_pair_names)
+
+    def test_build_coordinate_pairs_deux_orphanedRightWrittenToExcluded(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=150,
+                                         next_reference_start=100))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        aligns = [align1L, align1R, align2R]
+        writer = MockAlignWriter()
+
+        for _ in connor._build_coordinate_pairs_deux(aligns, writer):
+            pass
+
+        self.assertEqual(1, len(writer._write_calls))
+        (actual_family, actual_align) = writer._write_calls[0]
+        self.assertEqual(None, actual_family)
+        self.assertEqual(align2R, actual_align)
+
+    def test_build_coordinate_pairs_deux_whenExhasutedRemaindersWrittenToExcluded(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        align3L = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=150,
+                                         next_reference_start=250))
+        aligns = [align1L, align3L, align1R]
+        writer = MockAlignWriter()
+
+        for _ in connor._build_coordinate_pairs_deux(aligns, writer):
+            pass
+
+        self.assertEqual(1, len(writer._write_calls))
+        (actual_family, actual_align) = writer._write_calls[0]
+        self.assertEqual(None, actual_family)
+        self.assertEqual(align3L, actual_align)
+
+    def test_build_coordinate_pairs_deux_lookForPassedPops(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align2L = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=100,
+                                         next_reference_start=200))
+        align3L = ConnorAlign(mock_align(query_name = '3',
+                                         reference_start=300,
+                                         next_reference_start=400))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        align2R = ConnorAlign(mock_align(query_name = '2',
+                                         reference_start=200,
+                                         next_reference_start=100))
+        
+        class BombError(ValueError):
+            pass
+
+        class BombAlign(object):
+            @property
+            def orientation(self):
+                raise BombError("Boom.")
+        align4L = BombAlign()
+
+        aligns = [align1L, align2L, align1R, align2R, align3L, align4L]
+        actual_pairs = []
+        try:
+            for pair in connor._build_coordinate_pairs_deux(aligns):
+                actual_pairs.append(pair)
+            self.fail("expected BombError")
+        except BombError:
+            pass
+
+        self.assertEqual(2, len(actual_pairs))
+        actual_pair_names = set([pair.query_name for pair in actual_pairs])
+        self.assertEqual(set(['1', '2']), actual_pair_names)
 
     def test_log_environment(self):
         args = Namespace(original_command_line=['foo', 'bar'],

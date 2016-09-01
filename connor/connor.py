@@ -314,7 +314,8 @@ def _build_coordinate_families(aligned_segments,
         align.filter_value = 'read mate was missing or excluded'
         excluded_writer.write(None, align)
 
-def _build_coordinate_pairs_deux(connor_alignments):
+#TODO: cgates: remove default arg values
+def _build_coordinate_pairs_deux(connor_alignments, excluded_writer=None):
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
@@ -322,10 +323,18 @@ def _build_coordinate_pairs_deux(connor_alignments):
             coords[key][alignment.query_name] = alignment
         else:
             key = (alignment.reference_id, alignment.reference_start)
-            #TODO: cgates: this line will raise on orphaned right read
-            l_align = coords[key].pop(alignment.query_name)
-            yield _PairedAlignment(l_align, alignment)
-    #TODO: cgates: write orphaned pairs to excluded writer
+            coord = coords[key]
+            l_align = coord.pop(alignment.query_name, None)
+            # Clear empty coordinate dict
+            if not len(coord):
+                del coords[key]
+            if l_align:
+                yield _PairedAlignment(l_align, alignment)
+            else:
+                excluded_writer.write(None, alignment)
+    for aligns in coords.values():
+        for align in aligns.values():
+            excluded_writer.write(None, align)
 
 class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
@@ -389,13 +398,6 @@ class _CoordinateFamilyHolder(object):
 
         for family in self._remaining_families():
             yield family
-
-
-def _build_coordinate_families_deux(paired_aligns):
-    family_holder = _CoordinateFamilyHolder()
-    for family in family_holder.build_coordinate_families(paired_aligns):
-        yield family
-
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,

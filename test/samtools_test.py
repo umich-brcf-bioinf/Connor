@@ -27,6 +27,7 @@ class MockAlignWriter(object):
     def write(self, family, connor_align):
         self._write_calls.append((family, connor_align))
 
+    #pylint: disable=unused-argument
     def close(self, log=None):
         self._close_was_called = True
 
