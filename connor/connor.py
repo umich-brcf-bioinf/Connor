@@ -356,7 +356,8 @@ class _CoordinateFamilyHolder(object):
             if right_coord < rightmost_boundary:
                 self.right_coords_in_progress.pop(0)
                 left_families = self.coordinate_family.pop(right_coord)
-                for family in left_families.values():
+                for family in sorted(left_families.values(), key=lambda x:x[0].left.reference_start):
+                    family.sort(key=lambda x: x.query_name)
                     yield family
             else:
                 break
@@ -568,8 +569,9 @@ def _build_manifest(input_bam):
 
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
-    (total_aligns,
-     coord_manifest) = _build_manifest(args.input_bam)
+    total_aligns = 1000000
+#     (total_aligns,
+#      coord_manifest) = _build_manifest(args.input_bam)
     family_filter = _build_family_filter(args)
     handlers = familyhandler.build_family_handlers(args,
                                                    consensus_writer,
@@ -582,9 +584,15 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                     log)
     filtered_aligns_gen = samtools.filter_alignments(progress_gen,
                                                      annotated_writer)
-    for coord_family in _build_coordinate_families(filtered_aligns_gen,
-                                                   coord_manifest,
-                                                   annotated_writer):
+#     for coord_family in _build_coordinate_families(filtered_aligns_gen,
+#                                                    coord_manifest,
+#                                                    annotated_writer):
+
+    paired_align_gen = _build_coordinate_pairs_deux(filtered_aligns_gen,
+                                                    annotated_writer)
+    coordinate_family_holder = _CoordinateFamilyHolder()
+    coord_family_gen = coordinate_family_holder.build_coordinate_families(paired_align_gen)
+    for coord_family in coord_family_gen:
         ranked_tags = _rank_tags(coord_family)
         tag_families = _build_tag_families(coord_family,
                                            ranked_tags,
