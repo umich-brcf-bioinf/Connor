@@ -358,10 +358,8 @@ class ConnorAlign(object):
             return 'left'
         elif self.reference_start > self.next_reference_start:
             return 'right'
-        elif self.pysam_align_segment.is_reverse:
-            return 'right'
         else:
-            return 'left'
+            return 'neither'
 
     @property
     def query_name(self):

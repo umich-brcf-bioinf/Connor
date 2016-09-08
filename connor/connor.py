@@ -321,6 +321,13 @@ def _build_coordinate_pairs_deux(connor_alignments, excluded_writer=None):
         if alignment.orientation == 'left':
             key = (alignment.reference_id, alignment.next_reference_start)
             coords[key][alignment.query_name] = alignment
+        elif alignment.orientation == 'neither':
+            key = (alignment.reference_id, alignment.next_reference_start)
+            if key in coords and alignment.query_name in coords[key]:
+                align1 = coords[key].pop(alignment.query_name)
+                yield _PairedAlignment(align1, alignment)
+            else:
+                coords[key][alignment.query_name] = alignment
         else:
             key = (alignment.reference_id, alignment.reference_start)
             coord = coords[key]
@@ -331,9 +338,11 @@ def _build_coordinate_pairs_deux(connor_alignments, excluded_writer=None):
             if l_align:
                 yield _PairedAlignment(l_align, alignment)
             else:
+                alignment.filter_value = 'read mate was missing or excluded'
                 excluded_writer.write(None, alignment)
     for aligns in coords.values():
         for align in aligns.values():
+            align.filter_value = 'read mate was missing or excluded'
             excluded_writer.write(None, align)
 
 class _CoordinateFamilyHolder(object):
@@ -356,8 +365,11 @@ class _CoordinateFamilyHolder(object):
             if right_coord < rightmost_boundary:
                 self.right_coords_in_progress.pop(0)
                 left_families = self.coordinate_family.pop(right_coord)
-                for family in sorted(left_families.values(), key=lambda x:x[0].left.reference_start):
-                    family.sort(key=lambda x: x.query_name)
+#                 for family in sorted(left_families.values(),
+#                                      key=lambda x:x[0].left.reference_start):
+#                     family.sort(key=lambda x: x.query_name)
+#                     yield family
+                for family in left_families.values():
                     yield family
             else:
                 break

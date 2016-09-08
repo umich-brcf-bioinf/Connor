@@ -778,6 +778,23 @@ class ConnorTest(BaseConnorTestCase):
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
         self.assertEqual(set(['1', '2', '3']), actual_pair_names)
 
+    def test_build_coordinate_pairs_deux_identicalCoordinates(self):
+        align1L = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=100))
+        align1R = ConnorAlign(mock_align(query_name = '1',
+                                         reference_start=100,
+                                         next_reference_start=100))
+        aligns = [align1L, align1R]
+        writer = MockAlignWriter()
+        actual_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns,
+                                                                       writer)]
+
+        self.assertEqual(1, len(actual_pairs))
+        actual_pair_names = set([pair.query_name for pair in actual_pairs])
+        self.assertEqual(set(['1']), actual_pair_names)
+
+
     def test_build_coordinate_pairs_deux_orphanedRightIsSafe(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
@@ -817,6 +834,8 @@ class ConnorTest(BaseConnorTestCase):
         (actual_family, actual_align) = writer._write_calls[0]
         self.assertEqual(None, actual_family)
         self.assertEqual(align2R, actual_align)
+        self.assertEqual('read mate was missing or excluded',
+                         actual_align.filter_value)
 
     def test_build_coordinate_pairs_deux_whenExhasutedRemaindersWrittenToExcluded(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
@@ -838,6 +857,8 @@ class ConnorTest(BaseConnorTestCase):
         (actual_family, actual_align) = writer._write_calls[0]
         self.assertEqual(None, actual_family)
         self.assertEqual(align3L, actual_align)
+        self.assertEqual('read mate was missing or excluded',
+                         actual_align.filter_value)
 
     def test_build_coordinate_pairs_deux_lookForPassedPops(self):
         align1L = ConnorAlign(mock_align(query_name = '1',

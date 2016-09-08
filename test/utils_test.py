@@ -62,7 +62,6 @@ class BaseConnorTestCase(unittest.TestCase):
             # nosetest and pylint fight over stdout; run nosetest -s to be safe
             sys.stdout.fileno() #pylint disable=pointless-statement
         except Exception: #pylint disable=broad=except
-#            print("skipping test", file=sys.stderr)
             raise SkipTest("sysout unsafe to test: run nosetest with -s option")
 
 class FilteredGeneratorTest(BaseConnorTestCase):

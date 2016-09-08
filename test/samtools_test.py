@@ -205,54 +205,11 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         pysam_align = mock_align(reference_start=200, next_reference_start=100)
         self.assertEqual('right', ConnorAlign(pysam_align).orientation)
 
-    def test_orientation_samePositiveIsLeft(self):
-        pysam_align = mock_align(flag=1,
+    def test_orientation_sameIsNeither(self):
+        pysam_align = mock_align(flag=129,
                                  reference_start=100,
                                  next_reference_start=100)
-        self.assertEqual('left', ConnorAlign(pysam_align).orientation)
-
-    def test_orientation_sameNegativeIsRight(self):
-        pysam_align = mock_align(flag=17,
-                                 reference_start=100,
-                                 next_reference_start=100)
-        self.assertEqual('right', ConnorAlign(pysam_align).orientation)
-
-#http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python/22434262#22434262
-
-#import sys
-# from contextlib import contextmanager
-# 
-# def fileno(file_or_fd):
-#     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
-#     if not isinstance(fd, int):
-#         raise ValueError("Expected a file (`.fileno()`) or a file descriptor")
-#     return fd
-# 
-# @contextmanager
-# def stdout_redirected(to=os.devnull, stdout=None):
-#     if stdout is None:
-#         stdout = sys.stdout
-# 
-#     stdout_fd = fileno(stdout)
-#     # copy stdout_fd before it is overwritten
-#     #NOTE: `copied` is inheritable on Windows when duplicating a standard stream
-#     with os.fdopen(os.dup(stdout_fd), 'wb') as copied:
-#         stdout.flush()  # flush library buffers that dup2 knows nothing about
-#         try:
-#             os.dup2(fileno(to), stdout_fd)  # $ exec >&to
-#         except ValueError:  # filename
-#             with open(to, 'wb') as to_file:
-#                 os.dup2(to_file.fileno(), stdout_fd)  # $ exec > to
-#         try:
-#             yield stdout # allow code to be run with the redirected stdout
-#         finally:
-#             # restore stdout to its previous value
-#             #NOTE: dup2 makes stdout_fd inheritable unconditionally
-#             try:
-#                 stdout.flush()
-#             except ValueError: #some ops close stdout
-#                 pass
-#             os.dup2(copied.fileno(), stdout_fd)  # $ exec >&copied
+        self.assertEqual('neither', ConnorAlign(pysam_align).orientation)
 
 
 class SamtoolsTest(utils_test.BaseConnorTestCase):
