@@ -268,8 +268,16 @@ class _Pysam9SamtoolsUtil(object):
                             catch_stdout=False)
 
     @staticmethod
+    def _byte_array_to_string(sequence):
+        if isinstance(sequence, str):
+            return sequence
+        else:
+            return str(sequence.decode("utf-8"))
+
+    @staticmethod
     def idxstats(input_bam_filepath):
-        return pysam.idxstats(input_bam_filepath).split('\n')
+        result = pysam.samtools.idxstats(input_bam_filepath)
+        return _Pysam9SamtoolsUtil._byte_array_to_string(result).split('\n')
 
 
 class _Pysam8SamtoolsUtil(object):
