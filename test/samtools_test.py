@@ -5,7 +5,6 @@ from __future__ import print_function, absolute_import, division
 from argparse import Namespace
 from copy import deepcopy
 import os
-import sys
 
 
 import pysam
@@ -19,7 +18,6 @@ from connor.samtools import filter_alignments
 import connor.samtools as samtools
 from test.utils_test import MicroMock
 import test.utils_test as utils_test
-from _io import UnsupportedOperation
 
 
 class MockAlignWriter(object):

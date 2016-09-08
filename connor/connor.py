@@ -65,34 +65,6 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         raise utils.UsageError(message)
 
 
-class _LightweightAlignment(object):
-    '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
-    def __init__(self, aligned_segment):
-        self.name = aligned_segment.query_name
-        chrom = aligned_segment.reference_name
-        pos1 = aligned_segment.reference_start
-        pos2 = aligned_segment.next_reference_start
-        self.reference_end = aligned_segment.reference_end
-        if pos1 < pos2:
-            self.key = (chrom, pos1, pos2)
-            self.left_pos = pos1
-        else:
-            self.key = (chrom, pos2, pos1)
-            self.left_pos = pos2
-
-
-class _LightweightPair(object):
-    '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
-    def __init__(self, aligned_segment1, aligned_segment2):
-        self.name = aligned_segment1.query_name
-        chrom = aligned_segment1.reference_name
-        left_start = min(aligned_segment1.reference_start,
-                         aligned_segment2.reference_start)
-        right_end = max(aligned_segment1.reference_end,
-                        aligned_segment2.reference_end)
-        self.key = (chrom, left_start, right_end)
-
-
 class _PairedAlignment(object):
     '''Represents the left and right align pairs from an single sequence.'''
     def __init__(self,
@@ -278,44 +250,8 @@ class _TagFamily(object):
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
-
-def _build_coordinate_read_name_manifest(lw_aligns):
-    '''Return a dict mapping coordinates to set of aligned querynames.
-
-    Constructed on a preliminary pass through the input BAM, this lightweight
-    dict informs downstream processing that the collection of reads at a
-    coordinate can be released.
-    '''
-    af_dict = defaultdict(set)
-    for lwa in lw_aligns:
-        af_dict[lwa.key].add(lwa.name)
-    return af_dict
-
-def _build_coordinate_families(aligned_segments,
-                               coord_read_name_manifest,
-                               excluded_writer):
-    '''Generate sets of PairedAlignments that share the same coordinates.'''
-    family_dict = defaultdict(set)
-    pairing_dict = {}
-    for aseg in aligned_segments:
-        if not aseg.query_name in pairing_dict:
-            pairing_dict[aseg.query_name]= aseg
-        else:
-            paired_align = _PairedAlignment(pairing_dict.pop(aseg.query_name),
-                                            aseg)
-            key = _LightweightPair(paired_align.left,
-                                   paired_align.right).key
-            family_dict[key].add(paired_align)
-            coord_read_name_manifest[key].remove(aseg.query_name)
-            if not coord_read_name_manifest[key]:
-                yield family_dict.pop(key)
-
-    for align in sorted(pairing_dict.values(), key=lambda a:a.query_name):
-        align.filter_value = 'read mate was missing or excluded'
-        excluded_writer.write(None, align)
-
-#TODO: cgates: remove default arg values
-def _build_coordinate_pairs_deux(connor_alignments, excluded_writer=None):
+#TODO: cgates: can we reduce the complexity here?
+def _build_coordinate_pairs_deux(connor_alignments, excluded_writer):
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
@@ -524,22 +460,6 @@ def _rank_tags(tagged_paired_aligns):
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
-
-def _build_lightweight_pairs(aligned_segments):
-    name_pairs = dict()
-    lightweight_pairs = list()
-    total_align_count = 0
-    for align_segment in aligned_segments:
-        total_align_count += 1
-        query_name = align_segment.query_name
-        if not query_name in name_pairs:
-            name_pairs[align_segment.query_name] = align_segment
-        else:
-            new_pair = _LightweightPair(name_pairs.pop(query_name),
-                                        align_segment)
-            lightweight_pairs.append(new_pair)
-    return lightweight_pairs
-
 #TODO: cgates: improve how this is tested
 def _progress_logger(base_generator, total_rows, log):
     row_count = 0
@@ -568,21 +488,9 @@ def _build_family_filter(args):
             return None
     return family_size_filter
 
-def _build_manifest(input_bam):
-    bamfile = samtools.alignment_file(input_bam, 'rb')
-    counter = utils.CountingGenerator()
-    included_aligns = samtools.filter_alignments(counter.count(bamfile.fetch()))
-    lightweight_pairs = _build_lightweight_pairs(included_aligns)
-    bamfile.close()
-    coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
-    return counter.item_count, coord_manifest
-
-
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
     total_aligns = samtools.total_align_count(args.input_bam)
-#     (total_aligns,
-#      coord_manifest) = _build_manifest(args.input_bam)
     family_filter = _build_family_filter(args)
     handlers = familyhandler.build_family_handlers(args,
                                                    consensus_writer,
@@ -595,9 +503,6 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                     log)
     filtered_aligns_gen = samtools.filter_alignments(progress_gen,
                                                      annotated_writer)
-#     for coord_family in _build_coordinate_families(filtered_aligns_gen,
-#                                                    coord_manifest,
-#                                                    annotated_writer):
 
     paired_align_gen = _build_coordinate_pairs_deux(filtered_aligns_gen,
                                                     annotated_writer)

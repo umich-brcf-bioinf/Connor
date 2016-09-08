@@ -185,7 +185,7 @@ class LoggingWriter(object):
         self._log.info('{} alignments unplaced or discarded',
                        LoggingWriter._percent_stat_str(excluded_align_count,
                                                        total_align_count))
- 
+
         LoggingWriter._log_filter_counts(self._unplaced_aligns,
                                          self._log.debug,
                                          'alignments unplaced: {percent_stat} {filter_name}',
@@ -205,7 +205,7 @@ class LoggingWriter(object):
                                                        total_align_count)
         self._log.info('{} alignments included in {} families',
                        percent_stat,
-                       included_fam_count),
+                       included_fam_count)
 
         msg = ('{:.2f}% deduplication rate '
                '(1 - {} families/{} included alignments)')
