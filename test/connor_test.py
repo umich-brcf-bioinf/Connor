@@ -38,9 +38,6 @@ def _mock_connor_align(query_name,
                            query_sequence='AAAGGG')
     return ConnorAlign(mock_pysam)
 
-
-
-
 def _mock_tag_family(align_pairs=None,
                     distinct_cigar_count=1,
                     inexact_match_count=0,
@@ -57,7 +54,6 @@ def _mock_tag_family(align_pairs=None,
                      consensus=consensus,
                      filter_value=filter_value,
                      included_pair_count=included_pair_count)
-
 
 # #TODO: cgates: replace this with samtools_test.mock_align
 class MockAlignSegment(object):
@@ -206,7 +202,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
     def test_replace_umt(self):
         # pysam's represtation of the sequence is inconsistent across pysam
         # and python versions; this hack makes the values comparable
-        def _byte_array_to_string(sequence):
+        def _barray_to_string(sequence):
             if isinstance(sequence, str):
                 return sequence
             else:
@@ -219,9 +215,9 @@ class PairedAlignmentTest(BaseConnorTestCase):
         paired_align.replace_umt(('GG','TT'))
 
         self.assertEquals('GGNN',
-                          _byte_array_to_string(paired_align.left.query_sequence))
+                          _barray_to_string(paired_align.left.query_sequence))
         self.assertEquals('NNTT',
-                          _byte_array_to_string(paired_align.right.query_sequence))
+                          _barray_to_string(paired_align.right.query_sequence))
         self.assertEquals([1,2,3,4],
                           paired_align.left.query_qualities)
         self.assertEquals([5,6,7,8],
@@ -711,7 +707,7 @@ class ConnorTest(BaseConnorTestCase):
                 return tag
         return None
 
-    def test_build_coordinate_pairs_deux_singlePair(self):
+    def test_build_coordinate_pairs_singlePair(self):
         align1L = ConnorAlign(mock_align(query_name='1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -720,15 +716,14 @@ class ConnorTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align1R]
 
-        actual_pairs = [p for p in connor._build_coordinate_pairs_deux(aligns,
-                                                                       None)]
+        actual_pairs = [p for p in connor._build_coordinate_pairs(aligns, None)]
 
         self.assertEqual(1, len(actual_pairs))
         actual_pair = actual_pairs[0]
         self.assertEqual(align1L, actual_pair.left)
         self.assertEqual(align1R, actual_pair.right)
 
-    def test_build_coordinate_pairs_deux_oneCoordinate(self):
+    def test_build_coordinate_pairs_oneCoordinate(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -743,8 +738,7 @@ class ConnorTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align2L, align1R, align2R]
 
-        actual_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns,
-                                                                       None)]
+        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, None)]
 
         self.assertEqual(2, len(actual_pairs))
         pairs = dict([(pair.query_name, pair) for pair in actual_pairs])
@@ -753,7 +747,7 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual(align2L, pairs['2'].left)
         self.assertEqual(align2R, pairs['2'].right)
 
-    def test_build_coordinate_pairs_deux_twoCoordinatesSameRight(self):
+    def test_build_coordinate_pairs_twoCoordinatesSameRight(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -774,14 +768,13 @@ class ConnorTest(BaseConnorTestCase):
                                          next_reference_start=125))
         aligns = [align1L, align2L, align3L, align1R, align2R, align3R]
 
-        actual_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns,
-                                                                       None)]
+        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, None)]
 
         self.assertEqual(3, len(actual_pairs))
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
         self.assertEqual(set(['1', '2', '3']), actual_pair_names)
 
-    def test_build_coordinate_pairs_deux_identicalCoordinates(self):
+    def test_build_coordinate_pairs_identicalCoordinates(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=100))
@@ -790,15 +783,14 @@ class ConnorTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align1R]
         writer = MockAlignWriter()
-        actual_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns,
-                                                                       writer)]
+        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, writer)]
 
         self.assertEqual(1, len(actual_pairs))
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
         self.assertEqual(set(['1']), actual_pair_names)
 
 
-    def test_build_coordinate_pairs_deux_orphanedRightIsSafe(self):
+    def test_build_coordinate_pairs_orphanedRightIsSafe(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -810,14 +802,13 @@ class ConnorTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align1R, align2R]
         writer = MockAlignWriter()
-        actual_pairs = [f for f in connor._build_coordinate_pairs_deux(aligns,
-                                                                       writer)]
+        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, writer)]
 
         self.assertEqual(1, len(actual_pairs))
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
         self.assertEqual(set(['1']), actual_pair_names)
 
-    def test_build_coordinate_pairs_deux_orphanedRightWrittenToExcluded(self):
+    def test_build_coordinate_pairs_orphanedRightWrittenToExcluded(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -830,7 +821,7 @@ class ConnorTest(BaseConnorTestCase):
         aligns = [align1L, align1R, align2R]
         writer = MockAlignWriter()
 
-        for _ in connor._build_coordinate_pairs_deux(aligns, writer):
+        for _ in connor._build_coordinate_pairs(aligns, writer):
             pass
 
         self.assertEqual(1, len(writer._write_calls))
@@ -840,7 +831,7 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual('read mate was missing or excluded',
                          actual_align.filter_value)
 
-    def test_build_coordinate_pairs_deux_whenExhasutedRemaindersWrittenToExcluded(self):
+    def test_build_coordinate_pairs_whenExhasutedRemaindersWrittenToExcluded(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -853,7 +844,7 @@ class ConnorTest(BaseConnorTestCase):
         aligns = [align1L, align3L, align1R]
         writer = MockAlignWriter()
 
-        for _ in connor._build_coordinate_pairs_deux(aligns, writer):
+        for _ in connor._build_coordinate_pairs(aligns, writer):
             pass
 
         self.assertEqual(1, len(writer._write_calls))
@@ -863,7 +854,7 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual('read mate was missing or excluded',
                          actual_align.filter_value)
 
-    def test_build_coordinate_pairs_deux_lookForPassedPops(self):
+    def test_build_coordinate_pairs_lookForPassedPops(self):
         align1L = ConnorAlign(mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
@@ -892,7 +883,7 @@ class ConnorTest(BaseConnorTestCase):
         aligns = [align1L, align2L, align1R, align2R, align3L, align4L]
         actual_pairs = []
         try:
-            for pair in connor._build_coordinate_pairs_deux(aligns, None):
+            for pair in connor._build_coordinate_pairs(aligns, None):
                 actual_pairs.append(pair)
             self.fail("expected BombError")
         except BombError:

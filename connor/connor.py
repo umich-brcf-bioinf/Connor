@@ -251,7 +251,7 @@ class _TagFamily(object):
         return consensus_pair
 
 #TODO: cgates: can we reduce the complexity here?
-def _build_coordinate_pairs_deux(connor_alignments, excluded_writer):
+def _build_coordinate_pairs(connor_alignments, excluded_writer):
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
@@ -504,7 +504,7 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     filtered_aligns_gen = samtools.filter_alignments(progress_gen,
                                                      annotated_writer)
 
-    paired_align_gen = _build_coordinate_pairs_deux(filtered_aligns_gen,
+    paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
                                                     annotated_writer)
     coordinate_family_holder = _CoordinateFamilyHolder()
     coord_family_gen = coordinate_family_holder.build_coordinate_families(paired_align_gen)
