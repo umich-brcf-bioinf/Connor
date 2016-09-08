@@ -365,11 +365,9 @@ class _CoordinateFamilyHolder(object):
             if right_coord < rightmost_boundary:
                 self.right_coords_in_progress.pop(0)
                 left_families = self.coordinate_family.pop(right_coord)
-#                 for family in sorted(left_families.values(),
-#                                      key=lambda x:x[0].left.reference_start):
-#                     family.sort(key=lambda x: x.query_name)
-#                     yield family
-                for family in left_families.values():
+                for family in sorted(left_families.values(),
+                                     key=lambda x:x[0].left.reference_start):
+                    family.sort(key=lambda x: x.query_name)
                     yield family
             else:
                 break
