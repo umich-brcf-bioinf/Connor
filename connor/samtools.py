@@ -267,6 +267,11 @@ class _Pysam9SamtoolsUtil(object):
                             output_bam_filepath,
                             catch_stdout=False)
 
+    @staticmethod
+    def idxstats(input_bam_filepath):
+        return pysam.idxstats(input_bam_filepath).split('\n')
+
+
 class _Pysam8SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
@@ -278,6 +283,10 @@ class _Pysam8SamtoolsUtil(object):
         pysam.sort(input_bam_filepath,
                    output_bam_filepath_prefix,
                    catch_stdout=False)
+
+    @staticmethod
+    def idxstats(input_bam_filepath):
+        return pysam.idxstats(input_bam_filepath)
 
 
 def _get_samtools():
@@ -455,10 +464,17 @@ def build_writer(input_bam, output_bam, tags, args):
     if not output_bam:
         return AlignWriter.NULL
     else:
-        input_bam = alignment_file(input_bam, "rb")
+        input_bam = alignment_file(input_bam, 'rb')
         header = input_bam.header
         input_bam.close()
         _set_pg_header(header,
                        args.simplify_pg_header,
                        args.original_command_line)
         return AlignWriter(header, output_bam, tags)
+
+def total_align_count(input_bam):
+    '''Returns count of all alignments in input BAM (based on index)'''
+    count = 0
+    for line in SAMTOOLS_UTIL.idxstats(input_bam):
+        count += sum(map(int, line.strip().split('\t')[2:]))
+    return count

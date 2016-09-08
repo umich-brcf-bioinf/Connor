@@ -567,9 +567,10 @@ def _build_manifest(input_bam):
     coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
     return counter.item_count, coord_manifest
 
+
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
-    total_aligns = 1000000
+    total_aligns = samtools.total_align_count(args.input_bam)
 #     (total_aligns,
 #      coord_manifest) = _build_manifest(args.input_bam)
     family_filter = _build_family_filter(args)

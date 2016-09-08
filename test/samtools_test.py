@@ -5,6 +5,9 @@ from __future__ import print_function, absolute_import, division
 from argparse import Namespace
 from copy import deepcopy
 import os
+import sys
+
+
 import pysam
 from testfixtures.tempdirectory import TempDirectory
 
@@ -16,6 +19,7 @@ from connor.samtools import filter_alignments
 import connor.samtools as samtools
 from test.utils_test import MicroMock
 import test.utils_test as utils_test
+from _io import UnsupportedOperation
 
 
 class MockAlignWriter(object):
@@ -213,8 +217,66 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
                                  next_reference_start=100)
         self.assertEqual('right', ConnorAlign(pysam_align).orientation)
 
+#http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python/22434262#22434262
+
+#import sys
+# from contextlib import contextmanager
+# 
+# def fileno(file_or_fd):
+#     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
+#     if not isinstance(fd, int):
+#         raise ValueError("Expected a file (`.fileno()`) or a file descriptor")
+#     return fd
+# 
+# @contextmanager
+# def stdout_redirected(to=os.devnull, stdout=None):
+#     if stdout is None:
+#         stdout = sys.stdout
+# 
+#     stdout_fd = fileno(stdout)
+#     # copy stdout_fd before it is overwritten
+#     #NOTE: `copied` is inheritable on Windows when duplicating a standard stream
+#     with os.fdopen(os.dup(stdout_fd), 'wb') as copied:
+#         stdout.flush()  # flush library buffers that dup2 knows nothing about
+#         try:
+#             os.dup2(fileno(to), stdout_fd)  # $ exec >&to
+#         except ValueError:  # filename
+#             with open(to, 'wb') as to_file:
+#                 os.dup2(to_file.fileno(), stdout_fd)  # $ exec > to
+#         try:
+#             yield stdout # allow code to be run with the redirected stdout
+#         finally:
+#             # restore stdout to its previous value
+#             #NOTE: dup2 makes stdout_fd inheritable unconditionally
+#             try:
+#                 stdout.flush()
+#             except ValueError: #some ops close stdout
+#                 pass
+#             os.dup2(copied.fileno(), stdout_fd)  # $ exec >&copied
+
 
 class SamtoolsTest(utils_test.BaseConnorTestCase):
+    def test_total_align_count(self):
+        self.check_sysout_safe()
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
+readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
+readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
+readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
+readNameZ1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
+readNameZ1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
+'''.replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam = create_bam(tmp_dir.path,
+                                   'input.sam',
+                                   sam_contents,
+                                   index=False)
+            samtools.sort_and_index_bam(input_bam)
+            actual_count = samtools.total_align_count(input_bam)
+            self.assertEqual(6, actual_count)
+
     def test_build_writer(self):
         sam_contents = \
 '''@HD|VN:1.4|GO:none|SO:coordinate
