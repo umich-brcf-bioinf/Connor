@@ -154,7 +154,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
                           query_sequence='AAAAAA',
                           filter_value=None)
         paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual((100,250), paired_alignment.positions)
+        self.assertEqual((101,251), paired_alignment.positions)
 
     def test_filter_value(self):
         left = ConnorAlign(mock_align(), filter_value=None)
@@ -949,7 +949,7 @@ class ConnorTest(BaseConnorTestCase):
 
     def test_build_bam_tags(self):
         actual_tags = connor._build_bam_tags()
-        self.assertEqual(5, len(actual_tags))
+        self.assertEqual(6, len(actual_tags))
 
     def test_build_bam_tags_x0_filter(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X0')
@@ -969,11 +969,19 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals('bar', tag._get_value(None, None, connor_align))
         self.assertEquals('foo;bar', tag._get_value(family, None, connor_align))
 
-
-
-    def test_build_bam_tags_x1_unique_identifier(self):
+    def test_build_bam_tags_x1_positions(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X1')
         self.assertEqual('X1', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'leftmost~rightmost matched pair positions')
+        pair = MicroMock(positions=(100,150))
+        self.assertEquals("100~150", tag._get_value(None, pair, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x3_unique_identifier(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
+        self.assertEqual('X3', tag._tag_name)
         self.assertEqual('i', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'unique identifier')
         family = MicroMock(umi_sequence=42)
@@ -981,24 +989,14 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals(None, tag._get_value(None, None, None))
 
 
-    def test_build_bam_tags_x2_family_size(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
-        self.assertEqual('X2', tag._tag_name)
+    def test_build_bam_tags_x5_family_size(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X5')
+        self.assertEqual('X5', tag._tag_name)
         self.assertEqual('i', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'family size')
         family = MicroMock(included_pair_count=42)
         self.assertEquals(42, tag._get_value(family, None, None))
         self.assertEquals(None, tag._get_value(None, None, None))
-
-
-#     def test_build_bam_tags_x3_umt_barcodes(self):
-#         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
-#         self.assertEqual('X3', tag._tag_name)
-#         self.assertEqual('Z', tag._tag_type)
-#         self.assertRegexpMatches(tag._description, 'UMT barcodes')
-#         family = MicroMock(umt=('AAA','CCC'))
-#         self.assertEquals("AAA~CCC", tag._get_value(family, None))
-#         self.assertEquals(None, tag._get_value(None, None))
 
 
     def test_build_bam_tags_x4_umt_barcodes(self):
@@ -1024,8 +1022,12 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals(None,
                           tag._get_value(None, None, template_connor_align))
         self.assertEquals(None,
-                          tag._get_value(family, None, nontemplate_connor_align))
-        self.assertEquals(1, tag._get_value(family, None, template_connor_align))
+                          tag._get_value(family,
+                                         None,
+                                         nontemplate_connor_align))
+        self.assertEquals(1, tag._get_value(family,
+                                            None,
+                                            template_connor_align))
         self.assertEquals(None, tag._get_value(None, None, None))
 
 

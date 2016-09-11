@@ -17,10 +17,10 @@ class _WriteConsensusHandler(object):
     def handle(self, family):
         if not family.filter_value:
             self._writer.write(family,
-                               None,
+                               family.consensus,
                                family.consensus.left)
             self._writer.write(family,
-                               None,
+                               family.consensus,
                                family.consensus.right)
 
     def end(self):
@@ -35,10 +35,10 @@ class _WriteAnnotatedAlignsHandler(object):
         for align_pair in sorted(family.align_pairs,
                                  key=lambda a: a.query_name):
             self._writer.write(family,
-                               None,
+                               align_pair,
                                align_pair.left)
             self._writer.write(family,
-                               None,
+                               align_pair,
                                align_pair.right)
 
     def end(self):
