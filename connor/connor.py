@@ -23,6 +23,7 @@ except ImportError:
     from __builtin__ import xrange as iter_range
 from collections import defaultdict, Counter
 from copy import deepcopy
+from functools import partial
 import operator
 import os
 import platform
@@ -32,6 +33,7 @@ import resource
 import time
 
 import pysam
+from sortedcontainers import SortedSet
 
 import connor
 import connor.command_validator as command_validator
@@ -63,37 +65,10 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         raise utils.UsageError(message)
 
 
-class _LightweightAlignment(object):
-    '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
-    def __init__(self, aligned_segment):
-        self.name = aligned_segment.query_name
-        chrom = aligned_segment.reference_name
-        pos1 = aligned_segment.reference_start
-        pos2 = aligned_segment.next_reference_start
-        self.reference_end = aligned_segment.reference_end
-        if pos1 < pos2:
-            self.key = (chrom, pos1, pos2)
-            self.left_pos = pos1
-        else:
-            self.key = (chrom, pos2, pos1)
-            self.left_pos = pos2
-
-
-class _LightweightPair(object):
-    '''Minimal info from PySam.AlignedSegment used to expedite pos grouping.'''
-    def __init__(self, aligned_segment1, aligned_segment2):
-        self.name = aligned_segment1.query_name
-        chrom = aligned_segment1.reference_name
-        left_start = min(aligned_segment1.reference_start,
-                         aligned_segment2.reference_start)
-        right_end = max(aligned_segment1.reference_end,
-                        aligned_segment2.reference_end)
-        self.key = (chrom, left_start, right_end)
-
-
 class _PairedAlignment(object):
     '''Represents the left and right align pairs from an single sequence.'''
-    def __init__(self, left_alignment,
+    def __init__(self,
+                 left_alignment,
                  right_alignment,
                  tag_length=DEFAULT_TAG_LENGTH):
         if left_alignment.query_name != right_alignment.query_name:
@@ -275,41 +250,108 @@ class _TagFamily(object):
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
-
-def _build_coordinate_read_name_manifest(lw_aligns):
-    '''Return a dict mapping coordinates to set of aligned querynames.
-
-    Constructed on a preliminary pass through the input BAM, this lightweight
-    dict informs downstream processing that the collection of reads at a
-    coordinate can be released.
-    '''
-    af_dict = defaultdict(set)
-    for lwa in lw_aligns:
-        af_dict[lwa.key].add(lwa.name)
-    return af_dict
-
-def _build_coordinate_families(aligned_segments,
-                               coord_read_name_manifest,
-                               excluded_writer):
-    '''Generate sets of PairedAlignments that share the same coordinates.'''
-    family_dict = defaultdict(set)
-    pairing_dict = {}
-    for aseg in aligned_segments:
-        if not aseg.query_name in pairing_dict:
-            pairing_dict[aseg.query_name]= aseg
+#TODO: cgates: can we reduce the complexity here?
+def _build_coordinate_pairs(connor_alignments, excluded_writer):
+    coords = defaultdict(dict)
+    for alignment in connor_alignments:
+        if alignment.orientation == 'left':
+            key = (alignment.reference_id, alignment.next_reference_start)
+            coords[key][alignment.query_name] = alignment
+        elif alignment.orientation == 'neither':
+            key = (alignment.reference_id, alignment.next_reference_start)
+            if key in coords and alignment.query_name in coords[key]:
+                align1 = coords[key].pop(alignment.query_name)
+                yield _PairedAlignment(align1, alignment)
+            else:
+                coords[key][alignment.query_name] = alignment
         else:
-            paired_align = _PairedAlignment(pairing_dict.pop(aseg.query_name),
-                                            aseg)
-            key = _LightweightPair(paired_align.left,
-                                   paired_align.right).key
-            family_dict[key].add(paired_align)
-            coord_read_name_manifest[key].remove(aseg.query_name)
-            if not coord_read_name_manifest[key]:
-                yield family_dict.pop(key)
+            key = (alignment.reference_id, alignment.reference_start)
+            coord = coords[key]
+            l_align = coord.pop(alignment.query_name, None)
+            # Clear empty coordinate dict
+            if not len(coord):
+                del coords[key]
+            if l_align:
+                yield _PairedAlignment(l_align, alignment)
+            else:
+                alignment.filter_value = 'read mate was missing or excluded'
+                excluded_writer.write(None, alignment)
+    for aligns in coords.values():
+        for align in aligns.values():
+            align.filter_value = 'read mate was missing or excluded'
+            excluded_writer.write(None, align)
 
-    for align in sorted(pairing_dict.values(), key=lambda a:a.query_name):
-        align.filter_value = 'read mate was missing or excluded'
-        excluded_writer.write(None, align)
+class _CoordinateFamilyHolder(object):
+    '''Encapsulates how stream of paired aligns are iteratively released as
+    sets of pairs which share the same coordinate (coordinate families)'''
+    def __init__(self):
+        self._coordinate_family = defaultdict(partial(defaultdict, list))
+        self._right_coords_in_progress = SortedSet()
+        self.pending_pair_count = 0
+        self.pending_pair_peak_count = 0
+
+    def _add(self, pair):
+        right = pair.right.reference_end
+        left = pair.left.reference_start
+        self._right_coords_in_progress.add(right)
+        self._coordinate_family[right][left].append(pair)
+        self.pending_pair_count += 1
+        self.pending_pair_peak_count = max(self.pending_pair_count,
+                                           self.pending_pair_peak_count)
+
+    def _completed_families(self, rightmost_boundary):
+        '''returns one or more families whose end < rightmost boundary'''
+        while len(self._right_coords_in_progress):
+            right_coord = self._right_coords_in_progress[0]
+            if right_coord < rightmost_boundary:
+                self._right_coords_in_progress.pop(0)
+                left_families = self._coordinate_family.pop(right_coord)
+                for family in sorted(left_families.values(),
+                                     key=lambda x:x[0].left.reference_start):
+                    family.sort(key=lambda x: x.query_name)
+                    self.pending_pair_count -= len(family)
+                    yield family
+            else:
+                break
+
+    def _remaining_families(self):
+        for left_families in self._coordinate_family.values():
+            for family in left_families.values():
+                self.pending_pair_count -= len(family)
+                yield family
+            left_families.clear()
+        self._coordinate_family.clear()
+
+    #TODO: cgates: can we reduce the complexity here?
+    def build_coordinate_families(self, paired_aligns):
+        '''Given a stream of paired aligns, return a list of pairs that share
+        same coordinates (coordinate family).  Flushes families in progress
+        when any of:
+        a) incoming right start > family end
+        b) incoming chrom != current chrom
+        c) incoming align stream is exhausted'''
+        rightmost_start = None
+        current_chrom = None
+        def _new_coordinate(pair):
+            return pair.right.reference_start != rightmost_start
+        def _new_chrom(pair):
+            return current_chrom != pair.right.reference_name
+
+        for pair in paired_aligns:
+            if rightmost_start is None:
+                rightmost_start = pair.right.reference_start
+                current_chrom = pair.right.reference_name
+            if _new_chrom(pair):
+                for family in self._remaining_families():
+                    yield family
+            elif _new_coordinate(pair):
+                rightmost_start = pair.right.reference_start
+                for family in self._completed_families(rightmost_start):
+                    yield family
+            self._add(pair)
+
+        for family in self._remaining_families():
+            yield family
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
@@ -425,24 +467,10 @@ def _rank_tags(tagged_paired_aligns):
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
-
-def _build_lightweight_pairs(aligned_segments):
-    name_pairs = dict()
-    lightweight_pairs = list()
-    total_align_count = 0
-    for align_segment in aligned_segments:
-        total_align_count += 1
-        query_name = align_segment.query_name
-        if not query_name in name_pairs:
-            name_pairs[align_segment.query_name] = align_segment
-        else:
-            new_pair = _LightweightPair(name_pairs.pop(query_name),
-                                        align_segment)
-            lightweight_pairs.append(new_pair)
-    return lightweight_pairs
-
-#TODO: cgates: improve how this is tested
-def _progress_logger(base_generator, total_rows, log):
+def _progress_logger(base_generator,
+                     total_rows,
+                     log,
+                     supplemental_log=lambda x: None):
     row_count = 0
     next_breakpoint = 0
     for item in base_generator:
@@ -453,11 +481,11 @@ def _progress_logger(base_generator, total_rows, log):
                      next_breakpoint,
                      row_count,
                      total_rows)
-            log.debug("{}mb peak memory", _peak_memory())
+            supplemental_log(log)
             next_breakpoint = 10 * int(progress/10) + 10
         yield item
     log.info("100% ({}/{}) alignments processed", row_count, total_rows)
-    log.debug("{}mb peak memory", _peak_memory())
+    supplemental_log(log)
 
 def _build_family_filter(args):
     min_family_size = args.min_family_size_threshold
@@ -469,19 +497,17 @@ def _build_family_filter(args):
             return None
     return family_size_filter
 
-def _build_manifest(input_bam):
-    bamfile = samtools.alignment_file(input_bam, 'rb')
-    counter = utils.CountingGenerator()
-    included_aligns = samtools.filter_alignments(counter.count(bamfile.fetch()))
-    lightweight_pairs = _build_lightweight_pairs(included_aligns)
-    bamfile.close()
-    coord_manifest = _build_coordinate_read_name_manifest(lightweight_pairs)
-    return counter.item_count, coord_manifest
+def _build_supplemental_log(coordinate_holder):
+    def supplemental_progress_log(log):
+        log.debug("{}mb peak memory", _peak_memory())
+        log.debug("{} pending alignment pairs; {} peak pairs",
+                  coordinate_holder.pending_pair_count,
+                  coordinate_holder.pending_pair_peak_count)
+    return supplemental_progress_log
 
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
-    (total_aligns,
-     coord_manifest) = _build_manifest(args.input_bam)
+    total_aligns = samtools.total_align_count(args.input_bam)
     family_filter = _build_family_filter(args)
     handlers = familyhandler.build_family_handlers(args,
                                                    consensus_writer,
@@ -489,14 +515,18 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                                    log)
 
     bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    coord_family_holder = _CoordinateFamilyHolder()
+    supplemental_log = _build_supplemental_log(coord_family_holder)
     progress_gen = _progress_logger(bamfile.fetch(),
                                     total_aligns,
-                                    log)
+                                    log,
+                                    supplemental_log)
     filtered_aligns_gen = samtools.filter_alignments(progress_gen,
                                                      annotated_writer)
-    for coord_family in _build_coordinate_families(filtered_aligns_gen,
-                                                   coord_manifest,
-                                                   annotated_writer):
+    paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
+                                                    annotated_writer)
+    coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
+    for coord_family in coord_family_gen:
         ranked_tags = _rank_tags(coord_family)
         tag_families = _build_tag_families(coord_family,
                                            ranked_tags,

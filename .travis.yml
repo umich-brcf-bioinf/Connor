@@ -19,8 +19,8 @@ install:
     - pip install codeclimate-test-reporter
 
 script:
-    - nosetests --with-coverage --verbose --cover-package=connor
-    - nosetests examples
+    - nosetests -s --with-coverage --verbose --cover-package=connor
+    - nosetests -s examples
 
 after_success:
 # note CODECLIMATE_REPO_TOKEN must be set in travis env vars

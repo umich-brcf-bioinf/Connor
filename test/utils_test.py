@@ -3,7 +3,11 @@
 
 from argparse import Namespace
 from collections import defaultdict
+import sys
 import unittest
+
+from nose.exc import SkipTest
+
 import connor.utils as utils
 
 
@@ -51,6 +55,14 @@ class BaseConnorTestCase(unittest.TestCase):
     def ok(self):
         #pylint: disable=redundant-unittest-assert
         self.assertTrue(True)
+
+    @staticmethod
+    def check_sysout_safe():
+        try:
+            # nosetest and pylint fight over stdout; run nosetest -s to be safe
+            sys.stdout.fileno() #pylint disable=pointless-statement
+        except Exception: #pylint disable=broad=except
+            raise SkipTest("sysout unsafe to test: run nosetest with -s option")
 
 class FilteredGeneratorTest(BaseConnorTestCase):
     def test_filter_passesAllThroughWhenNoFilters(self):

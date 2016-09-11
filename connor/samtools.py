@@ -185,7 +185,7 @@ class LoggingWriter(object):
         self._log.info('{} alignments unplaced or discarded',
                        LoggingWriter._percent_stat_str(excluded_align_count,
                                                        total_align_count))
- 
+
         LoggingWriter._log_filter_counts(self._unplaced_aligns,
                                          self._log.debug,
                                          'alignments unplaced: {percent_stat} {filter_name}',
@@ -205,7 +205,7 @@ class LoggingWriter(object):
                                                        total_align_count)
         self._log.info('{} alignments included in {} families',
                        percent_stat,
-                       included_fam_count),
+                       included_fam_count)
 
         msg = ('{:.2f}% deduplication rate '
                '(1 - {} families/{} included alignments)')
@@ -267,6 +267,19 @@ class _Pysam9SamtoolsUtil(object):
                             output_bam_filepath,
                             catch_stdout=False)
 
+    @staticmethod
+    def _byte_array_to_string(sequence):
+        if isinstance(sequence, str):
+            return sequence
+        else:
+            return str(sequence.decode("utf-8"))
+
+    @staticmethod
+    def idxstats(input_bam_filepath):
+        result = pysam.samtools.idxstats(input_bam_filepath)
+        return _Pysam9SamtoolsUtil._byte_array_to_string(result).split('\n')
+
+
 class _Pysam8SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
@@ -278,6 +291,10 @@ class _Pysam8SamtoolsUtil(object):
         pysam.sort(input_bam_filepath,
                    output_bam_filepath_prefix,
                    catch_stdout=False)
+
+    @staticmethod
+    def idxstats(input_bam_filepath):
+        return pysam.idxstats(input_bam_filepath)
 
 
 def _get_samtools():
@@ -334,6 +351,15 @@ class ConnorAlign(object):
     @next_reference_start.setter
     def next_reference_start(self, value):
         self.pysam_align_segment.next_reference_start = value
+
+    @property
+    def orientation(self):
+        if self.reference_start < self.next_reference_start:
+            return 'left'
+        elif self.reference_start > self.next_reference_start:
+            return 'right'
+        else:
+            return 'neither'
 
     @property
     def query_name(self):
@@ -444,10 +470,20 @@ def build_writer(input_bam, output_bam, tags, args):
     if not output_bam:
         return AlignWriter.NULL
     else:
-        input_bam = alignment_file(input_bam, "rb")
+        input_bam = alignment_file(input_bam, 'rb')
         header = input_bam.header
         input_bam.close()
         _set_pg_header(header,
                        args.simplify_pg_header,
                        args.original_command_line)
         return AlignWriter(header, output_bam, tags)
+
+def total_align_count(input_bam):
+    '''Returns count of all mapped alignments in input BAM (based on index)'''
+    count = 0
+    for line in SAMTOOLS_UTIL.idxstats(input_bam):
+        if line:
+            chrom, _, mapped, unmapped = line.strip().split('\t')
+            if chrom != '*':
+                count += int(mapped) + int(unmapped)
+    return count
