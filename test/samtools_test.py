@@ -220,8 +220,10 @@ readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
 readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
 readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameZ1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
-readNameZ1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
+readNameC1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
+readNameC1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
+readNameZ1|77|*|0|0|*|*|0|0|TTTTT|>>>>>
+readNameZ1|141|*|0|0|*|*|0|0|GGGGG|>>>>>
 '''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
             input_bam = create_bam(tmp_dir.path,

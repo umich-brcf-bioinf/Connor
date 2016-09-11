@@ -479,8 +479,11 @@ def build_writer(input_bam, output_bam, tags, args):
         return AlignWriter(header, output_bam, tags)
 
 def total_align_count(input_bam):
-    '''Returns count of all alignments in input BAM (based on index)'''
+    '''Returns count of all mapped alignments in input BAM (based on index)'''
     count = 0
     for line in SAMTOOLS_UTIL.idxstats(input_bam):
-        count += sum(map(int, line.strip().split('\t')[2:]))
+        if line:
+            chrom, _, mapped, unmapped = line.strip().split('\t')
+            if chrom != '*':
+                count += int(mapped) + int(unmapped)
     return count
