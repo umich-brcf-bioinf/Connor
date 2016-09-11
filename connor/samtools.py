@@ -11,7 +11,7 @@ import connor.utils as utils
 
 class AlignWriter(object):
     class _NullWriter(object):
-        def write(self, family, connor_align):
+        def write(self, family, paired_align, connor_align):
             pass
 
         def close(self, log=None):
@@ -45,7 +45,7 @@ class AlignWriter(object):
         for tag in self._tags:
             tag.set_tag(family, connor_align)
 
-    def write(self, family, connor_align):
+    def write(self, family, paired_align, connor_align):
         self._add_bam_tags(family, connor_align)
         self._bam_file.write(connor_align.pysam_align_segment)
 
@@ -72,16 +72,16 @@ class LoggingWriter(object):
         self._family_filter_stats = defaultdict(set)
 
     #TODO: cgates: promote UNPLACED_FAMILY to public NULL class; use throughout
-    def write(self, family, connor_align):
+    def write(self, family, paired_align, connor_align):
         if not family:
             family = LoggingWriter.UNPLACED_FAMILY
         self._align_filter_stats[(family.filter_value,
                                   connor_align.filter_value)] += 1
         self._family_filter_stats[family.filter_value].add(family.umi_sequence)
         if family==LoggingWriter.UNPLACED_FAMILY:
-            self._base_writer.write(None, connor_align)
+            self._base_writer.write(None, paired_align, connor_align)
         else:
-            self._base_writer.write(family, connor_align)
+            self._base_writer.write(family, paired_align, connor_align)
 
     @staticmethod
     def _filter_counts(filter_dict):
@@ -414,6 +414,7 @@ class ConnorAlign(object):
     def template_length(self, value):
         self.pysam_align_segment.template_length = value
 
+
 def filter_alignments(pysam_alignments, excluded_writer=AlignWriter.NULL):
     filters = {'cigar unavailable': \
                     lambda a: a.cigarstring is None,
@@ -433,6 +434,7 @@ def filter_alignments(pysam_alignments, excluded_writer=AlignWriter.NULL):
         connor_align = ConnorAlign(pysam_align, filter_value)
         if filter_value:
             excluded_writer.write(family=None,
+                                  paired_align=None,
                                   connor_align=connor_align)
         else:
             yield connor_align

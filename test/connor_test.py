@@ -966,9 +966,29 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals(None, tag._get_value(None, None))
 
 
-    def test_build_bam_tags_x2_umt_barcodes(self):
+    def test_build_bam_tags_x2_family_size(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
         self.assertEqual('X2', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'family size')
+        family = MicroMock(included_pair_count=42)
+        self.assertEquals(42, tag._get_value(family, None))
+        self.assertEquals(None, tag._get_value(None, None))
+
+
+#     def test_build_bam_tags_x3_umt_barcodes(self):
+#         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
+#         self.assertEqual('X3', tag._tag_name)
+#         self.assertEqual('Z', tag._tag_type)
+#         self.assertRegexpMatches(tag._description, 'UMT barcodes')
+#         family = MicroMock(umt=('AAA','CCC'))
+#         self.assertEquals("AAA~CCC", tag._get_value(family, None))
+#         self.assertEquals(None, tag._get_value(None, None))
+
+
+    def test_build_bam_tags_x4_umt_barcodes(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
+        self.assertEqual('X4', tag._tag_name)
         self.assertEqual('Z', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'UMT barcodes')
         family = MicroMock(umt=('AAA','CCC'))
@@ -976,18 +996,9 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals(None, tag._get_value(None, None))
 
 
-    def test_build_bam_tags_x3_family_size(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
-        self.assertEqual('X3', tag._tag_name)
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'family size')
-        family = MicroMock(included_pair_count=42)
-        self.assertEquals(42, tag._get_value(family, None))
-        self.assertEquals(None, tag._get_value(None, None))
-
-    def test_build_bam_tags_x4_filter(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
-        self.assertEqual('X4', tag._tag_name)
+    def test_build_bam_tags_x6_consensus_template(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X6')
+        self.assertEqual('X6', tag._tag_name)
         self.assertEqual('i', tag._tag_type)
         self.assertRegexpMatches(tag._description,
                                  'template for the consensus alignment')

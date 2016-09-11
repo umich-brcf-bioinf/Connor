@@ -26,7 +26,7 @@ class MockAlignWriter(object):
         self.bam_file_path = "foo.bam"
         self._close_was_called = False
 
-    def write(self, family, connor_align):
+    def write(self, family, paired_align, connor_align):
         self._write_calls.append((family, connor_align))
 
     #pylint: disable=unused-argument
@@ -507,9 +507,9 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             family = None
             writer = samtools.AlignWriter(header, bam_path)
 
-            writer.write(family, align1)
-            writer.write(family, align2)
-            writer.write(family, align3)
+            writer.write(family, None, align1)
+            writer.write(family, None, align2)
+            writer.write(family, None, align3)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -535,9 +535,9 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
 
-            writer.write('familyA', align1)
-            writer.write('familyB', align2)
-            writer.write('familyC', align3)
+            writer.write('familyA', None, align1)
+            writer.write('familyB', None, align2)
+            writer.write('familyC', None, align3)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -574,9 +574,9 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer = samtools.AlignWriter(header, bam_path, [tag1])
 
-            writer.write('familyA', align1)
-            writer.write('familyB', align2)
-            writer.write('familyC', align3)
+            writer.write('familyA', None, align1)
+            writer.write('familyB', None, align2)
+            writer.write('familyC', None, align3)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -609,7 +609,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer = samtools.AlignWriter(header, bam_path, [tag1])
 
-            writer.write('familyA', align1)
+            writer.write('familyA', None, align1)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -653,7 +653,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual(expected_comments, actual_comments)
 
     def test_null_writer_methods(self):
-        samtools.AlignWriter.NULL.write('family', 'connor_align')
+        samtools.AlignWriter.NULL.write('family', None, 'connor_align')
         samtools.AlignWriter.NULL.close()
         self.assertEqual(1, 1)
 
@@ -677,9 +677,9 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
 
-            writer.write('familyC', align3)
-            writer.write('familyA', align1)
-            writer.write('familyB', align2)
+            writer.write('familyC', None, align3)
+            writer.write('familyA', None, align1)
+            writer.write('familyB', None, align2)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -702,7 +702,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer = samtools.AlignWriter(header, bam_path, [])
 
-            writer.write('familyA', align1)
+            writer.write('familyA', None, align1)
             writer.close(log=self.mock_logger)
         info_log_lines = self.mock_logger._log_calls['INFO']
         self.assertEqual(1, len(info_log_lines))
@@ -761,7 +761,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
                          (fam5, al5A), (fam5, al5B)]
 
         for family, align in family_aligns:
-            writer.write(family, align)
+            writer.write(family, None, align)
         writer.close()
 
         log_lines = self.mock_logger._log_calls['INFO']
@@ -795,7 +795,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         family_aligns = [(fam1, alignA), (fam1, alignA)]
 
         for family, align in family_aligns:
-            writer.write(family, align)
+            writer.write(family, None, align)
         writer.close()
 
         log_lines = self.mock_logger._log_calls['INFO']
@@ -820,7 +820,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         family_aligns = [(fam1, al1A), (fam1, al1B)]
 
         for family, align in family_aligns:
-            writer.write(family, align)
+            writer.write(family, None, align)
 
         self.assertEqual([(fam1, al1A), (fam1, al1B)],
                          base_writer._write_calls)
@@ -831,7 +831,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         fam1 = samtools.LoggingWriter.UNPLACED_FAMILY
         al1A = MicroMock(filter_value = 'foo')
 
-        writer.write(fam1, al1A)
+        writer.write(fam1, None, al1A)
 
         self.assertEqual([(None, al1A)], base_writer._write_calls)
 

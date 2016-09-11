@@ -252,6 +252,7 @@ class _TagFamily(object):
 
 #TODO: cgates: can we reduce the complexity here?
 def _build_coordinate_pairs(connor_alignments, excluded_writer):
+    MISSING_MATE_FILTER = 'read mate was missing or excluded'
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
@@ -274,12 +275,12 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             if l_align:
                 yield _PairedAlignment(l_align, alignment)
             else:
-                alignment.filter_value = 'read mate was missing or excluded'
-                excluded_writer.write(None, alignment)
+                alignment.filter_value = MISSING_MATE_FILTER
+                excluded_writer.write(None, None, alignment)
     for aligns in coords.values():
         for align in aligns.values():
-            align.filter_value = 'read mate was missing or excluded'
-            excluded_writer.write(None, align)
+            align.filter_value = MISSING_MATE_FILTER
+            excluded_writer.write(None, None, align)
 
 class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
@@ -563,19 +564,23 @@ def _build_bam_tags():
         samtools.BamTag("X0", "Z",
                         ("filter (why the alignment was excluded)"),
                         combine_filters),
+#         samtools.BamTag("X1", "Z",
+#                         ("L~R positions for this alignment"),
+#                         lambda fam, align: "{0}~{1}".format(fam.umt[0],
+#                                                             fam.umt[1]) if fam else None),
         samtools.BamTag("X1", "i",
                         "unique identifier for this alignment family",
                         lambda fam, align: fam.umi_sequence if fam else None),
-        samtools.BamTag("X2", "Z",
+        samtools.BamTag("X2", "i",
+                        "family size (number of align pairs in this family)",
+                        lambda fam, align: fam.included_pair_count if fam else None),
+        samtools.BamTag("X4", "Z",
                         ("L~R UMT barcodes for this alignment family; because "
                          "of fuzzy matching the family UMT may be distinct "
                          "from the UMT of the original alignment"),
                         lambda fam, align: "{0}~{1}".format(fam.umt[0],
                                                             fam.umt[1]) if fam else None),
-        samtools.BamTag("X3", "i",
-                        "family size (number of align pairs in this family)",
-                        lambda fam, align: fam.included_pair_count if fam else None),
-        samtools.BamTag("X4", "i",
+        samtools.BamTag("X6", "i",
                         ("presence of this tag signals that this alignment "
                          "would be the template for the consensus alignment"),
                         lambda fam, align: 1 if fam and fam.consensus.left.query_name == align.query_name else None)]
