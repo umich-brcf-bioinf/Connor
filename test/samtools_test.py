@@ -26,7 +26,7 @@ class MockAlignWriter(object):
         self.bam_file_path = "foo.bam"
         self._close_was_called = False
 
-    def write(self, family, connor_align):
+    def write(self, family, paired_align, connor_align):
         self._write_calls.append((family, connor_align))
 
     #pylint: disable=unused-argument
@@ -507,9 +507,9 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             family = None
             writer = samtools.AlignWriter(header, bam_path)
 
-            writer.write(family, align1)
-            writer.write(family, align2)
-            writer.write(family, align3)
+            writer.write(family, None, align1)
+            writer.write(family, None, align2)
+            writer.write(family, None, align3)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -529,15 +529,17 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             align3 = ConnorAlign(mock_align(query_name='align3'))
 
             tag1 = BamTag('X1','Z', 'desc',
-                          get_value=lambda family, align: family)
+                          get_value=lambda family,pair,align: family)
             tag2 = BamTag('X2','Z', 'desc',
-                          get_value=lambda family, align: align.query_name)
+                          get_value=lambda family,pair,align: pair)
+            tag3 = BamTag('X3','Z', 'desc',
+                          get_value=lambda family,pair,align: align.query_name)
 
-            writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
+            writer = samtools.AlignWriter(header, bam_path, [tag1, tag2, tag3])
 
-            writer.write('familyA', align1)
-            writer.write('familyB', align2)
-            writer.write('familyC', align3)
+            writer.write('familyA', 'pair1', align1)
+            writer.write('familyB', 'pair2', align2)
+            writer.write('familyC', 'pair3', align3)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -555,9 +557,12 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual("X1:Z:familyA", align_tags[('align1', 'X1')])
         self.assertEqual("X1:Z:familyB", align_tags[('align2', 'X1')])
         self.assertEqual("X1:Z:familyC", align_tags[('align3', 'X1')])
-        self.assertEqual("X2:Z:align1", align_tags[('align1', 'X2')])
-        self.assertEqual("X2:Z:align2", align_tags[('align2', 'X2')])
-        self.assertEqual("X2:Z:align3", align_tags[('align3', 'X2')])
+        self.assertEqual("X2:Z:pair1", align_tags[('align1', 'X2')])
+        self.assertEqual("X2:Z:pair2", align_tags[('align2', 'X2')])
+        self.assertEqual("X2:Z:pair3", align_tags[('align3', 'X2')])
+        self.assertEqual("X3:Z:align1", align_tags[('align1', 'X3')])
+        self.assertEqual("X3:Z:align2", align_tags[('align2', 'X3')])
+        self.assertEqual("X3:Z:align3", align_tags[('align3', 'X3')])
 
     def test_write_skipsTagsWhenValueIsNone(self):
         with TempDirectory() as tmp_dir:
@@ -569,14 +574,14 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             align2 = ConnorAlign(mock_align(query_name='align2'))
             align3 = ConnorAlign(mock_align(query_name='align3'))
 
-            get_value = lambda family, align: 'Yes' if align.query_name == 'align2' else None
+            get_value = lambda family, pair, align: 'Yes' if align.query_name == 'align2' else None
             tag1 = BamTag('X1','Z', 'desc', get_value=get_value)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1])
 
-            writer.write('familyA', align1)
-            writer.write('familyB', align2)
-            writer.write('familyC', align3)
+            writer.write('familyA', None, align1)
+            writer.write('familyB', None, align2)
+            writer.write('familyC', None, align3)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -605,11 +610,11 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             align1.set_tag('X1', 'No', 'Z')
 
             tag1 = BamTag('X1','Z', 'desc',
-                          get_value = lambda family, align: None)
+                          get_value = lambda family, pair, align: None)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1])
 
-            writer.write('familyA', align1)
+            writer.write('familyA', None, align1)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -653,7 +658,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual(expected_comments, actual_comments)
 
     def test_null_writer_methods(self):
-        samtools.AlignWriter.NULL.write('family', 'connor_align')
+        samtools.AlignWriter.NULL.write('family', None, 'connor_align')
         samtools.AlignWriter.NULL.close()
         self.assertEqual(1, 1)
 
@@ -671,15 +676,15 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
                                             reference_start=300))
 
             tag1 = BamTag('X1','Z', 'desc',
-                          get_value=lambda family, align: family)
+                          get_value=lambda family, pair, align: family)
             tag2 = BamTag('X2','Z', 'desc',
-                          get_value=lambda family, align: align.query_name)
+                          get_value=lambda family, pair, align: align.query_name)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
 
-            writer.write('familyC', align3)
-            writer.write('familyA', align1)
-            writer.write('familyB', align2)
+            writer.write('familyC', None, align3)
+            writer.write('familyA', None, align1)
+            writer.write('familyB', None, align2)
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
@@ -702,7 +707,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
 
             writer = samtools.AlignWriter(header, bam_path, [])
 
-            writer.write('familyA', align1)
+            writer.write('familyA', None, align1)
             writer.close(log=self.mock_logger)
         info_log_lines = self.mock_logger._log_calls['INFO']
         self.assertEqual(1, len(info_log_lines))
@@ -715,13 +720,13 @@ class BamTagTest(utils_test.BaseConnorTestCase):
                          tag.header_comment)
 
     def test_set_tag(self):
-        get_value = lambda family, align: family + ":" + align.query_name
+        get_value = lambda family, pair, align: family + ':' + pair + ':' + align.query_name
         tag = BamTag('X9', 'Z', 'foo description', get_value)
         connor_align = ConnorAlign(mock_align())
 
-        tag.set_tag('family1', connor_align)
+        tag.set_tag('family1', 'pair1', connor_align)
 
-        self.assertEqual([('X9', 'family1:align1')], connor_align.get_tags())
+        self.assertEqual([('X9', 'family1:pair1:align1')], connor_align.get_tags())
 
     def test_lt_sortsByNameThenDescription(self):
         base = BamTag('X2', 'i', 'Desc B', None)
@@ -761,7 +766,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
                          (fam5, al5A), (fam5, al5B)]
 
         for family, align in family_aligns:
-            writer.write(family, align)
+            writer.write(family, None, align)
         writer.close()
 
         log_lines = self.mock_logger._log_calls['INFO']
@@ -795,7 +800,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         family_aligns = [(fam1, alignA), (fam1, alignA)]
 
         for family, align in family_aligns:
-            writer.write(family, align)
+            writer.write(family, None, align)
         writer.close()
 
         log_lines = self.mock_logger._log_calls['INFO']
@@ -820,7 +825,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         family_aligns = [(fam1, al1A), (fam1, al1B)]
 
         for family, align in family_aligns:
-            writer.write(family, align)
+            writer.write(family, None, align)
 
         self.assertEqual([(fam1, al1A), (fam1, al1B)],
                          base_writer._write_calls)
@@ -831,7 +836,7 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         fam1 = samtools.LoggingWriter.UNPLACED_FAMILY
         al1A = MicroMock(filter_value = 'foo')
 
-        writer.write(fam1, al1A)
+        writer.write(fam1, None, al1A)
 
         self.assertEqual([(None, al1A)], base_writer._write_calls)
 

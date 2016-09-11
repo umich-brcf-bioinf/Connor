@@ -32,7 +32,7 @@ Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in yo
   usage: connor input_bam output_bam
   positional arguments:
   ...
-  v0.4
+  v0.5
  
 3. **Download the example data:**
 ::
@@ -49,17 +49,19 @@ BAM index) and a log file in your working directory.
   2016-08-11 17:08:07|INFO|logging to [PIK3CA-deduped.bam.log]
   2016-08-11 17:08:07|INFO|reading input bam [sample_data/examples/PIK3CA-original.bam]
   ...
-  2016-08-11 17:09:06|INFO|1016/3482 (29.18%) families were excluded because the original read count < 3
-  2016-08-11 17:09:06|INFO|61937 original pairs were deduplicated to 2466 families (overall dedup rate 96.02%)
-  2016-08-11 17:09:06|INFO|2466 families written to [PIK3CA-deduped.bam]
-  2016-08-11 17:09:06|INFO|connor complete
+  2016-08-11 17:08:29|INFO|8.69% (17937/206509) alignments unplaced or discarded
+  2016-09-11 15:08:29|INFO|families discarded: 16.03% (1518/9470) family too small (<3)
+  2016-09-11 15:08:29|INFO|91.31% (188572/206509) alignments included in 7952 families
+  2016-09-11 15:08:29|INFO|95.78% deduplication rate (1 - 7952 families/188572 included alignments)
+  2016-09-11 15:08:30|INFO|sorting/indexing [examples/PIK3CA-deduped.bam]
+  2016-08-11 15:08:30|INFO|connor complete  (23 seconds, 146mb peak memory)
 
   $ ls -1 PIK3CA*
   PIK3CA-deduped.bam
   PIK3CA-deduped.bam.bai
   PIK3CA-deduped.bam.log
 
-From the log above, you can see that the original alignments resulted in 2466
+From the log above, you can see that the original alignments resulted in 7952
 deduplicated families (pairs).
 
 5. **Reviewing output file**
@@ -68,36 +70,36 @@ You don't need samtools installed to use Connor, but if you have samtools instal
 you can examine the difference between original and deduplicated bams:
 ::
   $ samtools flagstat sample_data/examples/PIK3CA-original.bam
-  158401 + 0 in total (QC-passed reads + QC-failed reads)
-  722 + 0 secondary
+  206509 + 0 in total (QC-passed reads + QC-failed reads)
+  59 + 0 secondary
   0 + 0 supplementary
   0 + 0 duplicates
-  158401 + 0 mapped (100.00%:nan%)
-  157679 + 0 paired in sequencing
-  78817 + 0 read1
-  78862 + 0 read2
-  155079 + 0 properly paired (98.35%:nan%)
-  157362 + 0 with itself and mate mapped
-  317 + 0 singletons (0.20%:nan%)
-  2145 + 0 with mate mapped to a different chr
-  1991 + 0 with mate mapped to a different chr (mapQ>=5)
+  205705 + 0 mapped (99.61%:nan%)
+  206450 + 0 paired in sequencing
+  103175 + 0 read1
+  103275 + 0 read2
+  203974 + 0 properly paired (98.80%:nan%)
+  204842 + 0 with itself and mate mapped
+  804 + 0 singletons (0.39%:nan%)
+  677 + 0 with mate mapped to a different chr
+  664 + 0 with mate mapped to a different chr (mapQ>=5)
   
   $ samtools flagstat PIK3CA-deduped.bam
-  4932 + 0 in total (QC-passed reads + QC-failed reads)
+  15904 + 0 in total (QC-passed reads + QC-failed reads)
   0 + 0 secondary
   0 + 0 supplementary
   0 + 0 duplicates
-  4932 + 0 mapped (100.00%:nan%)
-  4932 + 0 paired in sequencing
-  2466 + 0 read1
-  2466 + 0 read2
-  4932 + 0 properly paired (100.00%:nan%)
-  4932 + 0 with itself and mate mapped
+  15904 + 0 mapped (100.00%:nan%)
+  15904 + 0 paired in sequencing
+  7952 + 0 read1
+  7952 + 0 read2
+  15904 + 0 properly paired (100.00%:nan%)
+  15904 + 0 with itself and mate mapped
   0 + 0 singletons (0.00%:nan%)
   0 + 0 with mate mapped to a different chr
   0 + 0 with mate mapped to a different chr (mapQ>=5)
 
-Note that 158401 original alignments were deduplicated to 4932 (2466 pairs).
+Note that 206509 original alignments were deduplicated to 15904 (7952 pairs).
 
 6. **Reviewing a consensus alignment**
 
@@ -105,26 +107,33 @@ Connor adds a set of custom tags to each consensus alignment that provide detail
 on the family of original alignment. Here is an excerpt of the first alignment:
 ::
   $ samtools view PIK3CA-deduped.bam | head -1 | tr '\t' '\n'
-  NS500501:108:HMKNKBGXX:1:13205:18985:5894
-  163
+  HWI-D00143:749:HM5YFBCXX:2:1112:3541:48875
+  99
   chr3
-  . . .
-  X1:i:175
-  X2:Z:ATGGAT~AAGACC
-  X3:i:41
+  178873584
+  ... lines omitted ...
+  X1:Z:178873584~178873660
+  X2:Z:14S76M10S~8S76M16S
+  X3:i:0
+  X4:Z:GAAAGT~CTTCGT
+  X5:i:5
 
-Note the BAM tags listed on the last few lines above (X1-X3). The documentation for these
+
+Note the BAM tags listed on the last few lines above (X1-X5). The documentation for these
 tags is in the SAM/BAM header and summarized here:
 
-* X1: unique identifier (integer) for this alignment family
-* X2: Left~Right UMT barcodes for this alignment family; because of fuzzy matching the
+* X1: leftmost~rightmost matched pair positions
+* X2: L~R CIGARs
+* X3: unique identifier for this alignment family
+* X4: L~R UMT barcodes for this alignment family; because of fuzzy matching the 
   family UMT may be distinct from the UMT of the original alignment
-* X3: family size (number of align pairs in this family)
+* X5: family size (number of align pairs in this family)
 
 Interpreting the tag definitions with the alignment above, this consensus
-alignment represents **41** original alignment pairs (from tag X3 above) whose
-alignment position matched exactly and left-right UMT barcodes matched
-**ATGGAT-AAGACC** (from tag X2).
+alignment represents **5** original alignment pairs (from tag X5 above) whose
+alignment leftmost and rightmost positions matched **178873584~178873660**
+(from tag X1) and left-right UMT barcodes matched **ATGGAT-AAGACC** (from
+tag X4).
 
 .. _METHODS: METHODS.rst
 .. _INSTALL: INSTALL.rst
