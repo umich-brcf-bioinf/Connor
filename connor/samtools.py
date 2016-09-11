@@ -41,12 +41,12 @@ class AlignWriter(object):
     def bam_file_path(self):
         return self._bam_path
 
-    def _add_bam_tags(self, family, connor_align):
+    def _add_bam_tags(self, family, paired_align, connor_align):
         for tag in self._tags:
-            tag.set_tag(family, connor_align)
+            tag.set_tag(family, paired_align, connor_align)
 
     def write(self, family, paired_align, connor_align):
-        self._add_bam_tags(family, connor_align)
+        self._add_bam_tags(family, paired_align, connor_align)
         self._bam_file.write(connor_align.pysam_align_segment)
 
     def close(self, log=None):
@@ -236,8 +236,8 @@ class BamTag(object):
         return (self._tag_name,
                 self._description) < (other._tag_name, other._description)
 
-    def set_tag(self, family, connor_align):
-        value = self._get_value(family, connor_align)
+    def set_tag(self, family, paired_align, connor_align):
+        value = self._get_value(family, paired_align, connor_align)
         connor_align.set_tag(self._tag_name, value, self._tag_type)
 
 

@@ -90,6 +90,10 @@ class _PairedAlignment(object):
         else:
             return None
 
+    @property
+    def positions(self):
+        return self.left.reference_start, self.right.reference_end
+
     def replace_umt(self, umt):
         def _byte_array_to_string(sequence):
             if isinstance(sequence, str):
@@ -554,7 +558,7 @@ def _log_environment_info(log, args):
 
 #TODO: cgates: None checking/cyclomatic complexity could be simplified with UNPLACED/NULL family object
 def _build_bam_tags():
-    def combine_filters(family, align):
+    def combine_filters(family, pair, align):
         filter_values = [x.filter_value for x in [family, align] if x and x.filter_value]
         if filter_values:
             return ";".join(filter_values).replace('; ', ';')
@@ -570,20 +574,20 @@ def _build_bam_tags():
 #                                                             fam.umt[1]) if fam else None),
         samtools.BamTag("X1", "i",
                         "unique identifier for this alignment family",
-                        lambda fam, align: fam.umi_sequence if fam else None),
+                        lambda fam, pair, align: fam.umi_sequence if fam else None),
         samtools.BamTag("X2", "i",
                         "family size (number of align pairs in this family)",
-                        lambda fam, align: fam.included_pair_count if fam else None),
+                        lambda fam, pair, align: fam.included_pair_count if fam else None),
         samtools.BamTag("X4", "Z",
                         ("L~R UMT barcodes for this alignment family; because "
                          "of fuzzy matching the family UMT may be distinct "
                          "from the UMT of the original alignment"),
-                        lambda fam, align: "{0}~{1}".format(fam.umt[0],
+                        lambda fam, pair, align: "{0}~{1}".format(fam.umt[0],
                                                             fam.umt[1]) if fam else None),
         samtools.BamTag("X6", "i",
                         ("presence of this tag signals that this alignment "
                          "would be the template for the consensus alignment"),
-                        lambda fam, align: 1 if fam and fam.consensus.left.query_name == align.query_name else None)]
+                        lambda fam, pair, align: 1 if fam and fam.consensus.left.query_name == align.query_name else None)]
     return tags
 
 
