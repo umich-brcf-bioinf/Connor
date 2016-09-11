@@ -91,6 +91,10 @@ class _PairedAlignment(object):
             return None
 
     @property
+    def cigars(self):
+        return self.left.cigarstring, self.right.cigarstring
+
+    @property
     def positions(self):
         return self.left.reference_start + 1, self.right.reference_end + 1
 
@@ -572,10 +576,9 @@ def _build_bam_tags():
         samtools.BamTag("X1", "Z",
                         ("leftmost~rightmost matched pair positions"),
                         lambda fam, pair, align: "{0}~{1}".format(*pair.positions) if pair else None),
-#         samtools.BamTag("X2", "Z",
-#                         ("L~R positions for this alignment"),
-#                         lambda fam, align: "{0}~{1}".format(fam.umt[0],
-#                                                             fam.umt[1]) if fam else None),
+        samtools.BamTag("X2", "Z",
+                        ("L~R CIGARs"),
+                        lambda fam, pair, align: "{0}~{1}".format(*pair.cigars) if pair else None),
         samtools.BamTag("X3", "i",
                         "unique identifier for this alignment family",
                         lambda fam, pair, align: fam.umi_sequence if fam else None),

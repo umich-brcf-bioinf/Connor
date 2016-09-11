@@ -142,17 +142,25 @@ class PairedAlignmentTest(BaseConnorTestCase):
                                 right,
                                 tag_length=1)
 
+    def test_cigars(self):
+        left = MicroMock(query_name='A',
+                         cigarstring='1S2M4S',
+                         query_sequence='AAAAAA')
+        right = MicroMock(query_name='A',
+                         cigarstring='16S32M64S',
+                          query_sequence='AAAAAA')
+        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
+        self.assertEqual(('1S2M4S', '16S32M64S'), paired_alignment.cigars)
+
     def test_positions(self):
         left = MicroMock(query_name='A',
                          reference_start=100,
                          reference_end=150,
-                         query_sequence='AAAAAA',
-                         filter_value=None)
+                         query_sequence='AAAAAA')
         right = MicroMock(query_name='A',
                           reference_start=200,
                           reference_end=250,
-                          query_sequence='AAAAAA',
-                          filter_value=None)
+                          query_sequence='AAAAAA')
         paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
         self.assertEqual((101,251), paired_alignment.positions)
 
@@ -949,7 +957,7 @@ class ConnorTest(BaseConnorTestCase):
 
     def test_build_bam_tags(self):
         actual_tags = connor._build_bam_tags()
-        self.assertEqual(6, len(actual_tags))
+        self.assertEqual(7, len(actual_tags))
 
     def test_build_bam_tags_x0_filter(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X0')
@@ -977,6 +985,16 @@ class ConnorTest(BaseConnorTestCase):
                                  'leftmost~rightmost matched pair positions')
         pair = MicroMock(positions=(100,150))
         self.assertEquals("100~150", tag._get_value(None, pair, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x2_cigars(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
+        self.assertEqual('X2', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'L~R CIGARs')
+        pair = MicroMock(cigars=('1S2M4S','8S16M32S'))
+        self.assertEquals("1S2M4S~8S16M32S", tag._get_value(None, pair, None))
         self.assertEquals(None, tag._get_value(None, None, None))
 
     def test_build_bam_tags_x3_unique_identifier(self):
