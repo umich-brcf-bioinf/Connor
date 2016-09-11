@@ -667,6 +667,32 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
         expected_families = set([(pair1,),])
         self.assertEquals(expected_families, actual_families)
 
+    def test_pending_pair_count_and_peak(self):
+        pair1 = self._pair('A1', 100, 150, 155)
+        pair2 = self._pair('B1', 200, 250, 255)
+        pair3 = self._pair('B2', 200, 250, 355)
+
+        holder = _CoordinateFamilyHolder()
+        self.assertEqual(0, holder.pending_pair_count)
+        self.assertEqual(0, holder.pending_pair_peak_count)
+        holder._add(pair1)
+        self.assertEqual(1, holder.pending_pair_count)
+        self.assertEqual(1, holder.pending_pair_peak_count)
+        holder._add(pair2)
+        self.assertEqual(2, holder.pending_pair_count)
+        self.assertEqual(2, holder.pending_pair_peak_count)
+        holder._add(pair3)
+        self.assertEqual(3, holder.pending_pair_count)
+        self.assertEqual(3, holder.pending_pair_peak_count)
+        for _ in holder._completed_families(200):
+            pass
+        self.assertEqual(2, holder.pending_pair_count)
+        self.assertEqual(3, holder.pending_pair_peak_count)
+        for _ in holder._remaining_families():
+            pass
+        self.assertEqual(0, holder.pending_pair_count)
+        self.assertEqual(3, holder.pending_pair_peak_count)
+
     def test_build_coordinate_families_6families(self):
         pair1 = self._pair('1', 100, 400, 405)
         pair2 = self._pair('2', 100, 400, 405)
@@ -1213,6 +1239,74 @@ class ConnorTest(BaseConnorTestCase):
                            "input",
                            "output",
                            "something else"])
+
+    def test_progress_logger_passesThroughItems(self):
+        base_gen = [0,1,2,3,4,5,6,7,8,9]
+        total_rows = len(base_gen)
+        actual_items = []
+        for item in connor._progress_logger(base_gen,
+                                         total_rows,
+                                         self.mock_logger):
+            actual_items.append(item)
+        self.assertEqual(actual_items, base_gen)
+
+    def test_progress_logger_logsProgress(self):
+        base_gen = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+        total_rows = len(base_gen)
+        gen = connor._progress_logger(base_gen,
+                                     total_rows,
+                                     self.mock_logger)
+        next(gen)
+        self.assertEqual("0% (1/20) alignments processed",
+                         self.mock_logger._log_calls['INFO'][0])
+        next(gen)
+        self.assertEqual("10% (2/20) alignments processed",
+                         self.mock_logger._log_calls['INFO'][1])
+        next(gen)
+        next(gen)
+        self.assertEqual("20% (4/20) alignments processed",
+                         self.mock_logger._log_calls['INFO'][2])
+        next(gen)
+        next(gen)
+        self.assertEqual("30% (6/20) alignments processed",
+                         self.mock_logger._log_calls['INFO'][3])
+        for _ in range(7, 21):
+            next(gen)
+
+        self.assertRaises(StopIteration,
+                          next,
+                          gen)
+
+        self.assertEqual("100% (20/20) alignments processed",
+                         self.mock_logger._log_calls['INFO'][-1])
+
+    def test_progress_logger_logsMem(self):
+        base_gen = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+        total_rows = len(base_gen)
+        def supplemental_log(logger):
+            logger.debug("foo")
+            logger.debug("bar")
+        gen = connor._progress_logger(base_gen,
+                                     total_rows,
+                                     self.mock_logger,
+                                     supplemental_log)
+        next(gen)
+        next(gen)
+        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][0],
+                                 "foo")
+        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][1],
+                                 "bar")
+        next(gen)
+        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][2],
+                                 "foo")
+        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][3],
+                                 "bar")
+        next(gen)
+        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][4],
+                                 "foo")
+        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][5],
+                                 "bar")
+
 
 
     def test_rank_tags_breaksTiesByTag(self):

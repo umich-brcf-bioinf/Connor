@@ -285,35 +285,42 @@ class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
     sets of pairs which share the same coordinate (coordinate families)'''
     def __init__(self):
-        self.coordinate_family = defaultdict(partial(defaultdict, list))
-        self.right_coords_in_progress = SortedSet()
+        self._coordinate_family = defaultdict(partial(defaultdict, list))
+        self._right_coords_in_progress = SortedSet()
+        self.pending_pair_count = 0
+        self.pending_pair_peak_count = 0
 
     def _add(self, pair):
         right = pair.right.reference_end
         left = pair.left.reference_start
-        self.right_coords_in_progress.add(right)
-        self.coordinate_family[right][left].append(pair)
+        self._right_coords_in_progress.add(right)
+        self._coordinate_family[right][left].append(pair)
+        self.pending_pair_count += 1
+        self.pending_pair_peak_count = max(self.pending_pair_count,
+                                           self.pending_pair_peak_count)
 
     def _completed_families(self, rightmost_boundary):
         '''returns one or more families whose end < rightmost boundary'''
-        while len(self.right_coords_in_progress):
-            right_coord = self.right_coords_in_progress[0]
+        while len(self._right_coords_in_progress):
+            right_coord = self._right_coords_in_progress[0]
             if right_coord < rightmost_boundary:
-                self.right_coords_in_progress.pop(0)
-                left_families = self.coordinate_family.pop(right_coord)
+                self._right_coords_in_progress.pop(0)
+                left_families = self._coordinate_family.pop(right_coord)
                 for family in sorted(left_families.values(),
                                      key=lambda x:x[0].left.reference_start):
                     family.sort(key=lambda x: x.query_name)
+                    self.pending_pair_count -= len(family)
                     yield family
             else:
                 break
 
     def _remaining_families(self):
-        for left_families in self.coordinate_family.values():
+        for left_families in self._coordinate_family.values():
             for family in left_families.values():
+                self.pending_pair_count -= len(family)
                 yield family
             left_families.clear()
-        self.coordinate_family.clear()
+        self._coordinate_family.clear()
 
     #TODO: cgates: can we reduce the complexity here?
     def build_coordinate_families(self, paired_aligns):
@@ -460,8 +467,10 @@ def _rank_tags(tagged_paired_aligns):
     ranked_tags = [tag_count[0] for tag_count in tags_by_count]
     return ranked_tags
 
-#TODO: cgates: improve how this is tested
-def _progress_logger(base_generator, total_rows, log):
+def _progress_logger(base_generator,
+                     total_rows,
+                     log,
+                     supplemental_log=lambda x: None):
     row_count = 0
     next_breakpoint = 0
     for item in base_generator:
@@ -472,11 +481,11 @@ def _progress_logger(base_generator, total_rows, log):
                      next_breakpoint,
                      row_count,
                      total_rows)
-            log.debug("{}mb peak memory", _peak_memory())
+            supplemental_log(log)
             next_breakpoint = 10 * int(progress/10) + 10
         yield item
     log.info("100% ({}/{}) alignments processed", row_count, total_rows)
-    log.debug("{}mb peak memory", _peak_memory())
+    supplemental_log(log)
 
 def _build_family_filter(args):
     min_family_size = args.min_family_size_threshold
@@ -488,6 +497,14 @@ def _build_family_filter(args):
             return None
     return family_size_filter
 
+def _build_supplemental_log(coordinate_holder):
+    def supplemental_progress_log(log):
+        log.debug("{}mb peak memory", _peak_memory())
+        log.debug("{} pending alignment pairs; {} peak pairs",
+                  coordinate_holder.pending_pair_count,
+                  coordinate_holder.pending_pair_peak_count)
+    return supplemental_progress_log
+
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
     total_aligns = samtools.total_align_count(args.input_bam)
@@ -498,16 +515,17 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                                    log)
 
     bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    coord_family_holder = _CoordinateFamilyHolder()
+    supplemental_log = _build_supplemental_log(coord_family_holder)
     progress_gen = _progress_logger(bamfile.fetch(),
                                     total_aligns,
-                                    log)
+                                    log,
+                                    supplemental_log)
     filtered_aligns_gen = samtools.filter_alignments(progress_gen,
                                                      annotated_writer)
-
     paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
                                                     annotated_writer)
-    coordinate_family_holder = _CoordinateFamilyHolder()
-    coord_family_gen = coordinate_family_holder.build_coordinate_families(paired_align_gen)
+    coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
     for coord_family in coord_family_gen:
         ranked_tags = _rank_tags(coord_family)
         tag_families = _build_tag_families(coord_family,
