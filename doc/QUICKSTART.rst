@@ -19,9 +19,9 @@ This command will install connor and its dependencies; it may take a moment to s
 showing progress and should take several minutes to complete. See `INSTALL`_ for more
 info on requirements and more install options.
 ::
-  $ pip install git+https://github.com/umich-brcf-bioinf/Connor --user
+  $ pip install connor --user
   ...
-  Successfully installed Connor-0.3
+  Successfully installed Connor-0.4
 
 Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in your path:
 ::
@@ -32,7 +32,7 @@ Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in yo
   usage: connor input_bam output_bam
   positional arguments:
   ...
-  v0.3
+  v0.4
  
 3. **Download the example data:**
 ::
@@ -121,10 +121,10 @@ tags is in the SAM/BAM header and summarized here:
   family UMT may be distinct from the UMT of the original alignment
 * X3: family size (number of align pairs in this family)
 
-Interpreting the tag definitions with the alignment above, the consensus
-alignment identified by the number **175** (from tag X1) represents **41** original
-alignment pairs (X3) whose alignment position matched exactly and left-right UMT barcodes
-matched **ATGGAT-AAGACC** (X2).
+Interpreting the tag definitions with the alignment above, this consensus
+alignment represents **41** original alignment pairs (from tag X3 above) whose
+alignment position matched exactly and left-right UMT barcodes matched
+**ATGGAT-AAGACC** (from tag X2).
 
 .. _METHODS: METHODS.rst
 .. _INSTALL: INSTALL.rst

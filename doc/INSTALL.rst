@@ -11,6 +11,8 @@ pysam, which is not supported on Windows.
 
 Prerequisites
 -------------
+* Python (2.7 or later) and pip. See https://www.python.org/downloads/ for more details on
+  downloading a recent version of Python 2/3.
 .. note:: Pip installs all required libraries; see [Installing] below.
 
 * cython
@@ -23,21 +25,18 @@ Installing
 
 * The simplest way to install Connor is through PyPI:
 
-  *(This option only available after general release.)*
-
   ``$ pip install connor``
-
-* You can also install directly from source from github:
-
-  ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor``
 
 * If you don't have root permissions, you can install connor locally:
 
-  ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor --user``
+  ``$ pip install connor --user``
 
   Following a --user install, you may need to adjust your path settings to
   include $HOME/.local/bin. 
 
+* You can also install directly from source from github:
+
+  ``$ pip install git+https://github.com/umich-brcf-bioinf/Connor``
 
 Uninstalling
 ------------
@@ -46,6 +45,10 @@ Uninstalling
 
 Advanced / Connor developers
 ----------------------------
+Connor has been tested with virtualenv and Conda. (Note Conda's pysam version
+lags behind so if you're using conda and installing modules manually, we
+recommend you install pysam via 'pip install' instead of 'conda install').
+
 If you already have prerequisite modules installed, you can also clone from
 github and run directly from the source like so:
 
