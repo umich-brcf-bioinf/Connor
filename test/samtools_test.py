@@ -393,6 +393,26 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         self.assertEqual(align2.query_name, connor_align.query_name)
         self.assertEqual('secondary alignment', connor_align.filter_value)
 
+    def test_filter_alignments_excludesSupplementaryAligns(self):
+        flag = 99
+        align1 = mock_align(query_name="align1", flag=flag)
+        align2 = mock_align(query_name="align2",
+                            flag=flag | BamFlag.SUPPLEMENTARY)
+        align3 = mock_align(query_name="align3", flag=flag)
+        base = [align1, align2, align3]
+        excluded_writer = MockAlignWriter()
+
+        names = [x.query_name for x in filter_alignments(base,
+                                                         excluded_writer)]
+
+        self.assertEqual(["align1", "align3"], names)
+        self.assertEqual(1, len(excluded_writer._write_calls))
+        (family, connor_align) = excluded_writer._write_calls[0]
+        self.assertEqual(None, family)
+        self.assertEqual(align2.query_name, connor_align.query_name)
+        self.assertEqual('supplementary alignment', connor_align.filter_value)
+
+
     def test_filter_alignments_excludesQCFails(self):
         flag = 99
         align1 = mock_align(query_name="align1", flag=flag)
