@@ -135,11 +135,34 @@ class PairedAlignmentTest(BaseConnorTestCase):
         left = mock_align(query_name="alignA")
         right = mock_align(query_name="alignB")
         self.assertRaisesRegexp(ValueError,
-                                r'Inconsistent query names \(alignA != alignB\)',
+                                (r'Inconsistent query names '
+                                 r'\(alignA != alignB\)'),
                                 connor._PairedAlignment,
                                 left,
                                 right,
                                 tag_length=1)
+
+    def test_cigars(self):
+        left = MicroMock(query_name='A',
+                         cigarstring='1S2M4S',
+                         query_sequence='AAAAAA')
+        right = MicroMock(query_name='A',
+                         cigarstring='16S32M64S',
+                          query_sequence='AAAAAA')
+        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
+        self.assertEqual(('1S2M4S', '16S32M64S'), paired_alignment.cigars)
+
+    def test_positions(self):
+        left = MicroMock(query_name='A',
+                         reference_start=100,
+                         reference_end=150,
+                         query_sequence='AAAAAA')
+        right = MicroMock(query_name='A',
+                          reference_start=200,
+                          reference_end=250,
+                          query_sequence='AAAAAA')
+        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
+        self.assertEqual((101,251), paired_alignment.positions)
 
     def test_filter_value(self):
         left = ConnorAlign(mock_align(), filter_value=None)
@@ -668,9 +691,9 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
         self.assertEquals(expected_families, actual_families)
 
     def test_pending_pair_count_and_peak(self):
-        pair1 = self._pair('A1', 100, 150, 155)
-        pair2 = self._pair('B1', 200, 250, 255)
-        pair3 = self._pair('B2', 200, 250, 355)
+        pair1 = self._pair('A1', 100, 150, 155, reference_name='1')
+        pair2 = self._pair('B1', 200, 250, 255, reference_name='1')
+        pair3 = self._pair('B2', 200, 250, 355, reference_name='1')
 
         holder = _CoordinateFamilyHolder()
         self.assertEqual(0, holder.pending_pair_count)
@@ -684,7 +707,7 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
         holder._add(pair3)
         self.assertEqual(3, holder.pending_pair_count)
         self.assertEqual(3, holder.pending_pair_peak_count)
-        for _ in holder._completed_families(200):
+        for _ in holder._completed_families('1', 200):
             pass
         self.assertEqual(2, holder.pending_pair_count)
         self.assertEqual(3, holder.pending_pair_peak_count)
@@ -713,15 +736,28 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
         self.assertEqual(expected_coord_families, actual_coord_families)
 
     def test_build_coordinate_families_flushesInProgressForNewChromosome(self):
-        pair1 = self._pair('1', 100, 200, 205, reference_name='1')
-        pair2 = self._pair('2', 100, 200, 205, reference_name='2')
-        pair3 = self._pair('3', 100, 200, 205, reference_name='3')
-        pairs = [pair1, pair2, pair3]
+        pair1A = self._pair('1A', 100, 200, 205, reference_name='1')
+        pair1B = self._pair('1B', 100, 200, 205, reference_name='1')
+        pair1C = self._pair('1C', 300, 400, 405, reference_name='1')
+        pair2A = self._pair('2A', 100, 200, 205, reference_name='2')
+        pair2B = self._pair('2B', 100, 200, 205, reference_name='2')
+        pair2C = self._pair('2C', 400, 500, 505, reference_name='2')
+        pair3A = self._pair('3A', 600, 700, 705, reference_name='3')
+        pair3B = self._pair('3B', 600, 700, 705, reference_name='3')
+        pair3C = self._pair('3C', 800, 900, 905, reference_name='3')
+        pairs = [pair1A, pair1B, pair1C,
+                 pair2A, pair2B, pair2C,
+                 pair3A, pair3B, pair3C]
         holder = _CoordinateFamilyHolder()
         actual_families = set()
         for family in holder.build_coordinate_families(pairs):
             actual_families.add(tuple(family))
-        expected_families = set([(pair1,), (pair2,), (pair3,)])
+        expected_families = set([(pair1A, pair1B),
+                                 (pair1C,),
+                                 (pair2A, pair2B),
+                                 (pair2C,),
+                                 (pair3A, pair3B),
+                                 (pair3C,)])
         self.assertEquals(expected_families, actual_families)
 
 
@@ -934,7 +970,7 @@ class ConnorTest(BaseConnorTestCase):
 
     def test_build_bam_tags(self):
         actual_tags = connor._build_bam_tags()
-        self.assertEqual(5, len(actual_tags))
+        self.assertEqual(7, len(actual_tags))
 
     def test_build_bam_tags_x0_filter(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X0')
@@ -942,52 +978,71 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual('Z', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'filter')
 
-        self.assertEquals(None, tag._get_value(None, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
 
         family = MicroMock(filter_value=None)
         connor_align = MicroMock(filter_value=None)
-        self.assertEquals(None, tag._get_value(family, connor_align))
+        self.assertEquals(None, tag._get_value(family, None, connor_align))
 
         family = MicroMock(filter_value='foo')
         connor_align = MicroMock(filter_value='bar')
-        self.assertEquals('foo', tag._get_value(family, None))
-        self.assertEquals('bar', tag._get_value(None, connor_align))
-        self.assertEquals('foo;bar', tag._get_value(family, connor_align))
+        self.assertEquals('foo', tag._get_value(family, None, None))
+        self.assertEquals('bar', tag._get_value(None, None, connor_align))
+        self.assertEquals('foo;bar', tag._get_value(family, None, connor_align))
 
-
-
-    def test_build_bam_tags_x1_unique_identifier(self):
+    def test_build_bam_tags_x1_positions(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X1')
         self.assertEqual('X1', tag._tag_name)
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'unique identifier')
-        family = MicroMock(umi_sequence=42)
-        self.assertEquals(42, tag._get_value(family, None))
-        self.assertEquals(None, tag._get_value(None, None))
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'leftmost~rightmost matched pair positions')
+        pair = MicroMock(positions=(100,150))
+        self.assertEquals("100~150", tag._get_value(None, pair, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
 
-
-    def test_build_bam_tags_x2_umt_barcodes(self):
+    def test_build_bam_tags_x2_cigars(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
         self.assertEqual('X2', tag._tag_name)
         self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'UMT barcodes')
-        family = MicroMock(umt=('AAA','CCC'))
-        self.assertEquals("AAA~CCC", tag._get_value(family, None))
-        self.assertEquals(None, tag._get_value(None, None))
+        self.assertRegexpMatches(tag._description,
+                                 'L~R CIGARs')
+        pair = MicroMock(cigars=('1S2M4S','8S16M32S'))
+        self.assertEquals("1S2M4S~8S16M32S", tag._get_value(None, pair, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
 
-
-    def test_build_bam_tags_x3_family_size(self):
+    def test_build_bam_tags_x3_unique_identifier(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
         self.assertEqual('X3', tag._tag_name)
         self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'unique identifier')
+        family = MicroMock(umi_sequence=42)
+        self.assertEquals(42, tag._get_value(family, None, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
+
+
+    def test_build_bam_tags_x5_family_size(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X5')
+        self.assertEqual('X5', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
         self.assertRegexpMatches(tag._description, 'family size')
         family = MicroMock(included_pair_count=42)
-        self.assertEquals(42, tag._get_value(family, None))
-        self.assertEquals(None, tag._get_value(None, None))
+        self.assertEquals(42, tag._get_value(family, None, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
 
-    def test_build_bam_tags_x4_filter(self):
+
+    def test_build_bam_tags_x4_umt_barcodes(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
         self.assertEqual('X4', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'UMT barcodes')
+        family = MicroMock(umt=('AAA','CCC'))
+        self.assertEquals("AAA~CCC", tag._get_value(family, None, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
+
+
+    def test_build_bam_tags_x6_consensus_template(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X6')
+        self.assertEqual('X6', tag._tag_name)
         self.assertEqual('i', tag._tag_type)
         self.assertRegexpMatches(tag._description,
                                  'template for the consensus alignment')
@@ -996,11 +1051,15 @@ class ConnorTest(BaseConnorTestCase):
         consensus_pair = MicroMock(left=MicroMock(query_name='bar'))
         family = MicroMock(consensus=consensus_pair)
         self.assertEquals(None,
-                          tag._get_value(None, template_connor_align))
+                          tag._get_value(None, None, template_connor_align))
         self.assertEquals(None,
-                          tag._get_value(family, nontemplate_connor_align))
-        self.assertEquals(1, tag._get_value(family, template_connor_align))
-        self.assertEquals(None, tag._get_value(None, None))
+                          tag._get_value(family,
+                                         None,
+                                         nontemplate_connor_align))
+        self.assertEquals(1, tag._get_value(family,
+                                            None,
+                                            template_connor_align))
+        self.assertEquals(None, tag._get_value(None, None, None))
 
 
     def test_build_family_filter_whenFamilySizeOk(self):
