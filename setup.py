@@ -1,12 +1,32 @@
-#pylint: disable=line-too-long
+from __future__ import print_function
 import os
+import platform
+import sys
+
 from setuptools import find_packages, setup
+
 import connor
+
+_REQUIRED_PYTHON_VERSION = (2, 7)
+
+def check_python_version():
+    if sys.version_info < _REQUIRED_PYTHON_VERSION:
+        msg_format = '''
+Problem: Python v{0}.{1} or above is required but you are using v{2}.
+Please install a supported version of Python and try again.\
+'''
+        message = msg_format.format(_REQUIRED_PYTHON_VERSION[0],
+                                    _REQUIRED_PYTHON_VERSION[1],
+                                    platform.python_version())
+        print(message, file=sys.stderr)
+        sys.exit(1)
 
 def read(*paths):
     """Build a file path from *paths* and return the contents."""
     with open(os.path.join(*paths), 'r') as filename:
         return filename.read()
+
+check_python_version()
 
 setup(name='Connor',
       version = connor.__version__,
