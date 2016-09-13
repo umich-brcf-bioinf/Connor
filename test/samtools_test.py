@@ -211,6 +211,103 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
 
 
 class SamtoolsTest(utils_test.BaseConnorTestCase):
+    @staticmethod
+    def get_tag(tags, name):
+        for tag in tags:
+            if tag._tag_name == name:
+                return tag
+        return None
+    
+    def test_build_bam_tags(self):
+        actual_tags = samtools._build_bam_tags()
+        self.assertEqual(7, len(actual_tags))
+
+    def test_build_bam_tags_x0_filter(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X0')
+        self.assertEqual('X0', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'filter')
+
+        self.assertEqual(None, tag._get_value(None, None, None))
+
+        family = MicroMock(filter_value=None)
+        connor_align = MicroMock(filter_value=None)
+        self.assertEqual(None, tag._get_value(family, None, connor_align))
+
+        family = MicroMock(filter_value='foo')
+        connor_align = MicroMock(filter_value='bar')
+        self.assertEqual('foo', tag._get_value(family, None, None))
+        self.assertEqual('bar', tag._get_value(None, None, connor_align))
+        self.assertEqual('foo;bar', tag._get_value(family, None, connor_align))
+
+    def test_build_bam_tags_x1_positions(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X1')
+        self.assertEqual('X1', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'leftmost~rightmost matched pair positions')
+        pair = MicroMock(positions=(100,150))
+        self.assertEqual("100~150", tag._get_value(None, pair, None))
+        self.assertEqual(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x2_cigars(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X2')
+        self.assertEqual('X2', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'L~R CIGARs')
+        pair = MicroMock(cigars=('1S2M4S','8S16M32S'))
+        self.assertEqual("1S2M4S~8S16M32S", tag._get_value(None, pair, None))
+        self.assertEqual(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x3_unique_identifier(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X3')
+        self.assertEqual('X3', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'unique identifier')
+        family = MicroMock(umi_sequence=42)
+        self.assertEqual(42, tag._get_value(family, None, None))
+        self.assertEqual(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x4_umt_barcodes(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X4')
+        self.assertEqual('X4', tag._tag_name)
+        self.assertEqual('Z', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'UMT barcodes')
+        family = MicroMock(umt=('AAA','CCC'))
+        self.assertEqual("AAA~CCC", tag._get_value(family, None, None))
+        self.assertEqual(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x5_family_size(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X5')
+        self.assertEqual('X5', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'family size')
+        family = MicroMock(included_pair_count=42)
+        self.assertEqual(42, tag._get_value(family, None, None))
+        self.assertEqual(None, tag._get_value(None, None, None))
+
+    def test_build_bam_tags_x6_consensus_template(self):
+        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X6')
+        self.assertEqual('X6', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description,
+                                 'template for the consensus alignment')
+        nontemplate_connor_align = MicroMock(query_name='foo')
+        template_connor_align = MicroMock(query_name='bar')
+        consensus_pair = MicroMock(left=MicroMock(query_name='bar'))
+        family = MicroMock(consensus=consensus_pair)
+        self.assertEqual(None,
+                          tag._get_value(None, None, template_connor_align))
+        self.assertEqual(None,
+                          tag._get_value(family,
+                                         None,
+                                         nontemplate_connor_align))
+        self.assertEqual(1, tag._get_value(family,
+                                            None,
+                                            template_connor_align))
+        self.assertEqual(None, tag._get_value(None, None, None))
+
     def test_total_align_count(self):
         self.check_sysout_safe()
         sam_contents = \

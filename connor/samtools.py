@@ -8,6 +8,7 @@ import pysam
 import connor
 import connor.utils as utils
 
+DEFAULT_TAG_LENGTH = 6
 
 class AlignWriter(object):
     class _NullWriter(object):
@@ -57,7 +58,7 @@ class AlignWriter(object):
 
 
 class LoggingWriter(object):
-
+    #pylint: disable=too-few-public-methods
     class UnplacedFamily(object):
         def __init__(self):
             self.filter_value = 'unplaced'
@@ -155,14 +156,6 @@ class LoggingWriter(object):
         total_count = included_count + excluded_count
         return included_count, excluded_count, total_count
 
-#     @staticmethod
-#     def _log_stat(log_method, text, count, total):
-#         log_method('{:.2f}% ({}/{}) {}',
-#                    100 * count / total,
-#                    count,
-#                    total,
-#                    text)
-
     @staticmethod
     def _percent_stat_str(count, total):
         return '{:.2f}% ({}/{})'.format(100 * count / total, count, total)
@@ -177,32 +170,35 @@ class LoggingWriter(object):
     def _log_results(self):
         (included_align_count,
          excluded_align_count,
-         total_align_count) = self._align_stats
+         tot_align_count) = self._align_stats
         (included_fam_count,
          total_fam_count,
          discarded_fam_filter_counts) = self._family_stats
 
         self._log.info('{} alignments unplaced or discarded',
                        LoggingWriter._percent_stat_str(excluded_align_count,
-                                                       total_align_count))
+                                                       tot_align_count))
 
         LoggingWriter._log_filter_counts(self._unplaced_aligns,
                                          self._log.debug,
-                                         'alignments unplaced: {percent_stat} {filter_name}',
-                                         total_align_count)
+                                         ('alignments unplaced: '
+                                          '{percent_stat} {filter_name}'),
+                                         tot_align_count)
 
         LoggingWriter._log_filter_counts(self._discarded_aligns,
                                          self._log.debug,
-                                         'alignments discarded: {percent_stat} {filter_name}',
-                                         total_align_count)
+                                         ('alignments discarded: '
+                                          '{percent_stat} {filter_name}'),
+                                         tot_align_count)
 
         LoggingWriter._log_filter_counts(discarded_fam_filter_counts,
                                          self._log.info,
-                                         'families discarded: {percent_stat} {filter_name}',
+                                         ('families discarded: '
+                                          '{percent_stat} {filter_name}'),
                                          total_fam_count)
 
         percent_stat = LoggingWriter._percent_stat_str(included_align_count,
-                                                       total_align_count)
+                                                       tot_align_count)
         self._log.info('{} alignments included in {} families',
                        percent_stat,
                        included_fam_count)
@@ -254,6 +250,79 @@ class BamFlag(object):
     QCFAIL = 512
     DUP = 1024
     SUPPLEMENTARY = 2048
+
+
+class PairedAlignment(object):
+    '''Represents the left and right align pairs from an single sequence.'''
+    def __init__(self,
+                 left_alignment,
+                 right_alignment,
+                 tag_length=DEFAULT_TAG_LENGTH):
+        if left_alignment.query_name != right_alignment.query_name:
+            msg = 'Inconsistent query names ({} != {})'
+            raise ValueError(msg.format(left_alignment.query_name,
+                                        right_alignment.query_name))
+        self.query_name = left_alignment.query_name
+        self.left = left_alignment
+        self.right = right_alignment
+        self._tag_length = tag_length
+        left_umt = self.left.query_sequence[0:self._tag_length]
+        right_umt = self.right.query_sequence[-1 * self._tag_length:]
+        self.umt = (left_umt, right_umt)
+
+    @property
+    def filter_value(self):
+        if self.left.filter_value or self.right.filter_value:
+            return (self.left.filter_value, self.right.filter_value)
+        else:
+            return None
+
+    @property
+    def cigars(self):
+        return self.left.cigarstring, self.right.cigarstring
+
+    @property
+    def positions(self):
+        return self.left.reference_start + 1, self.right.reference_end + 1
+
+    def replace_umt(self, umt):
+        def _byte_array_to_string(sequence):
+            if isinstance(sequence, str):
+                return sequence
+            else:
+                return str(sequence.decode("utf-8"))
+        if not (umt[0] or umt[1]) or \
+            (len(umt[0]) != self._tag_length) or \
+            (len(umt[1]) != self._tag_length):
+            msg = "Each UMT must match tag_length ({})"
+            raise ValueError(msg.format(self._tag_length))
+        left_qual = self.left.query_qualities
+        right_qual = self.right.query_qualities
+        left_query_frag = self.left.query_sequence[len(umt[0]):]
+        left_query_frag_str = _byte_array_to_string(left_query_frag)
+        self.left.query_sequence = umt[0] + left_query_frag_str
+        right_query_frag = self.right.query_sequence[:-len(umt[1])]
+        right_query_frag_str = _byte_array_to_string(right_query_frag)
+        self.right.query_sequence = right_query_frag_str + umt[1]
+        self.umt = umt
+        self.left.query_qualities = left_qual
+        self.right.query_qualities = right_qual
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __hash__(self):
+        return hash(self.left) * hash(self.right)
+
+    def __repr__(self):
+        return ("Pair({}|{}|{}, "
+                "{}|{}|{})").format(self.left.query_name,
+                                    self.left.reference_start,
+                                    self.left.query_sequence,
+                                    self.right.query_name,
+                                    self.right.reference_start,
+                                    self.right.query_sequence)
+
 
 class _Pysam9SamtoolsUtil(object):
     @staticmethod
@@ -492,3 +561,39 @@ def total_align_count(input_bam):
             if chrom != '*':
                 count += int(mapped) + int(unmapped)
     return count
+
+#TODO: cgates: None checking/cyclomatic complexity could be simplified with UNPLACED/NULL family object
+def _build_bam_tags():
+    def combine_filters(fam, pair, align):
+        filters = [x.filter_value for x in [fam, align] if x and x.filter_value]
+        if filters:
+            return ";".join(filters).replace('; ', ';')
+        else:
+            return None
+    tags = [
+        BamTag("X0", "Z",
+               ("filter (why the alignment was excluded)"),
+               combine_filters),
+        BamTag("X1", "Z",
+               ("leftmost~rightmost matched pair positions"),
+               lambda fam, pair, align: "{0}~{1}".format(*pair.positions) if pair else None),
+        BamTag("X2", "Z",
+               ("L~R CIGARs"),
+               lambda fam, pair, align: "{0}~{1}".format(*pair.cigars) if pair else None),
+        BamTag("X3", "i",
+               "unique identifier for this alignment family",
+               lambda fam, pair, align: fam.umi_sequence if fam else None),
+        BamTag("X4", "Z",
+               ("L~R UMT barcodes for this alignment family; because "
+                "of fuzzy matching the family UMT may be distinct "
+                "from the UMT of the original alignment"),
+               lambda fam, pair, align: "{0}~{1}".format(fam.umt[0],
+                                                            fam.umt[1]) if fam else None),
+        BamTag("X5", "i",
+               "family size (number of align pairs in this family)",
+               lambda fam, pair, align: fam.included_pair_count if fam else None),
+        BamTag("X6", "i",
+               ("presence of this tag signals that this alignment "
+                "would be the template for the consensus alignment"),
+               lambda fam, pair, align: 1 if fam and fam.consensus.left.query_name == align.query_name else None)]
+    return tags

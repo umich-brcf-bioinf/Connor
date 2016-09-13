@@ -25,14 +25,10 @@ from collections import defaultdict, Counter
 from copy import deepcopy
 from functools import partial
 import operator
-import os
-import platform
 import sys
 import traceback
-import resource
 import time
 
-import pysam
 from sortedcontainers import SortedSet
 
 import connor
@@ -44,7 +40,6 @@ from connor.samtools import LoggingWriter
 
 __version__ = connor.__version__
 
-DEFAULT_TAG_LENGTH = 6
 DEFAULT_CONSENSUS_FREQ_THRESHOLD=0.6
 DEFAULT_MIN_FAMILY_SIZE_THRESHOLD = 3
 DEFAULT_UMT_DISTANCE_THRESHOLD = 1
@@ -63,78 +58,6 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         '''Suppress default exit behavior'''
         raise utils.UsageError(message)
-
-#TODO: cgates: move this to samtools
-class _PairedAlignment(object):
-    '''Represents the left and right align pairs from an single sequence.'''
-    def __init__(self,
-                 left_alignment,
-                 right_alignment,
-                 tag_length=DEFAULT_TAG_LENGTH):
-        if left_alignment.query_name != right_alignment.query_name:
-            msg = 'Inconsistent query names ({} != {})'
-            raise ValueError(msg.format(left_alignment.query_name,
-                                        right_alignment.query_name))
-        self.query_name = left_alignment.query_name
-        self.left = left_alignment
-        self.right = right_alignment
-        self._tag_length = tag_length
-        left_umt = self.left.query_sequence[0:self._tag_length]
-        right_umt = self.right.query_sequence[-1 * self._tag_length:]
-        self.umt = (left_umt, right_umt)
-
-    @property
-    def filter_value(self):
-        if self.left.filter_value or self.right.filter_value:
-            return (self.left.filter_value, self.right.filter_value)
-        else:
-            return None
-
-    @property
-    def cigars(self):
-        return self.left.cigarstring, self.right.cigarstring
-
-    @property
-    def positions(self):
-        return self.left.reference_start + 1, self.right.reference_end + 1
-
-    def replace_umt(self, umt):
-        def _byte_array_to_string(sequence):
-            if isinstance(sequence, str):
-                return sequence
-            else:
-                return str(sequence.decode("utf-8"))
-        if not (umt[0] or umt[1]) or \
-            (len(umt[0]) != self._tag_length) or \
-            (len(umt[1]) != self._tag_length):
-            msg = "Each UMT must match tag_length ({})"
-            raise ValueError(msg.format(self._tag_length))
-        left_qual = self.left.query_qualities
-        right_qual = self.right.query_qualities
-        left_query_frag = self.left.query_sequence[len(umt[0]):]
-        left_query_frag_str = _byte_array_to_string(left_query_frag)
-        self.left.query_sequence = umt[0] + left_query_frag_str
-        right_query_frag = self.right.query_sequence[:-len(umt[1])]
-        right_query_frag_str = _byte_array_to_string(right_query_frag)
-        self.right.query_sequence = right_query_frag_str + umt[1]
-        self.umt = umt
-        self.left.query_qualities = left_qual
-        self.right.query_qualities = right_qual
-
-    def __eq__(self, other):
-        return self.__dict__ == other.__dict__
-
-    def __hash__(self):
-        return hash(self.left) * hash(self.right)
-
-    def __repr__(self):
-        return ("Pair({}|{}|{}, "
-                "{}|{}|{})").format(self.left.query_name,
-                                    self.left.reference_start,
-                                    self.left.query_sequence,
-                                    self.right.query_name,
-                                    self.right.reference_start,
-                                    self.right.query_sequence)
 
 #TODO: cgates: move consensus builder into separate class/module
 class _TagFamily(object):
@@ -252,9 +175,9 @@ class _TagFamily(object):
                 template_pair.left.query_qualities
         right_align.query_qualities = \
                 template_pair.right.query_qualities
-        consensus_pair = _PairedAlignment(left_align,
-                                          right_align,
-                                          tag_length=len(umt[0]))
+        consensus_pair = samtools.PairedAlignment(left_align,
+                                                   right_align,
+                                                   tag_length=len(umt[0]))
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
@@ -270,7 +193,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             key = (alignment.reference_id, alignment.next_reference_start)
             if key in coords and alignment.query_name in coords[key]:
                 align1 = coords[key].pop(alignment.query_name)
-                yield _PairedAlignment(align1, alignment)
+                yield samtools.PairedAlignment(align1, alignment)
             else:
                 coords[key][alignment.query_name] = alignment
         else:
@@ -281,7 +204,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             if not len(coord):
                 del coords[key]
             if l_align:
-                yield _PairedAlignment(l_align, alignment)
+                yield samtools.PairedAlignment(l_align, alignment)
             else:
                 alignment.filter_value = MISSING_MATE_FILTER
                 excluded_writer.write(None, None, alignment)
@@ -514,7 +437,7 @@ def _build_family_filter(args):
 
 def _build_supplemental_log(coordinate_holder):
     def supplemental_progress_log(log):
-        log.debug("{}mb peak memory", _peak_memory())
+        log.debug("{}mb peak memory", utils.peak_memory())
         log.debug("{} pending alignment pairs; {} peak pairs",
                   coordinate_holder.pending_pair_count,
                   coordinate_holder.pending_pair_peak_count)
@@ -557,61 +480,6 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
 
     bamfile.close()
 
-
-def _log_environment_info(log, args):
-    log.debug('original_command_line|{}',' '.join(args.original_command_line))
-    log.debug('command_options|{}', vars(args))
-    log.debug('command_cwd|{}', os.getcwd ())
-    log.debug('platform_uname|{}', platform.uname())
-    log.debug('platform_python_version|{}', platform.python_version())
-    log.debug('pysam_version|{}', pysam.__version__)
-
-#TODO: cgates: move this to samtools
-#TODO: cgates: None checking/cyclomatic complexity could be simplified with UNPLACED/NULL family object
-def _build_bam_tags():
-    def combine_filters(family, pair, align):
-        filter_values = [x.filter_value for x in [family, align] if x and x.filter_value]
-        if filter_values:
-            return ";".join(filter_values).replace('; ', ';')
-        else:
-            return None
-    tags = [
-        samtools.BamTag("X0", "Z",
-                        ("filter (why the alignment was excluded)"),
-                        combine_filters),
-        samtools.BamTag("X1", "Z",
-                        ("leftmost~rightmost matched pair positions"),
-                        lambda fam, pair, align: "{0}~{1}".format(*pair.positions) if pair else None),
-        samtools.BamTag("X2", "Z",
-                        ("L~R CIGARs"),
-                        lambda fam, pair, align: "{0}~{1}".format(*pair.cigars) if pair else None),
-        samtools.BamTag("X3", "i",
-                        "unique identifier for this alignment family",
-                        lambda fam, pair, align: fam.umi_sequence if fam else None),
-        samtools.BamTag("X4", "Z",
-                        ("L~R UMT barcodes for this alignment family; because "
-                         "of fuzzy matching the family UMT may be distinct "
-                         "from the UMT of the original alignment"),
-                        lambda fam, pair, align: "{0}~{1}".format(fam.umt[0],
-                                                            fam.umt[1]) if fam else None),
-        samtools.BamTag("X5", "i",
-                        "family size (number of align pairs in this family)",
-                        lambda fam, pair, align: fam.included_pair_count if fam else None),
-        samtools.BamTag("X6", "i",
-                        ("presence of this tag signals that this alignment "
-                         "would be the template for the consensus alignment"),
-                        lambda fam, pair, align: 1 if fam and fam.consensus.left.query_name == align.query_name else None)]
-    return tags
-
-
-def _peak_memory():
-    peak_memory = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    peak_memory_mb = peak_memory/1024
-    if sys.platform == 'darwin':
-        peak_memory_mb /= 1024
-    return int(peak_memory_mb)
-
-
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
     log = None
@@ -624,8 +492,8 @@ def main(command_line_args=None):
         command_validator.preflight(args, log)
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
-        _log_environment_info(log, args)
-        bam_tags = _build_bam_tags()
+        utils.log_environment_info(log, args)
+        bam_tags = samtools._build_bam_tags()
         base_annotated_writer = samtools.build_writer(args.input_bam,
                                                       args.annotated_output_bam,
                                                       bam_tags,
@@ -642,7 +510,7 @@ def main(command_line_args=None):
         elapsed_time = int(time.time() - start_time)
         log.info("connor complete ({} seconds, {}mb peak memory).{}",
              elapsed_time,
-             _peak_memory(),
+             utils.peak_memory(),
              warning)
     except utils.UsageError as usage_error:
         message = "connor usage problem: {}".format(str(usage_error))

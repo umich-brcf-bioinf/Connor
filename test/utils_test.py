@@ -238,3 +238,18 @@ class LoggerTestCase(BaseConnorTestCase):
         self.assertEqual(False, logger.warning_occurred)
         logger.warning("oops")
         self.assertEqual(True, logger.warning_occurred)
+
+
+class UtilsTest(BaseConnorTestCase):
+    def test_log_environment(self):
+        args = Namespace(original_command_line=['foo', 'bar'],
+                         other_stuff='baz')
+        utils.log_environment_info(self.mock_logger, args)
+        log_text = '\n'.join(self.mock_logger._log_calls['DEBUG'])
+        self.assertRegexpMatches(log_text, 'command_line.*foo bar')
+        self.assertRegexpMatches(log_text, 'command_options.*foo.*bar')
+        self.assertRegexpMatches(log_text, 'command_options.*baz')
+        self.assertRegexpMatches(log_text, 'command_cwd')
+        self.assertRegexpMatches(log_text, 'platform_uname')
+        self.assertRegexpMatches(log_text, 'python_version')
+        self.assertRegexpMatches(log_text, 'pysam_version')
