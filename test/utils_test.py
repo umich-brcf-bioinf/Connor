@@ -3,12 +3,14 @@
 
 from argparse import Namespace
 from collections import defaultdict
+import os
 import sys
 import unittest
 
 from nose.exc import SkipTest
 
 import connor.utils as utils
+from testfixtures.tempdirectory import TempDirectory
 
 
 class MicroMock(object):
@@ -154,6 +156,15 @@ class MockBaseLogger(object):
 
 
 class LoggerTestCase(BaseConnorTestCase):
+    def test_init_invalidPathRaisesUsageError(self):
+        with TempDirectory() as tmp_dir:
+            log_filepath = os.path.join(tmp_dir.path, "foo", "bar.log")
+            args = Namespace(log_file=log_filepath,
+                             verbose=None)
+            self.assertRaises(utils.UsageError,
+                              utils.Logger,
+                              args)
+
     def test_consoleFormat(self):
         args = Namespace(log_file="test.log",
                          verbose=None)
