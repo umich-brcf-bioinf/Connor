@@ -11,7 +11,7 @@ import connor.utils as utils
 
 class AlignWriter(object):
     class _NullWriter(object):
-        def write(self, family, connor_align):
+        def write(self, family, paired_align, connor_align):
             pass
 
         def close(self, log=None):
@@ -41,12 +41,12 @@ class AlignWriter(object):
     def bam_file_path(self):
         return self._bam_path
 
-    def _add_bam_tags(self, family, connor_align):
+    def _add_bam_tags(self, family, paired_align, connor_align):
         for tag in self._tags:
-            tag.set_tag(family, connor_align)
+            tag.set_tag(family, paired_align, connor_align)
 
-    def write(self, family, connor_align):
-        self._add_bam_tags(family, connor_align)
+    def write(self, family, paired_align, connor_align):
+        self._add_bam_tags(family, paired_align, connor_align)
         self._bam_file.write(connor_align.pysam_align_segment)
 
     def close(self, log=None):
@@ -72,16 +72,16 @@ class LoggingWriter(object):
         self._family_filter_stats = defaultdict(set)
 
     #TODO: cgates: promote UNPLACED_FAMILY to public NULL class; use throughout
-    def write(self, family, connor_align):
+    def write(self, family, paired_align, connor_align):
         if not family:
             family = LoggingWriter.UNPLACED_FAMILY
         self._align_filter_stats[(family.filter_value,
                                   connor_align.filter_value)] += 1
         self._family_filter_stats[family.filter_value].add(family.umi_sequence)
         if family==LoggingWriter.UNPLACED_FAMILY:
-            self._base_writer.write(None, connor_align)
+            self._base_writer.write(None, paired_align, connor_align)
         else:
-            self._base_writer.write(family, connor_align)
+            self._base_writer.write(family, paired_align, connor_align)
 
     @staticmethod
     def _filter_counts(filter_dict):
@@ -236,8 +236,8 @@ class BamTag(object):
         return (self._tag_name,
                 self._description) < (other._tag_name, other._description)
 
-    def set_tag(self, family, connor_align):
-        value = self._get_value(family, connor_align)
+    def set_tag(self, family, paired_align, connor_align):
+        value = self._get_value(family, paired_align, connor_align)
         connor_align.set_tag(self._tag_name, value, self._tag_type)
 
 
@@ -414,22 +414,27 @@ class ConnorAlign(object):
     def template_length(self, value):
         self.pysam_align_segment.template_length = value
 
+
 def filter_alignments(pysam_alignments, excluded_writer=AlignWriter.NULL):
-    filters = {'not in proper pair': \
-                    lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
-                'secondary alignment': \
-                    lambda a: a.flag & BamFlag.SECONDARY != 0,
-                'qc failed': \
-                    lambda a: a.flag & BamFlag.QCFAIL != 0,
+    filters = {'cigar unavailable': \
+                    lambda a: a.cigarstring is None,
                 'mapping quality < 1': \
                     lambda a: a.mapping_quality < 1,
-                'cigar unavailable': \
-                    lambda a: a.cigarstring is None}
+                'not in proper pair': \
+                    lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
+                'qc failed': \
+                    lambda a: a.flag & BamFlag.QCFAIL != 0,
+                'secondary alignment': \
+                    lambda a: a.flag & BamFlag.SECONDARY != 0,
+                'supplementary alignment': \
+                    lambda a: a.flag & BamFlag.SUPPLEMENTARY != 0,
+                    }
     generator = utils.FilteredGenerator(filters)
     for pysam_align, filter_value in generator.filter(pysam_alignments):
         connor_align = ConnorAlign(pysam_align, filter_value)
         if filter_value:
             excluded_writer.write(family=None,
+                                  paired_align=None,
                                   connor_align=connor_align)
         else:
             yield connor_align

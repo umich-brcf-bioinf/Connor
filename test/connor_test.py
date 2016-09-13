@@ -1019,17 +1019,6 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals(42, tag._get_value(family, None, None))
         self.assertEquals(None, tag._get_value(None, None, None))
 
-
-    def test_build_bam_tags_x5_family_size(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X5')
-        self.assertEqual('X5', tag._tag_name)
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'family size')
-        family = MicroMock(included_pair_count=42)
-        self.assertEquals(42, tag._get_value(family, None, None))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-
     def test_build_bam_tags_x4_umt_barcodes(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
         self.assertEqual('X4', tag._tag_name)
@@ -1039,6 +1028,14 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEquals("AAA~CCC", tag._get_value(family, None, None))
         self.assertEquals(None, tag._get_value(None, None, None))
 
+    def test_build_bam_tags_x5_family_size(self):
+        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X5')
+        self.assertEqual('X5', tag._tag_name)
+        self.assertEqual('i', tag._tag_type)
+        self.assertRegexpMatches(tag._description, 'family size')
+        family = MicroMock(included_pair_count=42)
+        self.assertEquals(42, tag._get_value(family, None, None))
+        self.assertEquals(None, tag._get_value(None, None, None))
 
     def test_build_bam_tags_x6_consensus_template(self):
         tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X6')
