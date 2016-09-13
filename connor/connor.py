@@ -614,6 +614,7 @@ def _peak_memory():
 
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
+    log = None
     if not command_line_args:
         command_line_args = sys.argv
     try:
@@ -649,8 +650,12 @@ def main(command_line_args=None):
         print("See 'connor --help'.", file=sys.stderr)
         sys.exit(1)
     except Exception: #pylint: disable=broad-except
-        log.error("An unexpected error occurred")
-        log.error(traceback.format_exc())
+        if log:
+            show = log.error
+        else:
+            show = partial(print, file=sys.stderr)
+        show("An unexpected error occurred")
+        show(traceback.format_exc())
         exit(1)
 
 
