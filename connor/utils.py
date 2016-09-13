@@ -56,9 +56,21 @@ class Logger(object):
                         '%(user)s|%(message)s')
     _CONSOLE_LOG_FORMAT = '%(asctime)s|%(levelname)s|%(message)s'
 
+    @staticmethod
+    def _validate_log_file(log_file):
+        try:
+            log = open(log_file, "w")
+            log.close()
+        except IOError:
+            raise UsageError(('Connor cannot create log file [{}]. '
+                              'Review inputs and try again.').format(log_file))
+
+
     def __init__(self, args, console_stream=None):
         self._verbose = args.verbose
         self._log_filename = args.log_file
+        Logger._validate_log_file(self._log_filename)
+
         if console_stream:
             self._console_stream = console_stream
         else:
