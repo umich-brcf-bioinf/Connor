@@ -21,7 +21,7 @@ info on requirements and more install options.
 ::
   $ pip install connor --user
   ...
-  Successfully installed Connor-0.4
+  Successfully installed Connor-0.5
 
 Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in your path:
 ::
@@ -41,27 +41,27 @@ Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in yo
 
 4. **Run Connor:**
 
-This command will read PIK3CA-original.bam and produce PIK3CA-deduped.bam (with
+This command will read sample1-original.bam and produce sample1-deduped.bam (with
 BAM index) and a log file in your working directory.
 ::
-  $ connor sample_data/examples/PIK3CA-original.bam PIK3CA-deduped.bam
-  2016-08-11 17:08:07|INFO|connor begins
-  2016-08-11 17:08:07|INFO|logging to [PIK3CA-deduped.bam.log]
-  2016-08-11 17:08:07|INFO|reading input bam [sample_data/examples/PIK3CA-original.bam]
+  $ connor sample_data/examples/sample1-original.bam sample1-deduped.bam
+  2016-09-12 17:08:12|INFO|connor begins
+  2016-09-12 17:08:12|INFO|logging to [sample1-deduped.bam.log]
+  2016-09-12 17:08:12|INFO|reading input bam [sample_data/examples/sample1-original.bam]
   ...
-  2016-08-11 17:08:29|INFO|8.69% (17937/206509) alignments unplaced or discarded
-  2016-09-11 15:08:29|INFO|families discarded: 16.03% (1518/9470) family too small (<3)
-  2016-09-11 15:08:29|INFO|91.31% (188572/206509) alignments included in 7952 families
-  2016-09-11 15:08:29|INFO|95.78% deduplication rate (1 - 7952 families/188572 included alignments)
-  2016-09-11 15:08:30|INFO|sorting/indexing [examples/PIK3CA-deduped.bam]
-  2016-08-11 15:08:30|INFO|connor complete  (23 seconds, 146mb peak memory)
+  2016-09-12 17:08:32|INFO|6.83% (18104/264986) alignments unplaced or discarded
+  2016-09-12 15:08:32|INFO|families discarded: 15.21% (1950/12817) family too small (<3)
+  2016-09-12 15:08:32|INFO|93.17% (246882/264986) alignments included in 10867 families
+  2016-09-12 15:08:32|INFO|95.60% deduplication rate (1 - 10867 families/246882 included alignments)
+  2016-09-12 15:08:32|INFO|sorting/indexing [examples/PIK3CA-deduped.bam]
+  2016-09-12 15:08:32|INFO|connor complete  (20 seconds, 35mb peak memory)
 
-  $ ls -1 PIK3CA*
-  PIK3CA-deduped.bam
-  PIK3CA-deduped.bam.bai
-  PIK3CA-deduped.bam.log
+  $ ls -1 sample1*
+  sample1-deduped.bam
+  sample1-deduped.bam.bai
+  sample1-deduped.bam.log
 
-From the log above, you can see that the original alignments resulted in 7952
+From the log above, you can see that the original alignments resulted in 10867
 deduplicated families (pairs).
 
 5. **Reviewing output file**
@@ -69,44 +69,44 @@ deduplicated families (pairs).
 You don't need samtools installed to use Connor, but if you have samtools installed,
 you can examine the difference between original and deduplicated bams:
 ::
-  $ samtools flagstat sample_data/examples/PIK3CA-original.bam
-  206509 + 0 in total (QC-passed reads + QC-failed reads)
+  $ samtools flagstat sample_data/examples/sample1-original.bam
+  264986 + 0 in total (QC-passed reads + QC-failed reads)
   59 + 0 secondary
   0 + 0 supplementary
   0 + 0 duplicates
-  205705 + 0 mapped (99.61%:nan%)
-  206450 + 0 paired in sequencing
-  103175 + 0 read1
-  103275 + 0 read2
-  203974 + 0 properly paired (98.80%:nan%)
-  204842 + 0 with itself and mate mapped
-  804 + 0 singletons (0.39%:nan%)
-  677 + 0 with mate mapped to a different chr
-  664 + 0 with mate mapped to a different chr (mapQ>=5)
+  263950 + 0 mapped (99.61%:nan%)
+  264927 + 0 paired in sequencing
+  132416 + 0 read1
+  132511 + 0 read2
+  261748 + 0 properly paired (98.80%:nan%)
+  262855 + 0 with itself and mate mapped
+  1036 + 0 singletons (0.39%:nan%)
+  848 + 0 with mate mapped to a different chr
+  834 + 0 with mate mapped to a different chr (mapQ>=5)
   
-  $ samtools flagstat PIK3CA-deduped.bam
-  15904 + 0 in total (QC-passed reads + QC-failed reads)
+  $ samtools flagstat sample1-deduped.bam
+  21734 + 0 in total (QC-passed reads + QC-failed reads)
   0 + 0 secondary
   0 + 0 supplementary
   0 + 0 duplicates
-  15904 + 0 mapped (100.00%:nan%)
-  15904 + 0 paired in sequencing
-  7952 + 0 read1
-  7952 + 0 read2
-  15904 + 0 properly paired (100.00%:nan%)
-  15904 + 0 with itself and mate mapped
+  21734 + 0 mapped (100.00%:nan%)
+  21734 + 0 paired in sequencing
+  10867 + 0 read1
+  10867 + 0 read2
+  21734 + 0 properly paired (100.00%:nan%)
+  21734 + 0 with itself and mate mapped
   0 + 0 singletons (0.00%:nan%)
   0 + 0 with mate mapped to a different chr
   0 + 0 with mate mapped to a different chr (mapQ>=5)
 
-Note that 206509 original alignments were deduplicated to 15904 (7952 pairs).
+Note that 264986 original alignments were deduplicated to 21734 (10867 pairs).
 
 6. **Reviewing a consensus alignment**
 
 Connor adds a set of custom tags to each consensus alignment that provide details
 on the family of original alignment. Here is an excerpt of the first alignment:
 ::
-  $ samtools view PIK3CA-deduped.bam | head -1 | tr '\t' '\n'
+  $ samtools view sample1-deduped.bam | head -1 | tr '\t' '\n'
   HWI-D00143:749:HM5YFBCXX:2:1112:3541:48875
   99
   chr3
@@ -132,7 +132,7 @@ tags is in the SAM/BAM header and summarized here:
 Interpreting the tag definitions with the alignment above, this consensus
 alignment represents **5** original alignment pairs (from tag X5 above) whose
 alignment leftmost and rightmost positions matched **178873584~178873660**
-(from tag X1) and left-right UMT barcodes matched **ATGGAT-AAGACC** (from
+(from tag X1) and left-right UMT barcodes matched **GAAAGT~CTTCGT** (from
 tag X4).
 
 .. _METHODS: METHODS.rst
