@@ -295,26 +295,28 @@ class _CoordinateFamilyHolder(object):
     sets of pairs which share the same coordinate (coordinate families)'''
     def __init__(self):
         self._coordinate_family = defaultdict(partial(defaultdict, list))
-        self._right_coords_in_progress = SortedSet()
+        self._right_coords_in_progress = defaultdict(SortedSet)
         self.pending_pair_count = 0
         self.pending_pair_peak_count = 0
 
     def _add(self, pair):
-        right = pair.right.reference_end
-        left = pair.left.reference_start
-        self._right_coords_in_progress.add(right)
-        self._coordinate_family[right][left].append(pair)
+        def _start(align):
+            return (align.reference_name, align.reference_start)
+        self._right_coords_in_progress[pair.right.reference_name].add(pair.right.reference_start)
+        right_coord = self._coordinate_family[_start(pair.right)]
+        right_coord[_start(pair.left)].append(pair)
         self.pending_pair_count += 1
         self.pending_pair_peak_count = max(self.pending_pair_count,
                                            self.pending_pair_peak_count)
 
-    def _completed_families(self, rightmost_boundary):
+    def _completed_families(self, reference_name, rightmost_boundary):
         '''returns one or more families whose end < rightmost boundary'''
-        while len(self._right_coords_in_progress):
-            right_coord = self._right_coords_in_progress[0]
+        in_progress = self._right_coords_in_progress[reference_name]
+        while len(in_progress):
+            right_coord = in_progress[0]
             if right_coord < rightmost_boundary:
-                self._right_coords_in_progress.pop(0)
-                left_families = self._coordinate_family.pop(right_coord)
+                in_progress.pop(0)
+                left_families = self._coordinate_family.pop((reference_name, right_coord), {})
                 for family in sorted(left_families.values(),
                                      key=lambda x:x[0].left.reference_start):
                     family.sort(key=lambda x: x.query_name)
@@ -351,11 +353,15 @@ class _CoordinateFamilyHolder(object):
                 rightmost_start = pair.right.reference_start
                 current_chrom = pair.right.reference_name
             if _new_chrom(pair):
+                self._right_coords_in_progress[current_chrom].clear()
+                rightmost_start = None
+                current_chrom = None
                 for family in self._remaining_families():
                     yield family
             elif _new_coordinate(pair):
-                rightmost_start = pair.right.reference_start
-                for family in self._completed_families(rightmost_start):
+                right = pair.right
+                for family in self._completed_families(right.reference_name,
+                                                       right.reference_start):
                     yield family
             self._add(pair)
 
