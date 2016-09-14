@@ -10,6 +10,13 @@ import connor.utils as utils
 
 DEFAULT_TAG_LENGTH = 6
 
+def _byte_array_to_string(sequence):
+    if isinstance(sequence, str):
+        return sequence
+    else:
+        return str(sequence.decode("utf-8"))
+
+
 class AlignWriter(object):
     class _NullWriter(object):
         def write(self, family, paired_align, connor_align):
@@ -306,11 +313,6 @@ class PairedAlignment(object):
             return left_value, right_value
 
     def replace_umt(self, umt):
-        def _byte_array_to_string(sequence):
-            if isinstance(sequence, str):
-                return sequence
-            else:
-                return str(sequence.decode("utf-8"))
         if not (umt[0] or umt[1]) or \
             (len(umt[0]) != self._tag_length) or \
             (len(umt[1]) != self._tag_length):
@@ -357,16 +359,9 @@ class _Pysam9SamtoolsUtil(object):
                             catch_stdout=False)
 
     @staticmethod
-    def _byte_array_to_string(sequence):
-        if isinstance(sequence, str):
-            return sequence
-        else:
-            return str(sequence.decode("utf-8"))
-
-    @staticmethod
     def idxstats(input_bam_filepath):
         result = pysam.samtools.idxstats(input_bam_filepath)
-        return _Pysam9SamtoolsUtil._byte_array_to_string(result).split('\n')
+        return _byte_array_to_string(result).split('\n')
 
 
 class _Pysam8SamtoolsUtil(object):

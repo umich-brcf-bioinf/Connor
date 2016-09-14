@@ -54,6 +54,13 @@ class BaseConnorTestCase(unittest.TestCase):
     def tearDown(self):
         unittest.TestCase.tearDown(self)
 
+    @staticmethod
+    def byte_array_to_string(sequence):
+        if isinstance(sequence, str):
+            return sequence
+        else:
+            return str(sequence.decode("utf-8"))
+
     def ok(self):
         #pylint: disable=redundant-unittest-assert
         self.assertTrue(True)

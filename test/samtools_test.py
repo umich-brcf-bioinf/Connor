@@ -82,13 +82,6 @@ def pysam_alignments_from_bam(bam_filename):
 
 
 class ConnorAlignTest(utils_test.BaseConnorTestCase):
-    @staticmethod
-    def byte_array_to_string(sequence):
-        if isinstance(sequence, str):
-            return sequence
-        else:
-            return str(sequence.decode("utf-8"))
-
     def test_eq(self):
         pysam_align = mock_align(query_name="align1")
         base =  ConnorAlign(pysam_align)
@@ -224,8 +217,10 @@ class PairedAlignmentTest(utils_test.BaseConnorTestCase):
 
         self.assertIs(left_align, actual_paired_alignment.left)
         self.assertIs(right_align, actual_paired_alignment.right)
-        self.assertEquals(("AAATTT","CCCGGG"), actual_paired_alignment.umt)
-
+        left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
+        right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
+        self.assertEquals(("AAATTT", "CCCGGG"), (left_umt, right_umt))
+        
     def test_init_valueErrorOnInconsistentQueryNames(self):
         left = mock_align(query_name="alignA")
         right = mock_align(query_name="alignB")
@@ -323,28 +318,22 @@ class PairedAlignmentTest(utils_test.BaseConnorTestCase):
         self.assertEquals(1, len(actual_set))
 
     def test_replace_umt(self):
-        # pysam's represtation of the sequence is inconsistent across pysam
-        # and python versions; this hack makes the values comparable
-        def _barray_to_string(sequence):
-            if isinstance(sequence, str):
-                return sequence
-            else:
-                return str(sequence.decode("utf-8"))
-
         left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
         right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
         paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
 
         paired_align.replace_umt(('GG','TT'))
 
+        left = paired_align.left
+        right = paired_align.right
         self.assertEquals('GGNN',
-                          _barray_to_string(paired_align.left.query_sequence))
+                          self.byte_array_to_string(left.query_sequence))
         self.assertEquals('NNTT',
-                          _barray_to_string(paired_align.right.query_sequence))
+                          self.byte_array_to_string(right.query_sequence))
         self.assertEquals([1,2,3,4],
-                          paired_align.left.query_qualities)
+                          left.query_qualities)
         self.assertEquals([5,6,7,8],
-                          paired_align.right.query_qualities)
+                          right.query_qualities)
 
     def test_replace_umt_errorIfInconsistentUmtLength(self):
         left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
