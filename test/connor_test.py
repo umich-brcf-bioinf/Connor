@@ -17,7 +17,6 @@ from connor import samtools
 import connor.utils as utils
 from connor.connor import _CoordinateFamilyHolder
 from connor.samtools import ConnorAlign
-from connor.connor import _PairedAlignment
 from test.samtools_test import MockAlignWriter
 from test.samtools_test import mock_align
 import test.samtools_test as samtools_test
@@ -113,160 +112,7 @@ def align_seg(query_name, #pylint: disable=dangerous-default-value
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
     alignR = align_seg(q, rn, rs, nrs, s2)
-    return connor._PairedAlignment(alignL, alignR, tag_length)
-
-
-class PairedAlignmentTest(BaseConnorTestCase):
-    def test_init(self):
-        left_align = MockAlignSegment("alignA", 'chr1', 10, 20,
-                                      "AAATTT" "GGGG", reference_end=14)
-        right_align = MockAlignSegment("alignA", 'chr1', 20, 10,
-                                       "TTTT" "CCCGGG" ,reference_end=24)
-        tag_length = 6
-        actual_paired_alignment = connor._PairedAlignment(left_align,
-                                                         right_align,
-                                                         tag_length)
-
-        self.assertIs(left_align, actual_paired_alignment.left)
-        self.assertIs(right_align, actual_paired_alignment.right)
-        self.assertEquals(("AAATTT","CCCGGG"), actual_paired_alignment.umt)
-
-    def test_init_valueErrorOnInconsistentQueryNames(self):
-        left = mock_align(query_name="alignA")
-        right = mock_align(query_name="alignB")
-        self.assertRaisesRegexp(ValueError,
-                                (r'Inconsistent query names '
-                                 r'\(alignA != alignB\)'),
-                                connor._PairedAlignment,
-                                left,
-                                right,
-                                tag_length=1)
-
-    def test_cigars(self):
-        left = MicroMock(query_name='A',
-                         cigarstring='1S2M4S',
-                         query_sequence='AAAAAA')
-        right = MicroMock(query_name='A',
-                         cigarstring='16S32M64S',
-                          query_sequence='AAAAAA')
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(('1S2M4S', '16S32M64S'), paired_alignment.cigars)
-
-    def test_positions(self):
-        left = MicroMock(query_name='A',
-                         reference_start=100,
-                         reference_end=150,
-                         query_sequence='AAAAAA')
-        right = MicroMock(query_name='A',
-                          reference_start=200,
-                          reference_end=250,
-                          query_sequence='AAAAAA')
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual((101,251), paired_alignment.positions)
-
-    def test_filter_value(self):
-        left = ConnorAlign(mock_align(), filter_value=None)
-        right = ConnorAlign(mock_align(), filter_value=None)
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(None, paired_alignment.filter_value)
-
-        left = ConnorAlign(mock_align(), filter_value='')
-        right = ConnorAlign(mock_align(), filter_value='')
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(None, paired_alignment.filter_value)
-
-        left = ConnorAlign(mock_align(), filter_value='foo')
-        right = ConnorAlign(mock_align(), filter_value=None)
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(('foo', None), paired_alignment.filter_value)
-
-        left = ConnorAlign(mock_align(), filter_value=None)
-        right = ConnorAlign(mock_align(), filter_value='bar')
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual((None, 'bar'), paired_alignment.filter_value)
-
-    def test_query_name(self):
-        left = mock_align(query_name="alignA", reference_start=100)
-        right = mock_align(query_name="alignA", reference_start=200)
-        paired_alignment = connor._PairedAlignment(left, right, tag_length=1)
-        self.assertEqual("alignA", paired_alignment.query_name)
-
-    def test_eq(self):
-        left = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
-        right = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
-        other = align_seg("alignA", 'chr2', 100, 200, "AAANNNNNNN")
-
-        base = connor._PairedAlignment(left, right)
-        self.assertEquals(base, connor._PairedAlignment(left, right))
-        self.assertNotEquals(base, connor._PairedAlignment(other, right))
-        self.assertNotEquals(base, connor._PairedAlignment(left, other))
-
-    def test_hash(self):
-        left_A = MockAlignSegment("alignA", 'chr1', 100, 200, "AAATTT" "NNNN")
-        right_A = MockAlignSegment("alignA", 'chr1', 200, 100, "NNNN" "CCCGGG")
-        left_B = MockAlignSegment("alignA", 'chr1', 100, 200, "AAATTT" "NNNN")
-        right_B = MockAlignSegment("alignA", 'chr1', 200, 100, "NNNN" "CCCGGG")
-
-        actual_set = set()
-        base = connor._PairedAlignment(left_A, right_A)
-        actual_set.add(base)
-        self.assertEquals(1, len(actual_set))
-
-        actual_set.add(base)
-        self.assertEquals(1, len(actual_set))
-
-        actual_set.add(connor._PairedAlignment(left_A, right_A))
-        self.assertEquals(1, len(actual_set))
-
-        equivalent_pair = connor._PairedAlignment(left_B, right_B)
-        actual_set.add(equivalent_pair)
-        self.assertEquals(1, len(actual_set))
-
-    def test_replace_umt(self):
-        # pysam's represtation of the sequence is inconsistent across pysam
-        # and python versions; this hack makes the values comparable
-        def _barray_to_string(sequence):
-            if isinstance(sequence, str):
-                return sequence
-            else:
-                return str(sequence.decode("utf-8"))
-
-        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
-        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
-        paired_align = connor._PairedAlignment(left_A, right_A, tag_length=2)
-
-        paired_align.replace_umt(('GG','TT'))
-
-        self.assertEquals('GGNN',
-                          _barray_to_string(paired_align.left.query_sequence))
-        self.assertEquals('NNTT',
-                          _barray_to_string(paired_align.right.query_sequence))
-        self.assertEquals([1,2,3,4],
-                          paired_align.left.query_qualities)
-        self.assertEquals([5,6,7,8],
-                          paired_align.right.query_qualities)
-
-    def test_replace_umt_errorIfInconsistentUmtLength(self):
-        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
-        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
-        paired_align = connor._PairedAlignment(left_A, right_A, tag_length=2)
-
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                ('G','TT'))
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                ('GG','T'))
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                (None, None))
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                ('G',))
+    return samtools.PairedAlignment(alignL, alignR, tag_length)
 
 
 class TagFamiliyTest(BaseConnorTestCase):
@@ -283,7 +129,7 @@ class TagFamiliyTest(BaseConnorTestCase):
                                              inexact_match_count,
                                              consensus_threshold=0.6)
 
-        self.assertEquals(input_umt, actual_tag_family.umt)
+        self.assertEquals(input_umt, actual_tag_family.umt())
         self.assertEquals(align_pairs, actual_tag_family.align_pairs)
         self.assertEquals(42, actual_tag_family.inexact_match_count)
 
@@ -307,6 +153,38 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals('alignA:alignB:alignC is too odd',
                           actual_tag_family.filter_value)
 
+    def test_is_consensus_template(self):
+        def pair(name):
+            left = ConnorAlign(mock_align(query_name=name))
+            right = ConnorAlign(mock_align(query_name=name))
+            return samtools.PairedAlignment(left, right)
+        pairA = pair('alignA')
+        alignA = ConnorAlign(mock_align(query_name='alignA'))
+        alignB = ConnorAlign(mock_align(query_name='alignB'))
+        alignC = ConnorAlign(mock_align(query_name='alignC'))
+        tag_family = connor._TagFamily(umt=("AAA", "CCC"),
+                                       alignments=[pairA],
+                                       inexact_match_count=0,
+                                       consensus_threshold=0.6)
+
+        self.assertEqual(True, tag_family.is_consensus_template(alignA))
+        self.assertEqual(False, tag_family.is_consensus_template(alignB))
+        self.assertEqual(False, tag_family.is_consensus_template(alignC))
+
+    def test_umt(self):
+        left = ConnorAlign(mock_align())
+        right = ConnorAlign(mock_align())
+        pair1 = samtools.PairedAlignment(left, right)
+
+        input_umt = ('AAANNN', 'CCCNNN')
+        actual_tag_family = connor._TagFamily(input_umt,
+                                             [pair1],
+                                             inexact_match_count=42,
+                                             consensus_threshold=0.6)
+
+        self.assertEquals(input_umt, actual_tag_family.umt())
+        self.assertEquals('AAANNN~CCCNNN',
+                          actual_tag_family.umt(format_string="{left}~{right}"))
 
     def test_consensus_rewrites_umt(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
@@ -391,15 +269,15 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_consensus_qualities_maxMappingQualityScores(self):
         alignAL = self.connor_align('alignA', 'nGT', 30)
         alignAR = self.connor_align('alignA', 'nCT', 25)
-        pairA = connor._PairedAlignment(alignAL, alignAR, tag_length=1)
+        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
 
         alignBL = self.connor_align('alignB', 'nGT', 20)
         alignBR = self.connor_align('alignB', 'nCT', 15)
-        pairB = connor._PairedAlignment(alignBL, alignBR, tag_length=1)
+        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
 
         alignCL = self.connor_align('alignC', 'nGT', 10)
         alignCR = self.connor_align('alignC', 'nCT', 5)
-        pairC = connor._PairedAlignment(alignCL, alignCR, tag_length=1)
+        pairC = samtools.PairedAlignment(alignCL, alignCR, tag_length=1)
 
         alignments = [pairA, pairB, pairC]
         input_umts = ("n", "n")
@@ -420,15 +298,15 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_select_template_alignment_pair_picksMaxQualityScores(self):
         alignAL = self.connor_align('alignA', 'nGT', 20)
         alignAR = self.connor_align('alignA', 'nCT', 15)
-        pairA = connor._PairedAlignment(alignAL, alignAR, tag_length=1)
+        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
 
         alignBL = self.connor_align('alignB', "nGT", 30)
         alignBR = self.connor_align('alignB', "nCT", 25)
-        pairB = connor._PairedAlignment(alignBL, alignBR, tag_length=1)
+        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
 
         alignCL = self.connor_align('alignC', "nGT", 10)
         alignCR = self.connor_align('alignC', "nCT", 5)
-        pairC = connor._PairedAlignment(alignCL, alignCR, tag_length=1)
+        pairC = samtools.PairedAlignment(alignCL, alignCR, tag_length=1)
 
         alignment_pairs = [pairA, pairB, pairC]
 
@@ -439,11 +317,11 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_select_template_alignment_pair_breaksTiesByQueryName(self):
         alignAL = self.connor_align('alignA', "nGT", 20)
         alignAR = self.connor_align('alignA', "nCT", 15)
-        pairA = connor._PairedAlignment(alignAL, alignAR, tag_length=1)
+        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
 
         alignBL = self.connor_align('alignB', "nGT", 20)
         alignBR = self.connor_align('alignB', "nCT", 15)
-        pairB = connor._PairedAlignment(alignBL, alignBR, tag_length=1)
+        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
         alignment_pairs = [pairA, pairB]
 
         actual_template = connor._TagFamily._select_template_alignment_pair(alignment_pairs)
@@ -569,10 +447,9 @@ class TagFamiliyTest(BaseConnorTestCase):
 
     def test_init_addsFilterForMinority(self):
         def pair(name, c1, c2):
-            return _PairedAlignment(ConnorAlign(mock_align(query_name=name,
-                                                           cigarstring=c1)),
-                                    ConnorAlign(mock_align(query_name=name,
-                                                           cigarstring=c2)))
+            left = ConnorAlign(mock_align(query_name=name, cigarstring=c1))
+            right = ConnorAlign(mock_align(query_name=name, cigarstring=c2))
+            return samtools.PairedAlignment(left, right)
         pairA = pair('alignA', '3S3M', '3S3M')
         pairB = pair('alignB', '3S3M', '3S3M')
         pairC = pair('alignC', '3S1I3M', '3S3M')
@@ -600,8 +477,9 @@ class TagFamiliyTest(BaseConnorTestCase):
 
     def test_included_pair_count(self):
         def pair(c1, c2):
-            return _PairedAlignment(ConnorAlign(mock_align(cigarstring=c1)),
-                                    ConnorAlign(mock_align(cigarstring=c2)))
+            left = ConnorAlign(mock_align(cigarstring=c1))
+            right = ConnorAlign(mock_align(cigarstring=c2))
+            return samtools.PairedAlignment(left, right)
         pairA = pair("3S3M", "3S3M")
         pairB = pair("3S3M", "3S3M")
         pairC = pair("3S1I3M", "3S3M")
@@ -632,7 +510,7 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
                                        query_sequence='AAATTTT',
                                        reference_end=right_end,
                                        reference_name=reference_name))
-        return _PairedAlignment(alignL, alignR)
+        return samtools.PairedAlignment(alignL, alignR)
 
     def test_build_coordinate_families_noFamilies(self):
         holder = _CoordinateFamilyHolder()
@@ -762,13 +640,6 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
 
 
 class ConnorTest(BaseConnorTestCase):
-    @staticmethod
-    def get_tag(tags, name):
-        for tag in tags:
-            if tag._tag_name == name:
-                return tag
-        return None
-
     def test_build_coordinate_pairs_singlePair(self):
         align1L = ConnorAlign(mock_align(query_name='1',
                                          reference_start=100,
@@ -955,109 +826,6 @@ class ConnorTest(BaseConnorTestCase):
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
         self.assertEqual(set(['1', '2']), actual_pair_names)
 
-    def test_log_environment(self):
-        args = Namespace(original_command_line=['foo', 'bar'],
-                         other_stuff='baz')
-        connor._log_environment_info(self.mock_logger, args)
-        log_text = '\n'.join(self.mock_logger._log_calls['DEBUG'])
-        self.assertRegexpMatches(log_text, 'command_line.*foo bar')
-        self.assertRegexpMatches(log_text, 'command_options.*foo.*bar')
-        self.assertRegexpMatches(log_text, 'command_options.*baz')
-        self.assertRegexpMatches(log_text, 'command_cwd')
-        self.assertRegexpMatches(log_text, 'platform_uname')
-        self.assertRegexpMatches(log_text, 'python_version')
-        self.assertRegexpMatches(log_text, 'pysam_version')
-
-    def test_build_bam_tags(self):
-        actual_tags = connor._build_bam_tags()
-        self.assertEqual(7, len(actual_tags))
-
-    def test_build_bam_tags_x0_filter(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X0')
-        self.assertEqual('X0', tag._tag_name)
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'filter')
-
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-        family = MicroMock(filter_value=None)
-        connor_align = MicroMock(filter_value=None)
-        self.assertEquals(None, tag._get_value(family, None, connor_align))
-
-        family = MicroMock(filter_value='foo')
-        connor_align = MicroMock(filter_value='bar')
-        self.assertEquals('foo', tag._get_value(family, None, None))
-        self.assertEquals('bar', tag._get_value(None, None, connor_align))
-        self.assertEquals('foo;bar', tag._get_value(family, None, connor_align))
-
-    def test_build_bam_tags_x1_positions(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X1')
-        self.assertEqual('X1', tag._tag_name)
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description,
-                                 'leftmost~rightmost matched pair positions')
-        pair = MicroMock(positions=(100,150))
-        self.assertEquals("100~150", tag._get_value(None, pair, None))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-    def test_build_bam_tags_x2_cigars(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X2')
-        self.assertEqual('X2', tag._tag_name)
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description,
-                                 'L~R CIGARs')
-        pair = MicroMock(cigars=('1S2M4S','8S16M32S'))
-        self.assertEquals("1S2M4S~8S16M32S", tag._get_value(None, pair, None))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-    def test_build_bam_tags_x3_unique_identifier(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X3')
-        self.assertEqual('X3', tag._tag_name)
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'unique identifier')
-        family = MicroMock(umi_sequence=42)
-        self.assertEquals(42, tag._get_value(family, None, None))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-    def test_build_bam_tags_x4_umt_barcodes(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X4')
-        self.assertEqual('X4', tag._tag_name)
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'UMT barcodes')
-        family = MicroMock(umt=('AAA','CCC'))
-        self.assertEquals("AAA~CCC", tag._get_value(family, None, None))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-    def test_build_bam_tags_x5_family_size(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X5')
-        self.assertEqual('X5', tag._tag_name)
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'family size')
-        family = MicroMock(included_pair_count=42)
-        self.assertEquals(42, tag._get_value(family, None, None))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
-    def test_build_bam_tags_x6_consensus_template(self):
-        tag = ConnorTest.get_tag(connor._build_bam_tags(), 'X6')
-        self.assertEqual('X6', tag._tag_name)
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description,
-                                 'template for the consensus alignment')
-        nontemplate_connor_align = MicroMock(query_name='foo')
-        template_connor_align = MicroMock(query_name='bar')
-        consensus_pair = MicroMock(left=MicroMock(query_name='bar'))
-        family = MicroMock(consensus=consensus_pair)
-        self.assertEquals(None,
-                          tag._get_value(None, None, template_connor_align))
-        self.assertEquals(None,
-                          tag._get_value(family,
-                                         None,
-                                         nontemplate_connor_align))
-        self.assertEquals(1, tag._get_value(family,
-                                            None,
-                                            template_connor_align))
-        self.assertEquals(None, tag._get_value(None, None, None))
-
 
     def test_build_family_filter_whenFamilySizeOk(self):
         args = Namespace(min_family_size_threshold=2)
@@ -1087,7 +855,7 @@ class ConnorTest(BaseConnorTestCase):
                                                          ranked_tags,
                                                          hamming_threshold=1,
                                                          consensus_threshold=0.6)
-        actual_tag_fam = {fam.umt:fam for fam in actual_tag_fam_list}
+        actual_tag_fam = {fam.umt():fam for fam in actual_tag_fam_list}
 
         self.assertEquals(2, len(actual_tag_fam))
         self.assertEquals(set([pair1, pair3, pair4]),
@@ -1111,7 +879,7 @@ class ConnorTest(BaseConnorTestCase):
                                                          ranked_tags,
                                                          hamming_threshold=1,
                                                          consensus_threshold=0.6)
-        actual_tag_fam = {fam.umt:fam for fam in actual_tag_fam_list}
+        actual_tag_fam = {fam.umt():fam for fam in actual_tag_fam_list}
 
         self.assertEquals(set([pair1, pair2, pair3, pair4]),
                           set(actual_tag_fam[('AAA','GGG')].align_pairs))

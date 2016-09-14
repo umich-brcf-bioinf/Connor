@@ -59,8 +59,6 @@ class _FamilySizeStatHandler(object):
     def handle(self, tag_family):
         self.collection.append(len(tag_family.align_pairs))
 
-    #TODO: cgates: given small num of distinct values, suspect there is a more
-    # memory efficient approach using dict[size] = count
     @staticmethod
     def _percentile(collection, percent):
         if not collection:
