@@ -53,7 +53,7 @@ BAM index) and a log file in your working directory.
   2016-09-12 15:08:32|INFO|families discarded: 15.21% (1950/12817) family too small (<3)
   2016-09-12 15:08:32|INFO|93.17% (246882/264986) alignments included in 10867 families
   2016-09-12 15:08:32|INFO|95.60% deduplication rate (1 - 10867 families/246882 included alignments)
-  2016-09-12 15:08:32|INFO|sorting/indexing [examples/PIK3CA-deduped.bam]
+  2016-09-12 15:08:32|INFO|sorting/indexing [sample1-deduped.bam]
   2016-09-12 15:08:32|INFO|connor complete  (20 seconds, 35mb peak memory)
 
   $ ls -1 sample1*
