@@ -71,7 +71,6 @@ class LoggingWriter(object):
         self._align_filter_stats = defaultdict(int)
         self._family_filter_stats = defaultdict(set)
 
-    #TODO: cgates: promote UNPLACED_FAMILY to public NULL class; use throughout
     def write(self, family, paired_align, connor_align):
         if not family:
             family = LoggingWriter.UNPLACED_FAMILY
@@ -584,7 +583,8 @@ def total_align_count(input_bam):
     return count
 
 def _build_bam_tags():
-    def combine_filters(fam, _, align):
+    #pylint: disable=unused-argument
+    def combine_filters(fam, paired_align, align):
         filters = [x.filter_value for x in [fam, align] if x and x.filter_value]
         if filters:
             return ";".join(filters).replace('; ', ';')

@@ -26,6 +26,7 @@ class MockAlignWriter(object):
         self.bam_file_path = "foo.bam"
         self._close_was_called = False
 
+    #pylint: disable=unused-argument
     def write(self, family, paired_align, connor_align):
         self._write_calls.append((family, connor_align))
 
@@ -375,7 +376,7 @@ class SamtoolsTest(utils_test.BaseConnorTestCase):
             if tag._tag_name == name:
                 return tag
         return None
-    
+
     def test_build_bam_tags(self):
         actual_tags = samtools._build_bam_tags()
         self.assertEqual(7, len(actual_tags))

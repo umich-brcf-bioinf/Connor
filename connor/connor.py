@@ -59,7 +59,7 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         '''Suppress default exit behavior'''
         raise utils.UsageError(message)
 
-#TODO: cgates: move consensus builder into separate class/module
+
 class _TagFamily(object):
     umi_sequence = 0
 
@@ -167,8 +167,6 @@ class _TagFamily(object):
     def is_consensus_template(self, connor_align):
         return self.consensus.left.query_name == connor_align.query_name
 
-    #TODO: (cgates) tags should not assume umt is a tuple and symmetric
-    #between left and right
     def _build_consensus(self, umt, align_pairs):
         included_pairs = [p for p in align_pairs if not p.filter_value]
         template_pair = _TagFamily._select_template_alignment_pair(included_pairs)
@@ -189,7 +187,7 @@ class _TagFamily(object):
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
-#TODO: cgates: can we reduce the complexity here?
+#TODO: cgates: reduce complexity
 def _build_coordinate_pairs(connor_alignments, excluded_writer):
     MISSING_MATE_FILTER = 'read mate was missing or excluded'
     coords = defaultdict(dict)
@@ -264,7 +262,7 @@ class _CoordinateFamilyHolder(object):
             left_families.clear()
         self._coordinate_family.clear()
 
-    #TODO: cgates: can we reduce the complexity here?
+    #TODO: cgates: reduce complexity
     def build_coordinate_families(self, paired_aligns):
         '''Given a stream of paired aligns, return a list of pairs that share
         same coordinates (coordinate family).  Flushes families in progress
