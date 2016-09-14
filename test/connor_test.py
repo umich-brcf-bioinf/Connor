@@ -115,159 +115,6 @@ def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     return samtools.PairedAlignment(alignL, alignR, tag_length)
 
 
-class PairedAlignmentTest(BaseConnorTestCase):
-    def test_init(self):
-        left_align = MockAlignSegment("alignA", 'chr1', 10, 20,
-                                      "AAATTT" "GGGG", reference_end=14)
-        right_align = MockAlignSegment("alignA", 'chr1', 20, 10,
-                                       "TTTT" "CCCGGG" ,reference_end=24)
-        tag_length = 6
-        actual_paired_alignment = samtools.PairedAlignment(left_align,
-                                                         right_align,
-                                                         tag_length)
-
-        self.assertIs(left_align, actual_paired_alignment.left)
-        self.assertIs(right_align, actual_paired_alignment.right)
-        self.assertEquals(("AAATTT","CCCGGG"), actual_paired_alignment.umt)
-
-    def test_init_valueErrorOnInconsistentQueryNames(self):
-        left = mock_align(query_name="alignA")
-        right = mock_align(query_name="alignB")
-        self.assertRaisesRegexp(ValueError,
-                                (r'Inconsistent query names '
-                                 r'\(alignA != alignB\)'),
-                                samtools.PairedAlignment,
-                                left,
-                                right,
-                                tag_length=1)
-
-    def test_cigars(self):
-        left = MicroMock(query_name='A',
-                         cigarstring='1S2M4S',
-                         query_sequence='AAAAAA')
-        right = MicroMock(query_name='A',
-                         cigarstring='16S32M64S',
-                          query_sequence='AAAAAA')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(('1S2M4S', '16S32M64S'), paired_alignment.cigars)
-
-    def test_positions(self):
-        left = MicroMock(query_name='A',
-                         reference_start=100,
-                         reference_end=150,
-                         query_sequence='AAAAAA')
-        right = MicroMock(query_name='A',
-                          reference_start=200,
-                          reference_end=250,
-                          query_sequence='AAAAAA')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual((101,251), paired_alignment.positions)
-
-    def test_filter_value(self):
-        left = ConnorAlign(mock_align(), filter_value=None)
-        right = ConnorAlign(mock_align(), filter_value=None)
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(None, paired_alignment.filter_value)
-
-        left = ConnorAlign(mock_align(), filter_value='')
-        right = ConnorAlign(mock_align(), filter_value='')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(None, paired_alignment.filter_value)
-
-        left = ConnorAlign(mock_align(), filter_value='foo')
-        right = ConnorAlign(mock_align(), filter_value=None)
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual(('foo', None), paired_alignment.filter_value)
-
-        left = ConnorAlign(mock_align(), filter_value=None)
-        right = ConnorAlign(mock_align(), filter_value='bar')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual((None, 'bar'), paired_alignment.filter_value)
-
-    def test_query_name(self):
-        left = mock_align(query_name="alignA", reference_start=100)
-        right = mock_align(query_name="alignA", reference_start=200)
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
-        self.assertEqual("alignA", paired_alignment.query_name)
-
-    def test_eq(self):
-        left = align_seg("alignA", 'chr1', 100, 200, "AAANNNNNNN")
-        right = align_seg("alignA", 'chr1', 200, 100, "CCCNNNNNNN")
-        other = align_seg("alignA", 'chr2', 100, 200, "AAANNNNNNN")
-
-        base = samtools.PairedAlignment(left, right)
-        self.assertEquals(base, samtools.PairedAlignment(left, right))
-        self.assertNotEquals(base, samtools.PairedAlignment(other, right))
-        self.assertNotEquals(base, samtools.PairedAlignment(left, other))
-
-    def test_hash(self):
-        left_A = MockAlignSegment("alignA", 'chr1', 100, 200, "AAATTT" "NNNN")
-        right_A = MockAlignSegment("alignA", 'chr1', 200, 100, "NNNN" "CCCGGG")
-        left_B = MockAlignSegment("alignA", 'chr1', 100, 200, "AAATTT" "NNNN")
-        right_B = MockAlignSegment("alignA", 'chr1', 200, 100, "NNNN" "CCCGGG")
-
-        actual_set = set()
-        base = samtools.PairedAlignment(left_A, right_A)
-        actual_set.add(base)
-        self.assertEquals(1, len(actual_set))
-
-        actual_set.add(base)
-        self.assertEquals(1, len(actual_set))
-
-        actual_set.add(samtools.PairedAlignment(left_A, right_A))
-        self.assertEquals(1, len(actual_set))
-
-        equivalent_pair = samtools.PairedAlignment(left_B, right_B)
-        actual_set.add(equivalent_pair)
-        self.assertEquals(1, len(actual_set))
-
-    def test_replace_umt(self):
-        # pysam's represtation of the sequence is inconsistent across pysam
-        # and python versions; this hack makes the values comparable
-        def _barray_to_string(sequence):
-            if isinstance(sequence, str):
-                return sequence
-            else:
-                return str(sequence.decode("utf-8"))
-
-        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
-        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
-        paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
-
-        paired_align.replace_umt(('GG','TT'))
-
-        self.assertEquals('GGNN',
-                          _barray_to_string(paired_align.left.query_sequence))
-        self.assertEquals('NNTT',
-                          _barray_to_string(paired_align.right.query_sequence))
-        self.assertEquals([1,2,3,4],
-                          paired_align.left.query_qualities)
-        self.assertEquals([5,6,7,8],
-                          paired_align.right.query_qualities)
-
-    def test_replace_umt_errorIfInconsistentUmtLength(self):
-        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
-        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
-        paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
-
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                ('G','TT'))
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                ('GG','T'))
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                (None, None))
-        self.assertRaisesRegexp(ValueError,
-                                r'Each UMT must match tag_length \(2\)',
-                                paired_align.replace_umt,
-                                ('G',))
-
-
 class TagFamiliyTest(BaseConnorTestCase):
     def test_init(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
@@ -282,7 +129,7 @@ class TagFamiliyTest(BaseConnorTestCase):
                                              inexact_match_count,
                                              consensus_threshold=0.6)
 
-        self.assertEquals(input_umt, actual_tag_family.umt)
+        self.assertEquals(input_umt, actual_tag_family.umt())
         self.assertEquals(align_pairs, actual_tag_family.align_pairs)
         self.assertEquals(42, actual_tag_family.inexact_match_count)
 
@@ -306,6 +153,38 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals('alignA:alignB:alignC is too odd',
                           actual_tag_family.filter_value)
 
+    def test_is_consensus_template(self):
+        def pair(name):
+            left = ConnorAlign(mock_align(query_name=name))
+            right = ConnorAlign(mock_align(query_name=name))
+            return samtools.PairedAlignment(left, right)
+        pairA = pair('alignA')
+        alignA = ConnorAlign(mock_align(query_name='alignA'))
+        alignB = ConnorAlign(mock_align(query_name='alignB'))
+        alignC = ConnorAlign(mock_align(query_name='alignC'))
+        tag_family = connor._TagFamily(umt=("AAA", "CCC"),
+                                       alignments=[pairA],
+                                       inexact_match_count=0,
+                                       consensus_threshold=0.6)
+
+        self.assertEqual(True, tag_family.is_consensus_template(alignA))
+        self.assertEqual(False, tag_family.is_consensus_template(alignB))
+        self.assertEqual(False, tag_family.is_consensus_template(alignC))
+
+    def test_umt(self):
+        left = ConnorAlign(mock_align())
+        right = ConnorAlign(mock_align())
+        pair1 = samtools.PairedAlignment(left, right)
+
+        input_umt = ('AAANNN', 'CCCNNN')
+        actual_tag_family = connor._TagFamily(input_umt,
+                                             [pair1],
+                                             inexact_match_count=42,
+                                             consensus_threshold=0.6)
+
+        self.assertEquals(input_umt, actual_tag_family.umt())
+        self.assertEquals('AAANNN~CCCNNN',
+                          actual_tag_family.umt(format_string="{left}~{right}"))
 
     def test_consensus_rewrites_umt(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
@@ -976,7 +855,7 @@ class ConnorTest(BaseConnorTestCase):
                                                          ranked_tags,
                                                          hamming_threshold=1,
                                                          consensus_threshold=0.6)
-        actual_tag_fam = {fam.umt:fam for fam in actual_tag_fam_list}
+        actual_tag_fam = {fam.umt():fam for fam in actual_tag_fam_list}
 
         self.assertEquals(2, len(actual_tag_fam))
         self.assertEquals(set([pair1, pair3, pair4]),
@@ -1000,7 +879,7 @@ class ConnorTest(BaseConnorTestCase):
                                                          ranked_tags,
                                                          hamming_threshold=1,
                                                          consensus_threshold=0.6)
-        actual_tag_fam = {fam.umt:fam for fam in actual_tag_fam_list}
+        actual_tag_fam = {fam.umt():fam for fam in actual_tag_fam_list}
 
         self.assertEquals(set([pair1, pair2, pair3, pair4]),
                           set(actual_tag_fam[('AAA','GGG')].align_pairs))

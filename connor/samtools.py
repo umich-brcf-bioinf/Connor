@@ -19,7 +19,6 @@ class AlignWriter(object):
             pass
 
     NULL= _NullWriter()
-    BAM_TAG_FORMAT = 'connor|BAM tag|{}:{}'.replace('|', '\t')
 
     def __init__(self, header, bam_path, tags=None):
         if tags is None:
@@ -220,6 +219,19 @@ class LoggingWriter(object):
 class BamTag(object):
     HEADER_FORMAT = 'connor|BAM tag|{}: {}'.replace('|', '\t')
 
+    class _NullObject(object):
+        '''Returns None for all method calls'''
+        #pylint: disable=no-self-use, unused-argument
+        def __init__(self):
+            self.included_pair_count = None
+            self.filter_value = None
+            self.umi_sequence = None
+            self.umt=lambda *args: None
+            self.is_consensus_template = lambda *args: None
+            self.positions = lambda *args: None
+            self.cigars = lambda *args: None
+
+    _NULL_OBJECT = _NullObject()
     def __init__(self, tag_name, tag_type, description, get_value):
         self._tag_name = tag_name
         self._tag_type = tag_type
@@ -233,6 +245,8 @@ class BamTag(object):
                 self._description) < (other._tag_name, other._description)
 
     def set_tag(self, family, paired_align, connor_align):
+        family = family if family else BamTag._NULL_OBJECT
+        paired_align = paired_align if paired_align else BamTag._NULL_OBJECT
         value = self._get_value(family, paired_align, connor_align)
         connor_align.set_tag(self._tag_name, value, self._tag_type)
 
@@ -277,13 +291,20 @@ class PairedAlignment(object):
         else:
             return None
 
-    @property
-    def cigars(self):
-        return self.left.cigarstring, self.right.cigarstring
+    def cigars(self, format_string=None):
+        if format_string:
+            return format_string.format(left=self.left.cigarstring,
+                                        right=self.right.cigarstring)
+        else:
+            return self.left.cigarstring, self.right.cigarstring
 
-    @property
-    def positions(self):
-        return self.left.reference_start + 1, self.right.reference_end + 1
+    def positions(self, format_string=None):
+        left_value = self.left.reference_start + 1
+        right_value = self.right.reference_end + 1
+        if format_string:
+            return format_string.format(left=left_value, right=right_value)
+        else:
+            return left_value, right_value
 
     def replace_umt(self, umt):
         def _byte_array_to_string(sequence):
@@ -562,38 +583,37 @@ def total_align_count(input_bam):
                 count += int(mapped) + int(unmapped)
     return count
 
-#TODO: cgates: None checking/cyclomatic complexity could be simplified with UNPLACED/NULL family object
 def _build_bam_tags():
-    def combine_filters(fam, pair, align):
+    def combine_filters(fam, _, align):
         filters = [x.filter_value for x in [fam, align] if x and x.filter_value]
         if filters:
             return ";".join(filters).replace('; ', ';')
         else:
             return None
+    boolean_tag_value = {True:1}
     tags = [
         BamTag("X0", "Z",
                ("filter (why the alignment was excluded)"),
                combine_filters),
         BamTag("X1", "Z",
                ("leftmost~rightmost matched pair positions"),
-               lambda fam, pair, align: "{0}~{1}".format(*pair.positions) if pair else None),
+               lambda fam, pair, align: pair.positions('{left}~{right}')),
         BamTag("X2", "Z",
                ("L~R CIGARs"),
-               lambda fam, pair, align: "{0}~{1}".format(*pair.cigars) if pair else None),
+               lambda fam, pair, align: pair.cigars('{left}~{right}')),
         BamTag("X3", "i",
                "unique identifier for this alignment family",
-               lambda fam, pair, align: fam.umi_sequence if fam else None),
+               lambda fam, pair, align: fam.umi_sequence),
         BamTag("X4", "Z",
                ("L~R UMT barcodes for this alignment family; because "
                 "of fuzzy matching the family UMT may be distinct "
                 "from the UMT of the original alignment"),
-               lambda fam, pair, align: "{0}~{1}".format(fam.umt[0],
-                                                            fam.umt[1]) if fam else None),
+               lambda fam, pair, align: fam.umt('{left}~{right}')),
         BamTag("X5", "i",
                "family size (number of align pairs in this family)",
-               lambda fam, pair, align: fam.included_pair_count if fam else None),
+               lambda fam, pair, align: fam.included_pair_count),
         BamTag("X6", "i",
                ("presence of this tag signals that this alignment "
                 "would be the template for the consensus alignment"),
-               lambda fam, pair, align: 1 if fam and fam.consensus.left.query_name == align.query_name else None)]
+               lambda fam, pair, align: boolean_tag_value.get(fam.is_consensus_template(align), None))]
     return tags

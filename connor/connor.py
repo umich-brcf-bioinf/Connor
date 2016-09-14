@@ -71,7 +71,7 @@ class _TagFamily(object):
                  family_filter=lambda x: None):
         self.umi_sequence = _TagFamily.umi_sequence
         _TagFamily.umi_sequence += 1
-        self.umt = umt
+        self._umt = umt
         (self.distinct_cigar_count,
          majority_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
         self.align_pairs = alignments
@@ -81,6 +81,12 @@ class _TagFamily(object):
         self.consensus = self._build_consensus(umt, self.align_pairs)
         self.included_pair_count = sum([1 for p in self.align_pairs if not p.filter_value])
         self.filter_value = family_filter(self)
+
+    def umt(self, format_string=None):
+        if format_string:
+            return format_string.format(left=self._umt[0], right=self._umt[1])
+        else:
+            return self._umt
 
     @staticmethod
     def _get_cigarstring_tuple(paired_alignment):
@@ -158,6 +164,8 @@ class _TagFamily(object):
                                     key=lambda x: (-x[1], x[0]))[0][0]
         return number_distict_cigars, dominant_cigar
 
+    def is_consensus_template(self, connor_align):
+        return self.consensus.left.query_name == connor_align.query_name
 
     #TODO: (cgates) tags should not assume umt is a tuple and symmetric
     #between left and right
