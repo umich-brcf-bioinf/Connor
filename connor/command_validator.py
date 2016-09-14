@@ -13,8 +13,8 @@ try:
 except ImportError:
     iter_zip = zip
 import os
-import connor.utils as utils
 import connor.samtools as samtools
+import connor.utils as utils
 
 _SAMPLE_SIZE = 1000
 

@@ -16,10 +16,10 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
                 return os.path.join(output_dir.path, filename)
             def in_path(filename):
                 return os.path.join(INPUT_DIR, filename)
-            input_bam = "PIK3CA-original.bam"
-            output_deduped_bam = "PIK3CA-deduped.bam"
+            input_bam = "sample1-original.bam"
+            output_deduped_bam = "sample1-deduped.bam"
             output_deduped_bai = output_deduped_bam + ".bai"
-            output_annotated_bam = "PIK3CA-annotated.bam"
+            output_annotated_bam = "sample1-annotated.bam"
             output_annotated_bai = output_annotated_bam + ".bai"
 
             input_bam_path = in_path(input_bam)
@@ -56,10 +56,14 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
                     result = 'OK'
                 return expected_name, result
 
-            comparisons = [(expect_deduped_bam_path, output_deduped_bam_path),
-                           (expect_deduped_bai_path, output_deduped_bai_path),
-                           (expect_annotated_bam_path, output_annotated_bam_path),
-                           (expect_annotated_bai_path, output_annotated_bai_path)]
+            comparisons = [(expect_deduped_bam_path,
+                            output_deduped_bam_path),
+                           (expect_deduped_bai_path,
+                            output_deduped_bai_path),
+                           (expect_annotated_bam_path,
+                            output_annotated_bam_path),
+                           (expect_annotated_bai_path,
+                            output_annotated_bai_path)]
             diff_files = dict([compare_files(expected, output) for expected, output in comparisons])
 
         files_match = set(diff_files.values()) == set(["OK"])

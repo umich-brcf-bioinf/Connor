@@ -7,8 +7,13 @@ try:
 except ImportError:
     iter_map = map
 import logging
+import os
+import platform
+import resource
 import socket
 import sys
+
+import pysam
 
 
 class UsageError(Exception):
@@ -56,9 +61,21 @@ class Logger(object):
                         '%(user)s|%(message)s')
     _CONSOLE_LOG_FORMAT = '%(asctime)s|%(levelname)s|%(message)s'
 
+    @staticmethod
+    def _validate_log_file(log_file):
+        try:
+            log = open(log_file, "w")
+            log.close()
+        except IOError:
+            raise UsageError(('Connor cannot create log file [{}]. '
+                              'Review inputs and try again.').format(log_file))
+
+
     def __init__(self, args, console_stream=None):
         self._verbose = args.verbose
         self._log_filename = args.log_file
+        Logger._validate_log_file(self._log_filename)
+
         if console_stream:
             self._console_stream = console_stream
         else:
@@ -120,3 +137,19 @@ class Logger(object):
 
 def sort_dict(key_counts):
     return sorted(key_counts.items(), key=lambda x: (-1 * x[1], x[0]))
+
+
+def peak_memory():
+    peak_memory_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    peak_memory_mb = peak_memory_value/1024
+    if sys.platform == 'darwin':
+        peak_memory_mb /= 1024
+    return int(peak_memory_mb)
+
+def log_environment_info(log, args):
+    log.debug('original_command_line|{}',' '.join(args.original_command_line))
+    log.debug('command_options|{}', vars(args))
+    log.debug('command_cwd|{}', os.getcwd ())
+    log.debug('platform_uname|{}', platform.uname())
+    log.debug('platform_python_version|{}', platform.python_version())
+    log.debug('pysam_version|{}', pysam.__version__)

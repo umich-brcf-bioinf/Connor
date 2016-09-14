@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.5 (9/13/2016)
+---------------
+- Filters now exclude supplemental alignments
+- Added BAM tags to show pair positions and CIGAR values
+- Reduced required memory and improved performance
+
 0.4 (8/26/2016)
 ---------------
 - Added input/command validations
@@ -8,7 +14,7 @@ Changelog
 - Revised QUICKSTART, METHODS
 - Added PG line in BAM header
 - Improved logging of filtered aligns and progress
-- Removed some logged stats to focused logging results
+- Removed some logged stats to focus logging results
 - Removed dependency on pandas/numpy
 - Moderate performance (speed) improvements in calculating consensus sequence
 - Switched consensus quality to be the max mapping quality

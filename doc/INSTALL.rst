@@ -9,6 +9,8 @@ Connor requires python 2.7 or later and has been tested with:
 Connor does not work in Windows OS because it depends on the python library
 pysam, which is not supported on Windows.
 
+Connor runs in a single process and typical runs consume less than 2Gb mem.
+
 Prerequisites
 -------------
 * Python (2.7 or later) and pip. See https://www.python.org/downloads/ for more details on
@@ -17,6 +19,7 @@ Prerequisites
 
 * cython
 * pysam
+* sortedcontainters
 
 
 Installing

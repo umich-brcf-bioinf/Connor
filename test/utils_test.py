@@ -3,8 +3,14 @@
 
 from argparse import Namespace
 from collections import defaultdict
+import os
+import sys
 import unittest
+
+from nose.exc import SkipTest
+
 import connor.utils as utils
+from testfixtures.tempdirectory import TempDirectory
 
 
 class MicroMock(object):
@@ -48,9 +54,24 @@ class BaseConnorTestCase(unittest.TestCase):
     def tearDown(self):
         unittest.TestCase.tearDown(self)
 
+    @staticmethod
+    def byte_array_to_string(sequence):
+        if isinstance(sequence, str):
+            return sequence
+        else:
+            return str(sequence.decode("utf-8"))
+
     def ok(self):
         #pylint: disable=redundant-unittest-assert
         self.assertTrue(True)
+
+    @staticmethod
+    def check_sysout_safe():
+        try:
+            # nosetest and pylint fight over stdout; run nosetest -s to be safe
+            sys.stdout.fileno() #pylint disable=pointless-statement
+        except Exception: #pylint disable=broad=except
+            raise SkipTest("sysout unsafe to test: run nosetest with -s option")
 
 class FilteredGeneratorTest(BaseConnorTestCase):
     def test_filter_passesAllThroughWhenNoFilters(self):
@@ -142,6 +163,15 @@ class MockBaseLogger(object):
 
 
 class LoggerTestCase(BaseConnorTestCase):
+    def test_init_invalidPathRaisesUsageError(self):
+        with TempDirectory() as tmp_dir:
+            log_filepath = os.path.join(tmp_dir.path, "foo", "bar.log")
+            args = Namespace(log_file=log_filepath,
+                             verbose=None)
+            self.assertRaises(utils.UsageError,
+                              utils.Logger,
+                              args)
+
     def test_consoleFormat(self):
         args = Namespace(log_file="test.log",
                          verbose=None)
@@ -215,3 +245,18 @@ class LoggerTestCase(BaseConnorTestCase):
         self.assertEqual(False, logger.warning_occurred)
         logger.warning("oops")
         self.assertEqual(True, logger.warning_occurred)
+
+
+class UtilsTest(BaseConnorTestCase):
+    def test_log_environment(self):
+        args = Namespace(original_command_line=['foo', 'bar'],
+                         other_stuff='baz')
+        utils.log_environment_info(self.mock_logger, args)
+        log_text = '\n'.join(self.mock_logger._log_calls['DEBUG'])
+        self.assertRegexpMatches(log_text, 'command_line.*foo bar')
+        self.assertRegexpMatches(log_text, 'command_options.*foo.*bar')
+        self.assertRegexpMatches(log_text, 'command_options.*baz')
+        self.assertRegexpMatches(log_text, 'command_cwd')
+        self.assertRegexpMatches(log_text, 'platform_uname')
+        self.assertRegexpMatches(log_text, 'python_version')
+        self.assertRegexpMatches(log_text, 'pysam_version')
