@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.5.x (MM/DD/YYYY)
+------------------
+
+
 0.5 (9/13/2016)
 ---------------
 - Filters now exclude supplemental alignments
