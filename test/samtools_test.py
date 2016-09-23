@@ -358,6 +358,214 @@ class PairedAlignmentTest(utils_test.BaseConnorTestCase):
                                 ('G',))
 
 
+class PairedAlignmentSeuidTest(utils_test.BaseConnorTestCase):
+    def test_init(self):
+        left_align = mock_align(query_name="alignA",
+                                query_sequence="AAAATTTTGGGGCCCC" "GCTGCGAGAACC")
+        right_align = mock_align(query_name="alignA",
+                                 query_sequence="NNNN")
+        tag_length = 16
+        actual_paired_alignment = samtools.PairedAlignmentSeuid(left_align,
+                                                         right_align,
+                                                         tag_length)
+
+        self.assertIs(left_align, actual_paired_alignment.left)
+        self.assertIs(right_align, actual_paired_alignment.right)
+
+    def test_init_left_arg_is_P1_forward(self):
+        p1_align = mock_align(query_name="alignA",
+                                query_sequence="AAAATTTTGGGGCCCC" "GCTGCGAGAACC",
+                                flag=67)
+        p2_align = mock_align(query_name="alignA",
+                                 query_sequence="NNNN",
+                                 flag=131)
+        tag_length = 16
+        actual_paired_alignment = samtools.PairedAlignmentSeuid(p1_align,
+                                                         p2_align,
+                                                         tag_length)
+        left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
+        right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
+        self.assertEquals(("AAAATTTTGGGGCCCC", ""), (left_umt, right_umt))
+
+    def test_init_right_arg_is_P1_forward(self):
+        p1_align = mock_align(query_name="alignA",
+                                 query_sequence="AAAAGGGGCCCCTTTT" "GGTTCTCGCAGC",
+                                 flag=131)
+        p2_align = mock_align(query_name="alignA",
+                                query_sequence="NNNN",
+                                flag=67)
+        tag_length = 16
+        actual_paired_alignment = samtools.PairedAlignmentSeuid(p2_align,
+                                                         p1_align,
+                                                         tag_length)
+
+        left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
+        right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
+        self.assertEquals(("", "AAAATTTTGGGGCCCC"), (left_umt, right_umt))
+        
+    def test_init_left_arg_is_P1_reverse(self):
+        p1_align = mock_align(query_name="alignA",
+                                 query_sequence="GGTTCTCGCAGC" "AAAAGGGGCCCCTTTT",
+                                 flag=83)
+        p2_align = mock_align(query_name="alignA",
+                                 query_sequence="NNNN",
+                                 flag=147)
+        tag_length = 16
+        actual_paired_alignment = samtools.PairedAlignmentSeuid(p1_align,
+                                                         p2_align,
+                                                         tag_length)
+        left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
+        right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
+        self.assertEquals(("AAAATTTTGGGGCCCC", ""), (left_umt, right_umt))
+
+    def test_init_right_arg_is_P1_reverse(self):
+        p1_align = mock_align(query_name="alignA",
+                                 query_sequence="GGTTCTCGCAGC" "AAAAGGGGCCCCTTTT",
+                                 flag=147)
+        p2_align = mock_align(query_name="alignA",
+                                query_sequence="NNNN",
+                                flag=83)
+        tag_length = 16
+        actual_paired_alignment = samtools.PairedAlignmentSeuid(p2_align,
+                                                         p1_align,
+                                                         tag_length)
+
+        left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
+        right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
+        self.assertEquals(("", "AAAAGGGGCCCCTTTT"), (left_umt, right_umt))
+        
+    def test_init_valueErrorOnInconsistentQueryNames(self):
+        left = mock_align(query_name="alignA")
+        right = mock_align(query_name="alignB")
+        self.assertRaisesRegexp(ValueError,
+                                (r'Inconsistent query names '
+                                 r'\(alignA != alignB\)'),
+                                samtools.PairedAlignmentSeuid,
+                                left,
+                                right,
+                                tag_length=1)
+
+    def test_cigars(self):
+        left = mock_align(cigarstring='1S2M4S')
+        right = mock_align(cigarstring='16S32M64S')
+
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual(('1S2M4S', '16S32M64S'), paired_alignment.cigars())
+        self.assertEqual('1S2M4S~16S32M64S',
+                         paired_alignment.cigars('{left}~{right}'))
+
+
+    def test_positions(self):
+        left = mock_align(reference_start=100,
+                          cigarstring="5M",
+                          query_sequence="AAAAA")
+        right = mock_align(reference_start=200,
+                           cigarstring="5M",
+                           query_sequence="AAAAA")
+
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual((101,206), paired_alignment.positions())
+        self.assertEqual('101~206',
+                         paired_alignment.positions('{left}~{right}'))
+
+    def test_filter_value(self):
+        left = ConnorAlign(mock_align(), filter_value=None)
+        right = ConnorAlign(mock_align(), filter_value=None)
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual(None, paired_alignment.filter_value)
+
+        left = ConnorAlign(mock_align(), filter_value='')
+        right = ConnorAlign(mock_align(), filter_value='')
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual(None, paired_alignment.filter_value)
+
+        left = ConnorAlign(mock_align(), filter_value='foo')
+        right = ConnorAlign(mock_align(), filter_value=None)
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual(('foo', None), paired_alignment.filter_value)
+
+        left = ConnorAlign(mock_align(), filter_value=None)
+        right = ConnorAlign(mock_align(), filter_value='bar')
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual((None, 'bar'), paired_alignment.filter_value)
+
+    def test_query_name(self):
+        left = mock_align(query_name="alignA", reference_start=100)
+        right = mock_align(query_name="alignA", reference_start=200)
+        paired_alignment = samtools.PairedAlignmentSeuid(left, right, tag_length=1)
+        self.assertEqual("alignA", paired_alignment.query_name)
+
+    def test_eq(self):
+        left = mock_align(reference_start=100, next_reference_start=200)
+        right = mock_align(reference_start=200, next_reference_start=100)
+        other = mock_align(reference_start=0, next_reference_start=500)
+
+        base = samtools.PairedAlignmentSeuid(left, right)
+        self.assertEquals(base, samtools.PairedAlignmentSeuid(left, right))
+        self.assertNotEquals(base, samtools.PairedAlignmentSeuid(other, right))
+        self.assertNotEquals(base, samtools.PairedAlignmentSeuid(left, other))
+
+    def test_hash(self):
+        left_A = mock_align(query_name="alignA", reference_start=100)
+        right_A = mock_align(query_name="alignA", reference_start=200)
+        left_B = mock_align(query_name="alignA", reference_start=100)
+        right_B = mock_align(query_name="alignA", reference_start=200)
+
+        actual_set = set()
+        base = samtools.PairedAlignmentSeuid(left_A, right_A)
+        actual_set.add(base)
+        self.assertEquals(1, len(actual_set))
+
+        actual_set.add(base)
+        self.assertEquals(1, len(actual_set))
+
+        actual_set.add(samtools.PairedAlignmentSeuid(left_A, right_A))
+        self.assertEquals(1, len(actual_set))
+
+        equivalent_pair = samtools.PairedAlignmentSeuid(left_B, right_B)
+        actual_set.add(equivalent_pair)
+        self.assertEquals(1, len(actual_set))
+
+    def test_replace_umt(self):
+        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
+        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
+        paired_align = samtools.PairedAlignmentSeuid(left_A, right_A, tag_length=2)
+
+        paired_align.replace_umt(('GG','TT'))
+
+        left = paired_align.left
+        right = paired_align.right
+        self.assertEquals('GGNN',
+                          self.byte_array_to_string(left.query_sequence))
+        self.assertEquals('NNTT',
+                          self.byte_array_to_string(right.query_sequence))
+        self.assertEquals([1,2,3,4],
+                          left.query_qualities)
+        self.assertEquals([5,6,7,8],
+                          right.query_qualities)
+
+    def test_replace_umt_errorIfInconsistentUmtLength(self):
+        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
+        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
+        paired_align = samtools.PairedAlignmentSeuid(left_A, right_A, tag_length=2)
+
+        self.assertRaisesRegexp(ValueError,
+                                r'Each UMT must match tag_length \(2\)',
+                                paired_align.replace_umt,
+                                ('G','TT'))
+        self.assertRaisesRegexp(ValueError,
+                                r'Each UMT must match tag_length \(2\)',
+                                paired_align.replace_umt,
+                                ('GG','T'))
+        self.assertRaisesRegexp(ValueError,
+                                r'Each UMT must match tag_length \(2\)',
+                                paired_align.replace_umt,
+                                (None, None))
+        self.assertRaisesRegexp(ValueError,
+                                r'Each UMT must match tag_length \(2\)',
+                                paired_align.replace_umt,
+                                ('G',))
+
 class SamtoolsTest(utils_test.BaseConnorTestCase):
     @staticmethod
     def get_tag(tags, name):

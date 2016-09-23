@@ -8,7 +8,7 @@ import pysam
 import connor
 import connor.utils as utils
 
-DEFAULT_TAG_LENGTH = 6
+DEFAULT_TAG_LENGTH = 12
 
 def _byte_array_to_string(sequence):
     if isinstance(sequence, str):
@@ -346,6 +346,94 @@ class PairedAlignment(object):
                                     self.right.query_sequence)
 
 
+class PairedAlignmentSeuid(object):
+    '''Represents the left and right align pairs from an single sequence.'''
+    
+    def _extract_UMTs(self, left_alignment, right_alignment, tag_length):
+        first_in_pair = None
+        if (left_alignment.is_read1):
+            first_in_pair = left_alignment
+        else:
+            first_in_pair = right_alignment
+        if first_in_pair.is_reverse:
+            umt = first_in_pair.query_sequence[-tag_length:]
+        else:
+            umt = first_in_pair.query_sequence[:tag_length]
+        if (left_alignment.is_read1):
+            return (umt, '')
+        else:
+            return ('', umt)
+    
+    def __init__(self,
+                 left_alignment,
+                 right_alignment,
+                 tag_length=DEFAULT_TAG_LENGTH):
+        if left_alignment.query_name != right_alignment.query_name:
+            msg = 'Inconsistent query names ({} != {})'
+            raise ValueError(msg.format(left_alignment.query_name,
+                                        right_alignment.query_name))
+        self.query_name = left_alignment.query_name
+        self.left = left_alignment
+        self.right = right_alignment
+        self._tag_length = tag_length
+        self.umt = self._extract_UMTs(left_alignment, right_alignment, tag_length)
+
+    @property
+    def filter_value(self):
+        if self.left.filter_value or self.right.filter_value:
+            return (self.left.filter_value, self.right.filter_value)
+        else:
+            return None
+
+    def cigars(self, format_string=None):
+        if format_string:
+            return format_string.format(left=self.left.cigarstring,
+                                        right=self.right.cigarstring)
+        else:
+            return self.left.cigarstring, self.right.cigarstring
+
+    def positions(self, format_string=None):
+        left_value = self.left.reference_start + 1
+        right_value = self.right.reference_end + 1
+        if format_string:
+            return format_string.format(left=left_value, right=right_value)
+        else:
+            return left_value, right_value
+
+    def replace_umt(self, umt):
+        if not (umt[0] or umt[1]) or \
+            (len(umt[0]) != self._tag_length) or \
+            (len(umt[1]) != self._tag_length):
+            msg = "Each UMT must match tag_length ({})"
+            raise ValueError(msg.format(self._tag_length))
+        left_qual = self.left.query_qualities
+        right_qual = self.right.query_qualities
+        left_query_frag = self.left.query_sequence[len(umt[0]):]
+        left_query_frag_str = _byte_array_to_string(left_query_frag)
+        self.left.query_sequence = umt[0] + left_query_frag_str
+        right_query_frag = self.right.query_sequence[:-len(umt[1])]
+        right_query_frag_str = _byte_array_to_string(right_query_frag)
+        self.right.query_sequence = right_query_frag_str + umt[1]
+        self.umt = umt
+        self.left.query_qualities = left_qual
+        self.right.query_qualities = right_qual
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __hash__(self):
+        return hash(self.left) * hash(self.right)
+
+    def __repr__(self):
+        return ("Pair({}|{}|{}, "
+                "{}|{}|{})").format(self.left.query_name,
+                                    self.left.reference_start,
+                                    self.left.query_sequence,
+                                    self.right.query_name,
+                                    self.right.reference_start,
+                                    self.right.query_sequence)
+
+
 class _Pysam9SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
@@ -421,6 +509,14 @@ class ConnorAlign(object):
 
     def get_tags(self, with_value_type=False):
         return self.pysam_align_segment.get_tags(with_value_type)
+
+    @property
+    def is_read1(self):
+        return self.pysam_align_segment.is_read1
+
+    @property
+    def is_reverse(self):
+        return self.pysam_align_segment.is_reverse
 
     @property
     def mapping_quality(self):
