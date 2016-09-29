@@ -8,7 +8,7 @@ import pysam
 import connor
 import connor.utils as utils
 
-DEFAULT_TAG_LENGTH = 12
+DEFAULT_TAG_LENGTH = 16
 
 def _byte_array_to_string(sequence):
     if isinstance(sequence, str):
@@ -357,13 +357,11 @@ class PairedAlignmentSeuid(object):
             first_in_pair = right_alignment
         if first_in_pair.is_reverse:
             umt = first_in_pair.query_sequence[-tag_length:]
+            return ('', umt)
         else:
             umt = first_in_pair.query_sequence[:tag_length]
-        if (left_alignment.is_read1):
             return (umt, '')
-        else:
-            return ('', umt)
-    
+
     def __init__(self,
                  left_alignment,
                  right_alignment,
@@ -400,23 +398,30 @@ class PairedAlignmentSeuid(object):
         else:
             return left_value, right_value
 
-    def replace_umt(self, umt):
-        if not (umt[0] or umt[1]) or \
-            (len(umt[0]) != self._tag_length) or \
-            (len(umt[1]) != self._tag_length):
-            msg = "Each UMT must match tag_length ({})"
+    def replace_umt(self, barcode):
+        if len(barcode) != self._tag_length:
+            msg = "Barcode must match tag_length ({})"
             raise ValueError(msg.format(self._tag_length))
-        left_qual = self.left.query_qualities
-        right_qual = self.right.query_qualities
-        left_query_frag = self.left.query_sequence[len(umt[0]):]
-        left_query_frag_str = _byte_array_to_string(left_query_frag)
-        self.left.query_sequence = umt[0] + left_query_frag_str
-        right_query_frag = self.right.query_sequence[:-len(umt[1])]
-        right_query_frag_str = _byte_array_to_string(right_query_frag)
-        self.right.query_sequence = right_query_frag_str + umt[1]
-        self.umt = umt
-        self.left.query_qualities = left_qual
-        self.right.query_qualities = right_qual
+
+        if self.left.is_read1:
+            first_in_pair = self.left
+        else:
+            first_in_pair = self.right
+
+        qual = first_in_pair.query_qualities
+
+        if first_in_pair.is_reverse:
+            query_frag = first_in_pair.query_sequence[:-len(barcode)]
+            query_frag_str = _byte_array_to_string(query_frag)
+            first_in_pair.query_sequence = query_frag_str + barcode
+            self.umt = ('', barcode)
+        else:
+            query_frag = first_in_pair.query_sequence[len(barcode):]
+            query_frag_str = _byte_array_to_string(query_frag)
+            first_in_pair.query_sequence = barcode + query_frag_str
+            self.umt = (barcode, '')
+
+        first_in_pair.query_qualities = qual
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
