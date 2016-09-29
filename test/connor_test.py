@@ -54,7 +54,7 @@ def _mock_tag_family(align_pairs=None,
                      filter_value=filter_value,
                      included_pair_count=included_pair_count)
 
-# #TODO: cgates: replace this with samtools_test.mock_align
+#TODO: cgates: replace this with samtools_test.mock_align
 class MockAlignSegment(object):
     #pylint: disable=too-many-instance-attributes
     def __init__(self,
@@ -116,6 +116,13 @@ def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
 
 
 class TagFamiliyTest(BaseConnorTestCase):
+    @staticmethod
+    def _pair(tag_length, **kwargs):
+        left = ConnorAlign(mock_align(**kwargs))
+        right = ConnorAlign(mock_align(**kwargs))
+        return samtools.PairedAlignment(left, right, tag_length)
+
+
     def test_init(self):
         pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
         pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
@@ -134,12 +141,12 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals(42, actual_tag_family.inexact_match_count)
 
     def test_init_setsFilterValue(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
+        pair1 = self._pair(tag_length=3, query_name='alignA')
+        pair2 = self._pair(tag_length=3, query_name='alignB')
+        pair3 = self._pair(tag_length=3, query_name='alignC')
         align_pairs = [pair1, pair2, pair3]
         inexact_match_count = 42
-        input_umt = "AAANNNCCCNNN"
+        input_umt = ('BARCODE', '')
 
         def family_filter(family):
             return ":".join([a.query_name for a in family.align_pairs]) +\
@@ -223,9 +230,18 @@ class TagFamiliyTest(BaseConnorTestCase):
                           actual_consensus_seq.right.query_sequence)
 
     def test_consensus_sequence_majority_wins(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
+        pair1 = self._pair(tag_length=3, query_name='alignA')
+        pair1.left.query_sequence = 'nnnGTG'
+        pair1.right.query_sequence = 'TCTnnn'
+
+        pair2 = self._pair(tag_length=3, query_name='alignB')
+        pair2.left.query_sequence = 'nnnGTG'
+        pair2.right.query_sequence = 'TCTnnn'
+
+        pair3 = self._pair(tag_length=3, query_name='alignC')
+        pair3.left.query_sequence = 'nnnGGG'
+        pair3.right.query_sequence = 'TTTnnn'
+
         alignments = [pair1, pair2, pair3]
         input_umts = ("nnn", "nnn")
 
@@ -241,9 +257,18 @@ class TagFamiliyTest(BaseConnorTestCase):
                           consensus_pair.right.query_sequence)
 
     def test_consensus_sequence_below_threshold_Ns(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
+        pair1 = self._pair(tag_length=3, query_name='alignA')
+        pair1.left.query_sequence = 'nnnGTG'
+        pair1.right.query_sequence = 'TCTnnn'
+
+        pair2 = self._pair(tag_length=3, query_name='alignB')
+        pair2.left.query_sequence = 'nnnGTG'
+        pair2.right.query_sequence = 'TCTnnn'
+
+        pair3 = self._pair(tag_length=3, query_name='alignC')
+        pair3.left.query_sequence = 'nnnGGG'
+        pair3.right.query_sequence = 'TTTnnn'
+
         alignments = [pair1, pair2, pair3]
         input_umts = ("nnn", "nnn")
         threshold = 0.8
@@ -352,13 +377,13 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals(['alignA','alignB','alignC'], included_names)
 
     def test_consensus_minority_cigars_excluded(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1 = self._pair(tag_length=3, query_name='alignA')
         pair1.left.cigarstring = "3S3M"
         pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair2 = self._pair(tag_length=3, query_name='alignB')
         pair2.left.cigarstring = "3S3M"
         pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+        pair3 = self._pair(tag_length=3, query_name='alignC')
         pair3.left.cigarstring = "3S3I"
         pair3.right.cigarstring = "3S3M"
         align_pairs = [pair1, pair2, pair3]
@@ -382,15 +407,24 @@ class TagFamiliyTest(BaseConnorTestCase):
 
 
     def test_init_distinctCigarCountTwo(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+        pair1 = self._pair(tag_length=3, query_name='alignA')
+        pair1.left.query_sequence = 'nnnGTG'
+        pair1.right.query_sequence = 'TCTnnn'
         pair1.left.cigarstring = "3S3M"
         pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
+
+        pair2 = self._pair(tag_length=3, query_name='alignB')
+        pair2.left.query_sequence = 'nnnGTG'
+        pair2.right.query_sequence = 'TCTnnn'
         pair2.left.cigarstring = "3S3M"
         pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
+
+        pair3 = self._pair(tag_length=3, query_name='alignC')
+        pair3.left.query_sequence = 'nnnGGG'
+        pair3.right.query_sequence = 'TTTnnn'
         pair3.left.cigarstring = "3S3I"
         pair3.right.cigarstring = "3S3I"
+
         alignments = [pair1, pair2, pair3]
         input_umts = ("nnn", "nnn")
         inexact_match_count = 0
@@ -403,15 +437,9 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals(2, actual_tag_family.distinct_cigar_count)
 
     def test_init_distinctCigarCountOneForConsisentCigar(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3M"
-        pair3.right.cigarstring = "3S3M"
+        pair1 = self._pair(tag_length=3, query_name='alignA')
+        pair2 = self._pair(tag_length=3, query_name='alignB')
+        pair3 = self._pair(tag_length=3, query_name='alignC')
         alignments = [pair1, pair2, pair3]
         input_umts = ("nnn", "nnn")
         inexact_match_count = 0

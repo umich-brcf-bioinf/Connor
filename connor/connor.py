@@ -78,7 +78,9 @@ class _TagFamily(object):
         self._mark_minority_cigar(majority_cigar)
         self.inexact_match_count = inexact_match_count
         self.consensus_threshold = consensus_threshold
-        self.consensus = self._build_consensus(umt, self.align_pairs)
+#        self.consensus = self._build_consensus(umt, self.align_pairs)
+        barcode = umt[0] if umt[0] else umt[1]
+        self.consensus = self._build_consensus_seuid(barcode, self.align_pairs)
         self.included_pair_count = sum([1 for p in self.align_pairs if not p.filter_value])
         self.filter_value = family_filter(self)
 
@@ -182,9 +184,29 @@ class _TagFamily(object):
         right_align.query_qualities = \
                 template_pair.right.query_qualities
         consensus_pair = samtools.PairedAlignment(left_align,
-                                                   right_align,
-                                                   tag_length=len(umt[0]))
+                                                  right_align,
+                                                  tag_length=len(umt[0]))
         consensus_pair.replace_umt(umt)
+        return consensus_pair
+
+    def _build_consensus_seuid(self, barcode, align_pairs):
+        included_pairs = [p for p in align_pairs if not p.filter_value]
+        template_pair = _TagFamily._select_template_alignment_pair(included_pairs)
+
+        left_align = deepcopy(template_pair.left, {})
+        right_align = deepcopy(template_pair.right, {})
+        (left_sequence,
+         right_sequence) = self._generate_consensus_sequence(included_pairs)
+        left_align.query_sequence = left_sequence
+        right_align.query_sequence = right_sequence
+        left_align.query_qualities = \
+                template_pair.left.query_qualities
+        right_align.query_qualities = \
+                template_pair.right.query_qualities
+        consensus_pair = samtools.PairedAlignmentSeuid(left_align,
+                                                   right_align,
+                                                   tag_length=len(barcode))
+        consensus_pair.replace_umt(barcode)
         return consensus_pair
 
 #TODO: cgates: reduce complexity
@@ -199,7 +221,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             key = (alignment.reference_id, alignment.next_reference_start)
             if key in coords and alignment.query_name in coords[key]:
                 align1 = coords[key].pop(alignment.query_name)
-                yield samtools.PairedAlignment(align1, alignment)
+                yield samtools.PairedAlignmentSeuid(align1, alignment)
             else:
                 coords[key][alignment.query_name] = alignment
         else:
@@ -210,7 +232,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             if not len(coord):
                 del coords[key]
             if l_align:
-                yield samtools.PairedAlignment(l_align, alignment)
+                yield samtools.PairedAlignmentSeuid(l_align, alignment)
             else:
                 alignment.filter_value = MISSING_MATE_FILTER
                 excluded_writer.write(None, None, alignment)
