@@ -345,7 +345,7 @@ class PairedAlignment(object):
                                     self.right.reference_start,
                                     self.right.query_sequence)
 
-
+#TODO: cgates: changing the sequence
 class PairedAlignmentSeuid(object):
     '''Represents the left and right align pairs from an single sequence.'''
     

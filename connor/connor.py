@@ -356,6 +356,43 @@ def _build_tag_families(tagged_paired_aligns,
         tag_families.append(tag_family)
     return tag_families
 
+def _build_tag_families_seuid(tagged_paired_aligns,
+                        ranked_tags,
+                        hamming_threshold,
+                        consensus_threshold,
+                        family_filter=lambda x: None):
+    '''Partition paired aligns into families.
+
+    Each read is considered against each ranked tag until all reads are
+    partitioned into families.'''
+    tag_aligns = defaultdict(set)
+    tag_inexact_match_count = defaultdict(int)
+
+    for paired_align in tagged_paired_aligns:
+        (left_umt, right_umt) =  paired_align.umt
+        for best_tag in ranked_tags:
+            best_left, best_right = best_tag
+            if paired_align.umt == best_tag:
+                tag_aligns[best_tag].add(paired_align)
+                break
+            elif left_umt and best_left and (_hamming_dist(left_umt, best_left) <= hamming_threshold):
+                tag_aligns[best_tag].add(paired_align)
+                tag_inexact_match_count[best_tag] += 1
+                break
+            elif right_umt and best_right and (_hamming_dist(right_umt, best_right) <= hamming_threshold):
+                tag_aligns[best_tag].add(paired_align)
+                tag_inexact_match_count[best_tag] += 1
+                break
+    tag_families = []
+    for tag in sorted(tag_aligns):
+        tag_family = _TagFamily(tag,
+                               tag_aligns[tag],
+                               tag_inexact_match_count[tag],
+                               consensus_threshold,
+                               family_filter)
+        tag_families.append(tag_family)
+    return tag_families
+
 def _hamming_dist(str1, str2):
     assert len(str1) == len(str2)
     return sum(utils.iter_map(operator.ne, str1, str2))
@@ -494,7 +531,7 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
     for coord_family in coord_family_gen:
         ranked_tags = _rank_tags(coord_family)
-        tag_families = _build_tag_families(coord_family,
+        tag_families = _build_tag_families_seuid(coord_family,
                                            ranked_tags,
                                            args.umt_distance_threshold,
                                            args.consensus_freq_threshold,
