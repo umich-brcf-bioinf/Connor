@@ -547,6 +547,7 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
 
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''
+
     log = None
     if not command_line_args:
         command_line_args = sys.argv
@@ -593,4 +594,6 @@ def main(command_line_args=None):
 
 
 if __name__ == '__main__':
-    main(sys.argv)
+    import cProfile
+    cProfile.run('main()')
+    #main(sys.argv)
