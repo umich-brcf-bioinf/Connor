@@ -493,7 +493,7 @@ class ConnorAlign(object):
         return other.__dict__ == self.__dict__
 
     def __hash__(self):
-        return hash(self.filter_value) + hash(self.pysam_align_segment)
+        return hash(self.filter_value) ^ hash(self.pysam_align_segment.query_name) ^ self.pysam_align_segment.reference_start
 
     @property
     def cigarstring(self):
