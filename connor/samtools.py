@@ -346,6 +346,22 @@ class PairedAlignment(object):
                                     self.right.query_sequence)
 
 
+class _Pysam8SamtoolsUtil(object):
+    @staticmethod
+    def index(bam_filepath):
+        pysam.index(bam_filepath, catch_stdout=False)
+
+    @staticmethod
+    def sort(input_bam_filepath, output_bam_filepath):
+        output_bam_filepath_prefix = os.path.splitext(output_bam_filepath)[0]
+        pysam.sort(input_bam_filepath,
+                   output_bam_filepath_prefix,
+                   catch_stdout=False)
+    @staticmethod
+    def idxstats(input_bam_filepath):
+        return pysam.idxstats(input_bam_filepath)
+
+
 class _Pysam9SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
@@ -363,26 +379,28 @@ class _Pysam9SamtoolsUtil(object):
         result = pysam.samtools.idxstats(input_bam_filepath)
         return _byte_array_to_string(result).split('\n')
 
-
-class _Pysam8SamtoolsUtil(object):
+class _Pysam10_11_12SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
-        pysam.index(bam_filepath, catch_stdout=False)
+        pysam.samtools.index(bam_filepath, catch_stdout=False)
 
     @staticmethod
     def sort(input_bam_filepath, output_bam_filepath):
-        output_bam_filepath_prefix = os.path.splitext(output_bam_filepath)[0]
-        pysam.sort(input_bam_filepath,
-                   output_bam_filepath_prefix,
-                   catch_stdout=False)
+        pysam.samtools.sort('-o',
+                            output_bam_filepath,
+                            input_bam_filepath,
+                            catch_stdout=False)
 
     @staticmethod
     def idxstats(input_bam_filepath):
-        return pysam.idxstats(input_bam_filepath)
+        result = pysam.samtools.idxstats(input_bam_filepath)
+        return _byte_array_to_string(result).split('\n')
 
 
 def _get_samtools():
-    if re.match(r".*\.9\.*", pysam.__version__):
+    if re.match(r"^0\.1[012]\.*", pysam.__version__):
+        return _Pysam10_11_12SamtoolsUtil()
+    if re.match(r"^0\.9\.*", pysam.__version__):
         return _Pysam9SamtoolsUtil()
     else:
         return _Pysam8SamtoolsUtil()
