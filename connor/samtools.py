@@ -141,7 +141,7 @@ class LoggingWriter(object):
         family_filter_stats = dict(self._family_filter_stats)
         family_filter_stats.pop(LoggingWriter.UNPLACED_FAMILY.filter_value,
                                 None)
-        included_count = len(family_filter_stats.pop(None))
+        included_count = len(family_filter_stats.pop(None, []))
         discarded_count = 0
         filter_counts = OrderedDict()
         for name, fam_ids in family_filter_stats.items():
@@ -208,13 +208,16 @@ class LoggingWriter(object):
                        percent_stat,
                        included_fam_count)
 
-        msg = ('{:.2f}% deduplication rate '
-               '(1 - {} families/{} included alignments)')
-        percent_dedup = 100 * (1 - (included_fam_count / included_align_count))
-        self._log.info(msg,
-                       percent_dedup,
-                       included_fam_count,
-                       included_align_count)
+        if included_align_count == 0:
+            self._log.warning("No alignments passed filters. (Was input BAM downsampled?)")
+        else:
+            percent_dedup = 100 * (1 - (included_fam_count / included_align_count))
+            msg = ('{:.2f}% deduplication rate '
+                   '(1 - {} families/{} included alignments)')
+            self._log.info(msg,
+                           percent_dedup,
+                           included_fam_count,
+                           included_align_count)
 
     def close(self, log=None):
         if self._align_filter_stats:
