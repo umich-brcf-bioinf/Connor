@@ -417,8 +417,11 @@ class ConnorAlign(object):
     def __eq__(self, other):
         return other.__dict__ == self.__dict__
 
+    # cgates: the native pysam hashing is not performant for ultradeep pileups
     def __hash__(self):
-        return hash(self.filter_value) + hash(self.pysam_align_segment)
+        return hash(self.filter_value) ^ \
+               hash(self.pysam_align_segment.query_name) ^ \
+               self.pysam_align_segment.reference_start
 
     @property
     def cigarstring(self):
