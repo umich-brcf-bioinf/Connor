@@ -3,7 +3,7 @@ Changelog
 
 0.5.x (MM/DD/YYYY)
 ------------------
-
+- Extended supported python and pysam versions
 
 0.5 (9/13/2016)
 ---------------
@@ -32,7 +32,7 @@ Changelog
 
 0.2 (7/15/2016)
 ---------------
-- Bugfix: connor was mangling left hand side of right hand consensus reads 
+- Bugfix: connor was mangling left hand side of right hand consensus reads
 - Fuzzy grouping of pairs into families based on left or right UMI match
 - Fuzzy grouping of pairs into families based on UMI within Hamming distance
 - Command line args for hamming distince, consensus threshold, min orig reads
@@ -44,4 +44,3 @@ Changelog
 ---------------
 - Initial development release
 - Partitions raw reads into consensus families
-

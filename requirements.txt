@@ -1,5 +1,5 @@
 cython==0.24
-pysam>=0.8.4,<0.9.1
+pysam>=0.8.4,<0.13
 sortedcontainers>=1.5.3
-testfixtures>=3.0.2,<4.11
+testfixtures>=3.0.2
 nose
