@@ -13,6 +13,7 @@ env:
     - PYSAM_VERSION=0.12.0
 
 install:
+    - pip install `grep cython requirements.txt`
     - pip install -vvv --use-wheel --find-links=./ pysam==$PYSAM_VERSION
     - pip install -r requirements.txt
     - pip install coverage
