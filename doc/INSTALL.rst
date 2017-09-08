@@ -2,8 +2,8 @@ Installing Connor
 ==================
 Connor requires python 2.7 or later and has been tested with:
 
-* Python 2.7 and 3.4
-* pysam 0.8.4 and 0.9.0
+* Python 2.7, 3.4 - 3.6
+* pysam 0.8.4 - 0.12.0
 * OSX and \*nix RHEL6/7
 
 Connor does not work in Windows OS because it depends on the python library
@@ -34,7 +34,7 @@ Installing
   ``$ pip install connor --user``
 
   Following a --user install, you may need to adjust your path settings to
-  include $HOME/.local/bin. 
+  include $HOME/.local/bin.
 
 * You can also install directly from source from github:
 
@@ -61,5 +61,3 @@ github and run directly from the source like so:
 For running automated tests, Connor also requires:
  * nosetests
  * testfixtures
-
-

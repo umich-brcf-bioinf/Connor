@@ -141,7 +141,7 @@ class LoggingWriter(object):
         family_filter_stats = dict(self._family_filter_stats)
         family_filter_stats.pop(LoggingWriter.UNPLACED_FAMILY.filter_value,
                                 None)
-        included_count = len(family_filter_stats.pop(None))
+        included_count = len(family_filter_stats.pop(None, []))
         discarded_count = 0
         filter_counts = OrderedDict()
         for name, fam_ids in family_filter_stats.items():
@@ -208,13 +208,16 @@ class LoggingWriter(object):
                        percent_stat,
                        included_fam_count)
 
-        msg = ('{:.2f}% deduplication rate '
-               '(1 - {} families/{} included alignments)')
-        percent_dedup = 100 * (1 - (included_fam_count / included_align_count))
-        self._log.info(msg,
-                       percent_dedup,
-                       included_fam_count,
-                       included_align_count)
+        if included_align_count == 0:
+            self._log.warning("No alignments passed filters. (Was input BAM downsampled?)")
+        else:
+            percent_dedup = 100 * (1 - (included_fam_count / included_align_count))
+            msg = ('{:.2f}% deduplication rate '
+                   '(1 - {} families/{} included alignments)')
+            self._log.info(msg,
+                           percent_dedup,
+                           included_fam_count,
+                           included_align_count)
 
     def close(self, log=None):
         if self._align_filter_stats:
@@ -346,6 +349,22 @@ class PairedAlignment(object):
                                     self.right.query_sequence)
 
 
+class _Pysam8SamtoolsUtil(object):
+    @staticmethod
+    def index(bam_filepath):
+        pysam.index(bam_filepath, catch_stdout=False)
+
+    @staticmethod
+    def sort(input_bam_filepath, output_bam_filepath):
+        output_bam_filepath_prefix = os.path.splitext(output_bam_filepath)[0]
+        pysam.sort(input_bam_filepath,
+                   output_bam_filepath_prefix,
+                   catch_stdout=False)
+    @staticmethod
+    def idxstats(input_bam_filepath):
+        return pysam.idxstats(input_bam_filepath)
+
+
 class _Pysam9SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
@@ -363,26 +382,28 @@ class _Pysam9SamtoolsUtil(object):
         result = pysam.samtools.idxstats(input_bam_filepath)
         return _byte_array_to_string(result).split('\n')
 
-
-class _Pysam8SamtoolsUtil(object):
+class _Pysam10_11_12SamtoolsUtil(object):
     @staticmethod
     def index(bam_filepath):
-        pysam.index(bam_filepath, catch_stdout=False)
+        pysam.samtools.index(bam_filepath, catch_stdout=False)
 
     @staticmethod
     def sort(input_bam_filepath, output_bam_filepath):
-        output_bam_filepath_prefix = os.path.splitext(output_bam_filepath)[0]
-        pysam.sort(input_bam_filepath,
-                   output_bam_filepath_prefix,
-                   catch_stdout=False)
+        pysam.samtools.sort('-o',
+                            output_bam_filepath,
+                            input_bam_filepath,
+                            catch_stdout=False)
 
     @staticmethod
     def idxstats(input_bam_filepath):
-        return pysam.idxstats(input_bam_filepath)
+        result = pysam.samtools.idxstats(input_bam_filepath)
+        return _byte_array_to_string(result).split('\n')
 
 
 def _get_samtools():
-    if re.match(r".*\.9\.*", pysam.__version__):
+    if re.match(r"^0\.1[012]\.*", pysam.__version__):
+        return _Pysam10_11_12SamtoolsUtil()
+    if re.match(r"^0\.9\.*", pysam.__version__):
         return _Pysam9SamtoolsUtil()
     else:
         return _Pysam8SamtoolsUtil()
@@ -399,8 +420,11 @@ class ConnorAlign(object):
     def __eq__(self, other):
         return other.__dict__ == self.__dict__
 
+    # cgates: the native pysam hashing is not performant for ultradeep pileups
     def __hash__(self):
-        return hash(self.filter_value) + hash(self.pysam_align_segment)
+        return hash(self.filter_value) ^ \
+               hash(self.pysam_align_segment.query_name) ^ \
+               self.pysam_align_segment.reference_start
 
     @property
     def cigarstring(self):

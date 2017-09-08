@@ -34,22 +34,28 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
             output_annotated_bai_path = out_path(output_annotated_bai)
 
             connor.main(["program_name",
-                          input_bam_path,
-                          output_deduped_bam_path,
-                          "--annotated_output_bam",
-                          output_annotated_bam_path,
-                          "--verbose",
-                          "--simplify_pg_header",
-                          "--force"])
+                         input_bam_path,
+                         output_deduped_bam_path,
+                         "--annotated_output_bam",
+                         output_annotated_bam_path,
+                         "--verbose",
+                         "--simplify_pg_header",
+                         "--force"])
 
-            def compare_files(expected_path, output_path):
+            # always_match is useful for testing bai files which can change
+            # subtly across versions of pysam/htslib
+            always_match = lambda a, b: True
+            file_contents_match = lambda a, b: filecmp.cmp(a, b, shallow=False)
+            def compare_files(expected_path,
+                              output_path,
+                              match=file_contents_match):
                 expected_name = os.path.basename(expected_path)
                 output_name = os.path.basename(output_path)
                 if not os.path.isfile(output_path):
                     result = 'output file {} not found'.format(output_name)
                 elif not os.path.isfile(expected_path):
                     result = 'expected file {} not found'.format(expected_name)
-                elif not filecmp.cmp(expected_path, output_path, shallow=False):
+                elif not match(expected_path, output_path):
                     msg = '{} does not match expected'
                     result = msg.format(output_path)
                 else:
@@ -57,14 +63,18 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
                 return expected_name, result
 
             comparisons = [(expect_deduped_bam_path,
-                            output_deduped_bam_path),
+                            output_deduped_bam_path,
+                            file_contents_match),
                            (expect_deduped_bai_path,
-                            output_deduped_bai_path),
+                            output_deduped_bai_path,
+                            always_match),
                            (expect_annotated_bam_path,
-                            output_annotated_bam_path),
+                            output_annotated_bam_path,
+                            file_contents_match),
                            (expect_annotated_bai_path,
-                            output_annotated_bai_path)]
-            diff_files = dict([compare_files(expected, output) for expected, output in comparisons])
+                            output_annotated_bai_path,
+                            always_match)]
+            diff_files = dict([compare_files(expected, output, match) for expected, output, match in comparisons])
 
         files_match = set(diff_files.values()) == set(["OK"])
         self.assertTrue(files_match, diff_files)

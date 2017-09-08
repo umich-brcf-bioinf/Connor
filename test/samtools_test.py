@@ -94,6 +94,21 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         different_filter.filter_value = "foo; bar"
         self.assertNotEqual(base, different_filter)
 
+    def test_hash(self):
+        pysam_align_A_42 = mock_align(query_name="A", reference_start=42)
+        pysam_align_B_42 = mock_align(query_name="B", reference_start=42)
+        pysam_align_A_43 = mock_align(query_name="A", reference_start=43)
+
+        base = ConnorAlign(pysam_align_A_42, filter_value="f1")
+        same = ConnorAlign(pysam_align_A_42, filter_value="f1")
+        different_query_name = ConnorAlign(pysam_align_B_42, filter_value="f1")
+        different_start = ConnorAlign(pysam_align_A_43, filter_value="f1")
+        different_filter = ConnorAlign(pysam_align_A_42, filter_value="f2")
+        self.assertEqual(base.__hash__(), same.__hash__())
+        self.assertNotEqual(base.__hash__(), different_query_name.__hash__())
+        self.assertNotEqual(base.__hash__(), different_start.__hash__())
+        self.assertNotEqual(base.__hash__(), different_filter.__hash__())
+
     def test_gettersPassthroughToPysamAlignSegment(self):
         pysam_align = mock_align(query_name="queryname_1",
                             flag=99,
@@ -220,7 +235,7 @@ class PairedAlignmentTest(utils_test.BaseConnorTestCase):
         left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
         right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
         self.assertEquals(("AAATTT", "CCCGGG"), (left_umt, right_umt))
-        
+
     def test_init_valueErrorOnInconsistentQueryNames(self):
         left = mock_align(query_name="alignA")
         right = mock_align(query_name="alignB")
@@ -1077,6 +1092,27 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
                          log_lines[3])
         self.assertEqual(4, len(log_lines))
 
+    def test_close_logsFilterStatsWarnsWhenNoAlignments(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+        fam1 = None
+        al1A = MicroMock(filter_value='low mapping qual')
+        al1B = MicroMock(filter_value='low mapping qual')
+        fam2 = None
+        al2A = MicroMock(filter_value='unpaired read')
+        al2B = MicroMock(filter_value='unpaired read')
+        family_aligns = [(fam1, al1A), (fam1, al1B),
+                         (fam2, al2A), (fam2, al2B)]
+
+        for family, align in family_aligns:
+            writer.write(family, None, align)
+        writer.close()
+
+        log_lines = self.mock_logger._log_calls['WARNING']
+        self.assertEqual('No alignments passed filters. (Was input BAM downsampled?)',
+                         log_lines[0])
+        self.assertEqual(1, len(log_lines))
+
 
     def test_close_whenAllPlaced(self):
         base_writer = MockAlignWriter()
@@ -1101,6 +1137,31 @@ class LoggingWriterTest(utils_test.BaseConnorTestCase):
         log_lines = self.mock_logger._log_calls['DEBUG']
         self.assertEqual(0, len(log_lines))
 
+    def test_family_stats(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+        fam1 = MicroMock(umi_sequence=4, filter_value=None)
+        alignA = MicroMock(filter_value=None)
+        family_aligns = [(fam1, alignA), (fam1, alignA)]
+
+        for family, align in family_aligns:
+            writer.write(family, None, align)
+
+        included_count, total_count, filter_counts = writer._family_stats
+
+        self.assertEqual(1, included_count)
+        self.assertEqual(1, total_count)
+        self.assertEqual({}, filter_counts)
+
+    def test_family_stats_noFamilies(self):
+        base_writer = MockAlignWriter()
+        writer = samtools.LoggingWriter(base_writer, self.mock_logger)
+
+        included_count, total_count, filter_counts = writer._family_stats
+
+        self.assertEqual(0, included_count)
+        self.assertEqual(0, total_count)
+        self.assertEqual({}, filter_counts)
 
     def test_write_passThroughToBaseWriter(self):
         base_writer = MockAlignWriter()
