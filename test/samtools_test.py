@@ -94,6 +94,21 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         different_filter.filter_value = "foo; bar"
         self.assertNotEqual(base, different_filter)
 
+    def test_hash(self):
+        pysam_align_A_42 = mock_align(query_name="A", reference_start=42)
+        pysam_align_B_42 = mock_align(query_name="B", reference_start=42)
+        pysam_align_A_43 = mock_align(query_name="A", reference_start=43)
+
+        base = ConnorAlign(pysam_align_A_42, filter_value="f1")
+        same = ConnorAlign(pysam_align_A_42, filter_value="f1")
+        different_query_name = ConnorAlign(pysam_align_B_42, filter_value="f1")
+        different_start = ConnorAlign(pysam_align_A_43, filter_value="f1")
+        different_filter = ConnorAlign(pysam_align_A_42, filter_value="f2")
+        self.assertEqual(base.__hash__(), same.__hash__())
+        self.assertNotEqual(base.__hash__(), different_query_name.__hash__())
+        self.assertNotEqual(base.__hash__(), different_start.__hash__())
+        self.assertNotEqual(base.__hash__(), different_filter.__hash__())
+
     def test_gettersPassthroughToPysamAlignSegment(self):
         pysam_align = mock_align(query_name="queryname_1",
                             flag=99,
@@ -220,7 +235,7 @@ class PairedAlignmentTest(utils_test.BaseConnorTestCase):
         left_umt = self.byte_array_to_string(actual_paired_alignment.umt[0])
         right_umt = self.byte_array_to_string(actual_paired_alignment.umt[1])
         self.assertEquals(("AAATTT", "CCCGGG"), (left_umt, right_umt))
-        
+
     def test_init_valueErrorOnInconsistentQueryNames(self):
         left = mock_align(query_name="alignA")
         right = mock_align(query_name="alignB")

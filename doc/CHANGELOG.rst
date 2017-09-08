@@ -4,6 +4,7 @@ Changelog
 0.5.x (MM/DD/YYYY)
 ------------------
 - Extended supported python and pysam versions
+- Adjusted to avoid performance problem when processing extremely deep pileups
 
 0.5 (9/13/2016)
 ---------------
