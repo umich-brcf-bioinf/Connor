@@ -1,8 +1,11 @@
 Changelog
 =========
 
+0.5.1x (MM/DD/YYYY)
+-------------------
+
 0.5.1 (9/8/2017)
-------------------
+----------------
 - Extended supported python and pysam versions
 - Adjusted to avoid performance problem when processing extremely deep pileups
 - Adjusted so that when no families pass filters show warning instead of
