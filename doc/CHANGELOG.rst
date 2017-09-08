@@ -6,7 +6,7 @@ Changelog
 - Extended supported python and pysam versions
 - Adjusted to avoid performance problem when processing extremely deep pileups
 - Adjusted so that when no families pass filters show warning instead of
-  error message
+  error message (thanks to ccario83 for upvoting this fix)
 
 0.5 (9/13/2016)
 ---------------
