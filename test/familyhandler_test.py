@@ -144,6 +144,17 @@ class FamilySizeStatHandlerTest(BaseConnorTestCase):
 
         self.assertEqual((1, 2, 4, 6.2, 8, 16), stat_handler.summary)
 
+    def test_end_zeroFamilies(self):
+        stat_handler = _FamilySizeStatHandler(self.mock_logger)
+        stat_handler.end()
+
+        self.assertEqual(None, stat_handler.min)
+        self.assertEqual(None, stat_handler.quartile_1)
+        self.assertEqual(None, stat_handler.median)
+        self.assertEqual(None, stat_handler.mean)
+        self.assertEqual(None, stat_handler.quartile_3)
+        self.assertEqual(None, stat_handler.max)
+
 class MatchStatHandlerTest(BaseConnorTestCase):
     def test_total_inexact_match_count(self):
         args = Namespace(umt_distance_threshold=1)
@@ -161,6 +172,16 @@ class MatchStatHandlerTest(BaseConnorTestCase):
         self.assertEqual(5, stat_handler.total_inexact_match_count)
         self.assertEqual(20, stat_handler.total_pair_count)
         self.assertEqual(5/20, stat_handler.percent_inexact_match)
+
+    def test_total_percent_inexact_match_whenZeroFamilies(self):
+        args = Namespace(umt_distance_threshold=1)
+        stat_handler = _MatchStatHandler(args, self.mock_logger)
+        stat_handler.end()
+
+        self.assertEqual(0, stat_handler.total_inexact_match_count)
+        self.assertEqual(0, stat_handler.total_pair_count)
+        self.assertEqual(0, stat_handler.percent_inexact_match)
+
 
 def _mock_align_pair(query_name, filter_value=None):
     left = ConnorAlign(mock_align(query_name=query_name), filter_value)
