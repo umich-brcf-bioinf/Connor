@@ -29,6 +29,10 @@ Installing
 
   ``$ pip install connor``
 
+* You can also install Connor via the conda envirionment/package manager:
+
+  ``$ conda install -c bioconda connor``
+
 * If you don't have root permissions, you can install connor locally:
 
   ``$ pip install connor --user``
