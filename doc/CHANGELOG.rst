@@ -3,6 +3,7 @@ Changelog
 
 0.5.1x (MM/DD/YYYY)
 -------------------
+- Extended to support pysam v0.13
 - Adjusted so warning instead of error when no families found
 
 0.5.1 (9/8/2017)

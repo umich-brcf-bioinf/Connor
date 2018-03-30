@@ -35,7 +35,10 @@ class MockAlignWriter(object):
         self._close_was_called = True
 
 def mock_align(**kwargs):
-    a = pysam.AlignedSegment()
+    reference_names = ['chr1', 'chr2']
+    reference_lengths = [1000, 1000]
+    a = samtools.SAMTOOLS_UTIL.aligned_segment(reference_names,
+                                               reference_lengths)
     a.query_name = "align1"
     a.flag = 99
     a.reference_id = 0
@@ -535,8 +538,8 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                    sam_contents)
             annotated_output_bam = os.path.join(tmp_dir.path, 'annotated.bam')
             tags = []
-            args=Namespace(original_command_line=['command-line'],
-                           simplify_pg_header=False)
+            args = Namespace(original_command_line=['command-line'],
+                             simplify_pg_header=False)
             actual_writer = samtools.build_writer(input_bam,
                                                   annotated_output_bam,
                                                   tags,
@@ -556,7 +559,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                        'CL':'command-line'
                                        },
                                       ]}
-            self.assertEqual(expected_header, actual_output.header)
+            self.assertEqual(expected_header, samtools.get_header_dict(actual_output))
 
     def test_build_annotated_aligns_writer_nullIfNotSpecified(self):
         actual_writer = samtools.build_writer(input_bam='foo',
@@ -931,7 +934,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.close()
 
             bamfile = samtools.alignment_file(bam_path, 'rb')
-            actual_header = dict(bamfile.header)
+            actual_header = dict(samtools.get_header_dict(bamfile))
             bamfile.close()
 
         expected_header = deepcopy(header)

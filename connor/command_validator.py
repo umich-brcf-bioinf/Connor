@@ -91,9 +91,9 @@ def _check_input_bam_indexed(args, log=None): #pylint: disable=unused-argument
 
 def _check_input_bam_not_deduped(args, log=None):
     bamfile = samtools.alignment_file(args.input_bam, 'rb')
-    header = bamfile.header
+    header_dict = samtools.get_header_dict(bamfile)
     bamfile.close()
-    names = set([pg_item.get('PN', None) for pg_item in header.get('PG', [])])
+    names = set([pg_item.get('PN', None) for pg_item in header_dict.get('PG', [])])
     if samtools.CONNOR_PG_PN in names:
         msg = ('Specified input [{}] has already been processed with '
                'Connor.').format(args.input_bam)
@@ -188,4 +188,3 @@ _VALIDATIONS = [_check_input_bam_exists,
 def preflight(args, log):
     for validate in _VALIDATIONS:
         validate(args, log)
-        
