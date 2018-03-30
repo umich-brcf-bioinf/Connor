@@ -358,7 +358,7 @@ class _Pysam8Wrapper(object):
         return parse_version(pysam_version) < parse_version('0.9')
 
     @staticmethod
-    def aligned_segment(ref_names, ref_lengths):
+    def aligned_segment():
         return pysam.AlignedSegment()
 
     @staticmethod
@@ -386,7 +386,7 @@ class _Pysam9Wrapper(object):
         return parse_version('0.9') <= parse_version(pysam_version) < parse_version('0.10')
 
     @staticmethod
-    def aligned_segment(ref_names, ref_lengths):
+    def aligned_segment():
         return pysam.AlignedSegment()
 
     @staticmethod
@@ -416,7 +416,7 @@ class _Pysam10_11_12Wrapper(object):
         return parse_version('0.10') <= parse_version(pysam_version) < parse_version('0.13')
 
     @staticmethod
-    def aligned_segment(ref_names, ref_lengths):
+    def aligned_segment():
         return pysam.AlignedSegment()
 
     @staticmethod
@@ -446,12 +446,15 @@ class _Pysam13Wrapper(object):
         return parse_version(pysam_version) >= parse_version('0.13')
 
     @staticmethod
-    def aligned_segment(ref_names, ref_lengths):
-        return pysam.AlignedSegment(ref_names, ref_lengths)
+    def aligned_segment():
+        return pysam.AlignedSegment()
 
     @staticmethod
     def get_header_dict(input_bam):
-        return input_bam.header.to_dict()
+        d = input_bam.header
+        if isinstance(d, dict):
+            return d
+        return d.to_dict()
 
     @staticmethod
     def index(bam_filepath):

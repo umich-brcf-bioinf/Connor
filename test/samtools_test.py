@@ -35,10 +35,7 @@ class MockAlignWriter(object):
         self._close_was_called = True
 
 def mock_align(**kwargs):
-    reference_names = ['chr1', 'chr2']
-    reference_lengths = [1000, 1000]
-    a = samtools.SAMTOOLS_UTIL.aligned_segment(reference_names,
-                                               reference_lengths)
+    a = samtools.SAMTOOLS_UTIL.aligned_segment()
     a.query_name = "align1"
     a.flag = 99
     a.reference_id = 0
