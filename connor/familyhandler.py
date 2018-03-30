@@ -99,7 +99,7 @@ class _FamilySizeStatHandler(object):
                      'counts: min, 1Q, median, mean, 3Q, max): {}'),
                      ', '.join(map(lambda x: str(round(x, 2)), self.summary)))
         else:
-            self._log.debug('family_stat| no families found')
+            self._log.warning('family_stat| no families found')
 
 class _MatchStatHandler(object):
     def __init__(self, args, logger):
