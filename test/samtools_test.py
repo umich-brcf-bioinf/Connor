@@ -3,6 +3,7 @@
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
 from argparse import Namespace
+from collections import OrderedDict
 from copy import deepcopy
 import os
 
@@ -41,7 +42,7 @@ def mock_align(**kwargs):
     a.reference_id = 0
     a.reference_start = 32
     a.mapping_quality = 20
-    a.cigar = ((0,3), (2,1), (0,1))
+    a.cigar = ((0,7),)
     a.next_reference_id = 0
     a.next_reference_start=199
     a.template_length=167
@@ -522,7 +523,7 @@ readNameZ1|141|*|0|0|*|*|0|0|GGGGG|>>>>>
 
     def test_build_writer(self):
         sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
+'''@HD|VN:1.4|SO:coordinate
 @SQ|SN:chr10|LN:135534747
 @PG|ID:bwa|VN:0.5.5
 @PG|ID:GATK|PN:foo|VN:1.0.3471
@@ -544,8 +545,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
             actual_writer.close()
 
             actual_output = samtools.alignment_file(annotated_output_bam, 'rb',)
-            expected_header = {'HD': {'GO': 'none',
-                                      'SO': 'coordinate',
+            expected_header = {'HD': {'SO': 'coordinate',
                                       'VN': '1.4'},
                                'SQ': [{'SN': 'chr10', 'LN': 135534747}],
                                'PG': [{'ID':'bwa', 'VN':'0.5.5'},
@@ -556,7 +556,10 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                        'CL':'command-line'
                                        },
                                       ]}
-            self.assertEqual(expected_header, samtools.get_header_dict(actual_output))
+            actual_header = samtools.get_header_dict(actual_output)
+            if isinstance(actual_header, OrderedDict):
+                actual_header = dict(actual_header)
+            self.assertEqual(expected_header, actual_header)
 
     def test_build_annotated_aligns_writer_nullIfNotSpecified(self):
         actual_writer = samtools.build_writer(input_bam='foo',

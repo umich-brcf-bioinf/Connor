@@ -410,10 +410,10 @@ class _Pysam9Wrapper(object):
         return _byte_array_to_string(result).split('\n')
 
 
-class _Pysam10_11_12Wrapper(object):
+class _Pysam10_11_12_13Wrapper(object):
     @staticmethod
     def is_compatible_version(pysam_version):
-        return parse_version('0.10') <= parse_version(pysam_version) < parse_version('0.13')
+        return parse_version('0.10') <= parse_version(pysam_version) < parse_version('0.14')
 
     @staticmethod
     def aligned_segment():
@@ -440,10 +440,10 @@ class _Pysam10_11_12Wrapper(object):
         return _byte_array_to_string(result).split('\n')
 
 
-class _Pysam13Wrapper(object):
+class _Pysam14Wrapper(object):
     @staticmethod
     def is_compatible_version(pysam_version):
-        return parse_version(pysam_version) >= parse_version('0.13')
+        return parse_version(pysam_version) >= parse_version('0.14')
 
     @staticmethod
     def aligned_segment():
@@ -451,10 +451,7 @@ class _Pysam13Wrapper(object):
 
     @staticmethod
     def get_header_dict(input_bam):
-        d = input_bam.header
-        if isinstance(d, dict):
-            return d
-        return d.to_dict()
+        return input_bam.header.to_dict()
 
     @staticmethod
     def index(bam_filepath):
@@ -474,8 +471,8 @@ class _Pysam13Wrapper(object):
 
 
 def _get_pysam_wrapper():
-    pysam_wrappers = [_Pysam13Wrapper(),
-                      _Pysam10_11_12Wrapper(),
+    pysam_wrappers = [_Pysam14Wrapper(),
+                      _Pysam10_11_12_13Wrapper(),
                       _Pysam9Wrapper(),
                       _Pysam8Wrapper()]
     for wrapper in pysam_wrappers:
