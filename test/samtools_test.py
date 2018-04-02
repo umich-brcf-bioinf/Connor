@@ -14,8 +14,8 @@ from testfixtures.tempdirectory import TempDirectory
 import connor
 from connor.consam.bamflag import BamFlag
 import connor.consam.pysamwrapper as pysamwrapper
+import connor.consam.bamtag as bamtag
 import connor.samtools as samtools
-from connor.samtools import BamTag
 from connor.samtools import ConnorAlign
 from connor.samtools import filter_alignments
 from test.utils_test import MicroMock
@@ -36,41 +36,23 @@ class MockAlignWriter(object):
     def close(self, log=None):
         self._close_was_called = True
 
-def mock_align(**kwargs):
-    a = pysamwrapper.aligned_segment()
-    a.query_name = "align1"
-    a.flag = 99
-    a.reference_id = 0
-    a.reference_start = 32
-    a.mapping_quality = 20
-    a.cigar = ((0,7),)
-    a.next_reference_id = 0
-    a.next_reference_start=199
-    a.template_length=167
-    #query_qualities must be set after query_sequence
-    a.query_sequence=kwargs.pop('query_sequence', 'AGCTTAG')
-    for (key, value) in kwargs.items():
-        setattr(a, key, value)
-    return a
-
-
 class ConnorAlignTest(BaseConnorTestCase):
     def test_eq(self):
-        pysam_align = mock_align(query_name="align1")
+        pysam_align = self.mock_align(query_name="align1")
         base =  ConnorAlign(pysam_align)
         self.assertEqual(base, base)
         self.assertEqual(base, ConnorAlign(pysam_align))
-        self.assertEqual(base, ConnorAlign(mock_align(query_name = "align1")))
-        different_pysam_align = ConnorAlign(mock_align(query_name = "align2"))
+        self.assertEqual(base, ConnorAlign(self.mock_align(query_name = "align1")))
+        different_pysam_align = ConnorAlign(self.mock_align(query_name = "align2"))
         self.assertNotEqual(base, different_pysam_align)
         different_filter = ConnorAlign(pysam_align)
         different_filter.filter_value = "foo; bar"
         self.assertNotEqual(base, different_filter)
 
     def test_hash(self):
-        pysam_align_A_42 = mock_align(query_name="A", reference_start=42)
-        pysam_align_B_42 = mock_align(query_name="B", reference_start=42)
-        pysam_align_A_43 = mock_align(query_name="A", reference_start=43)
+        pysam_align_A_42 = self.mock_align(query_name="A", reference_start=42)
+        pysam_align_B_42 = self.mock_align(query_name="B", reference_start=42)
+        pysam_align_A_43 = self.mock_align(query_name="A", reference_start=43)
 
         base = ConnorAlign(pysam_align_A_42, filter_value="f1")
         same = ConnorAlign(pysam_align_A_42, filter_value="f1")
@@ -83,7 +65,7 @@ class ConnorAlignTest(BaseConnorTestCase):
         self.assertNotEqual(base.__hash__(), different_filter.__hash__())
 
     def test_gettersPassthroughToPysamAlignSegment(self):
-        pysam_align = mock_align(query_name="queryname_1",
+        pysam_align = self.mock_align(query_name="queryname_1",
                             flag=99,
                             reference_id=3,
                             reference_start=142,
@@ -115,7 +97,7 @@ class ConnorAlignTest(BaseConnorTestCase):
 
 
     def test_settersPassthroughToPysamAlignSegment(self):
-        pysam_align = mock_align(query_name="queryname_1",
+        pysam_align = self.mock_align(query_name="queryname_1",
                             flag=99,
                             reference_id=3,
                             reference_start=142,
@@ -159,7 +141,7 @@ class ConnorAlignTest(BaseConnorTestCase):
                          pysam_align.get_tag('X1', with_value_type=True))
 
     def test_filter(self):
-        pysam_align = mock_align(query_name="queryname_1",
+        pysam_align = self.mock_align(query_name="queryname_1",
                             flag=99,
                             reference_id=3,
                             reference_start=142,
@@ -178,15 +160,15 @@ class ConnorAlignTest(BaseConnorTestCase):
         self.assertEqual('foo', connor_align.filter_value)
 
     def test_orientation_left(self):
-        pysam_align = mock_align(reference_start=100, next_reference_start=200)
+        pysam_align = self.mock_align(reference_start=100, next_reference_start=200)
         self.assertEqual('left', ConnorAlign(pysam_align).orientation)
 
     def test_orientation_right(self):
-        pysam_align = mock_align(reference_start=200, next_reference_start=100)
+        pysam_align = self.mock_align(reference_start=200, next_reference_start=100)
         self.assertEqual('right', ConnorAlign(pysam_align).orientation)
 
     def test_orientation_sameIsNeither(self):
-        pysam_align = mock_align(flag=129,
+        pysam_align = self.mock_align(flag=129,
                                  reference_start=100,
                                  next_reference_start=100)
         self.assertEqual('neither', ConnorAlign(pysam_align).orientation)
@@ -194,9 +176,9 @@ class ConnorAlignTest(BaseConnorTestCase):
 
 class PairedAlignmentTest(BaseConnorTestCase):
     def test_init(self):
-        left_align = mock_align(query_name="alignA",
+        left_align = self.mock_align(query_name="alignA",
                                 query_sequence="AAATTT" "GGGG")
-        right_align = mock_align(query_name="alignA",
+        right_align = self.mock_align(query_name="alignA",
                                  query_sequence="TTTT" "CCCGGG")
         tag_length = 6
         actual_paired_alignment = samtools.PairedAlignment(left_align,
@@ -210,8 +192,8 @@ class PairedAlignmentTest(BaseConnorTestCase):
         self.assertEquals(("AAATTT", "CCCGGG"), (left_umt, right_umt))
 
     def test_init_valueErrorOnInconsistentQueryNames(self):
-        left = mock_align(query_name="alignA")
-        right = mock_align(query_name="alignB")
+        left = self.mock_align(query_name="alignA")
+        right = self.mock_align(query_name="alignB")
         self.assertRaisesRegexp(ValueError,
                                 (r'Inconsistent query names '
                                  r'\(alignA != alignB\)'),
@@ -248,36 +230,36 @@ class PairedAlignmentTest(BaseConnorTestCase):
                          paired_alignment.positions('{left}~{right}'))
 
     def test_filter_value(self):
-        left = ConnorAlign(mock_align(), filter_value=None)
-        right = ConnorAlign(mock_align(), filter_value=None)
+        left = ConnorAlign(self.mock_align(), filter_value=None)
+        right = ConnorAlign(self.mock_align(), filter_value=None)
         paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
         self.assertEqual(None, paired_alignment.filter_value)
 
-        left = ConnorAlign(mock_align(), filter_value='')
-        right = ConnorAlign(mock_align(), filter_value='')
+        left = ConnorAlign(self.mock_align(), filter_value='')
+        right = ConnorAlign(self.mock_align(), filter_value='')
         paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
         self.assertEqual(None, paired_alignment.filter_value)
 
-        left = ConnorAlign(mock_align(), filter_value='foo')
-        right = ConnorAlign(mock_align(), filter_value=None)
+        left = ConnorAlign(self.mock_align(), filter_value='foo')
+        right = ConnorAlign(self.mock_align(), filter_value=None)
         paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
         self.assertEqual(('foo', None), paired_alignment.filter_value)
 
-        left = ConnorAlign(mock_align(), filter_value=None)
-        right = ConnorAlign(mock_align(), filter_value='bar')
+        left = ConnorAlign(self.mock_align(), filter_value=None)
+        right = ConnorAlign(self.mock_align(), filter_value='bar')
         paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
         self.assertEqual((None, 'bar'), paired_alignment.filter_value)
 
     def test_query_name(self):
-        left = mock_align(query_name="alignA", reference_start=100)
-        right = mock_align(query_name="alignA", reference_start=200)
+        left = self.mock_align(query_name="alignA", reference_start=100)
+        right = self.mock_align(query_name="alignA", reference_start=200)
         paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
         self.assertEqual("alignA", paired_alignment.query_name)
 
     def test_eq(self):
-        left = mock_align(reference_start=100, next_reference_start=200)
-        right = mock_align(reference_start=200, next_reference_start=100)
-        other = mock_align(reference_start=0, next_reference_start=500)
+        left = self.mock_align(reference_start=100, next_reference_start=200)
+        right = self.mock_align(reference_start=200, next_reference_start=100)
+        other = self.mock_align(reference_start=0, next_reference_start=500)
 
         base = samtools.PairedAlignment(left, right)
         self.assertEquals(base, samtools.PairedAlignment(left, right))
@@ -285,10 +267,10 @@ class PairedAlignmentTest(BaseConnorTestCase):
         self.assertNotEquals(base, samtools.PairedAlignment(left, other))
 
     def test_hash(self):
-        left_A = mock_align(query_name="alignA", reference_start=100)
-        right_A = mock_align(query_name="alignA", reference_start=200)
-        left_B = mock_align(query_name="alignA", reference_start=100)
-        right_B = mock_align(query_name="alignA", reference_start=200)
+        left_A = self.mock_align(query_name="alignA", reference_start=100)
+        right_A = self.mock_align(query_name="alignA", reference_start=200)
+        left_B = self.mock_align(query_name="alignA", reference_start=100)
+        right_B = self.mock_align(query_name="alignA", reference_start=200)
 
         actual_set = set()
         base = samtools.PairedAlignment(left_A, right_A)
@@ -306,8 +288,8 @@ class PairedAlignmentTest(BaseConnorTestCase):
         self.assertEquals(1, len(actual_set))
 
     def test_replace_umt(self):
-        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
-        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
+        left_A = self.mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
+        right_A = self.mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
         paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
 
         paired_align.replace_umt(('GG','TT'))
@@ -324,8 +306,8 @@ class PairedAlignmentTest(BaseConnorTestCase):
                           right.query_qualities)
 
     def test_replace_umt_errorIfInconsistentUmtLength(self):
-        left_A = mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
-        right_A = mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
+        left_A = self.mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
+        right_A = self.mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
         paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
 
         self.assertRaisesRegexp(ValueError,
@@ -347,129 +329,6 @@ class PairedAlignmentTest(BaseConnorTestCase):
 
 
 class SamtoolsTest(BaseConnorTestCase):
-    @staticmethod
-    def get_tag(tags, name):
-        for tag in tags:
-            if tag._tag_name == name:
-                return tag
-        return None
-
-    def test_build_bam_tags(self):
-        actual_tags = samtools._build_bam_tags()
-        self.assertEqual(7, len(actual_tags))
-
-    def test_build_bam_tags_x0_filter(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X0')
-        self.assertEqual('X0', tag._tag_name)
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'filter')
-
-        self.assertEqual(None, tag._get_value(None, None, None))
-
-        family = MicroMock(filter_value=None)
-        connor_align = MicroMock(filter_value=None)
-        self.assertEqual(None, tag._get_value(family, None, connor_align))
-
-        family = MicroMock(filter_value='foo')
-        connor_align = MicroMock(filter_value='bar')
-        self.assertEqual('foo', tag._get_value(family, None, None))
-        self.assertEqual('bar', tag._get_value(None, None, connor_align))
-        self.assertEqual('foo;bar', tag._get_value(family, None, connor_align))
-
-    def test_build_bam_tags_x1_positions(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X1')
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description,
-                                 'leftmost~rightmost matched pair positions')
-
-        align = mock_align()
-        pair = MicroMock(positions=lambda x:'100~150')
-        tag.set_tag(None, pair, align)
-        self.assertEqual([('X1', '100~150')], align.get_tags())
-
-        align = mock_align()
-        tag.set_tag(None, None, align)
-        self.assertEqual([], align.get_tags())
-
-
-    def test_build_bam_tags_x2_cigars(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X2')
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description,
-                                 'L~R CIGARs')
-
-        align = mock_align()
-        pair = MicroMock(cigars=lambda x:'1S2M4S~8S16M32S')
-        tag.set_tag(None, pair, align)
-        self.assertEqual([('X2', '1S2M4S~8S16M32S')], align.get_tags())
-
-        align = mock_align()
-        tag.set_tag(None, None, align)
-        self.assertEqual([], align.get_tags())
-
-    def test_build_bam_tags_x3_unique_identifier(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X3')
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'unique identifier')
-
-        family = MicroMock(umi_sequence=42)
-        align = mock_align()
-        tag.set_tag(family, None, align)
-        self.assertEqual([('X3', 42)], align.get_tags())
-
-        align = mock_align()
-        tag.set_tag(None, None, align)
-        self.assertEqual([], align.get_tags())
-
-    def test_build_bam_tags_x4_umt_barcodes(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X4')
-        self.assertEqual('Z', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'UMT barcodes')
-
-        family = MicroMock(umt=lambda *args:'AAA~CCC')
-
-        align = mock_align()
-        tag.set_tag(family, None, align)
-        self.assertEqual([('X4', 'AAA~CCC')], align.get_tags())
-
-        align = mock_align()
-        tag.set_tag(None, None, align)
-        self.assertEqual([], align.get_tags())
-
-    def test_build_bam_tags_x5_family_size(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X5')
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description, 'family size')
-
-        family = MicroMock(included_pair_count=42)
-        align = mock_align()
-        tag.set_tag(family, None, align)
-        self.assertEqual([('X5', 42)], align.get_tags())
-
-        align = mock_align()
-        tag.set_tag(None, None, align)
-        self.assertEqual([], align.get_tags())
-
-    def test_build_bam_tags_x6_consensus_template(self):
-        tag = SamtoolsTest.get_tag(samtools._build_bam_tags(), 'X6')
-        self.assertEqual('i', tag._tag_type)
-        self.assertRegexpMatches(tag._description,
-                                 'template for the consensus alignment')
-
-        align = mock_align()
-        family = MicroMock(is_consensus_template=lambda x: 1)
-        tag.set_tag(family, None, align)
-        self.assertEqual([('X6', 1)], align.get_tags())
-
-        align = mock_align()
-        family = MicroMock(is_consensus_template=lambda x: None)
-        tag.set_tag(family, None, align)
-        self.assertEqual([], align.get_tags())
-
-        align = mock_align()
-        tag.set_tag(None, None, align)
-        self.assertEqual([], align.get_tags())
-
     def test_total_align_count(self):
         self.check_sysout_safe()
         sam_contents = \
@@ -541,7 +400,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEqual(samtools.AlignWriter.NULL, actual_writer)
 
     def test_filter_alignments_passthorughIncludedAligns(self):
-        align1 = mock_align(query_name="align1")
+        align1 = self.mock_align(query_name="align1")
         base = [align1]
         excluded_writer = MockAlignWriter()
 
@@ -553,9 +412,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
     def test_filter_alignments_skipsWriteIfNoExcludedWriter(self):
         flag = 99
-        align1 = mock_align(query_name="align1", flag=flag)
-        align2 = mock_align(query_name="align2", flag=flag^BamFlag.PROPER_PAIR)
-        align3 = mock_align(query_name="align3", flag=flag)
+        align1 = self.mock_align(query_name="align1", flag=flag)
+        align2 = self.mock_align(query_name="align2", flag=flag^BamFlag.PROPER_PAIR)
+        align3 = self.mock_align(query_name="align3", flag=flag)
         base = [align1, align2, align3]
 
         query_names = [x.query_name for x in filter_alignments(base)]
@@ -565,9 +424,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
     def test_filter_alignments_excludesUnpairedAligns(self):
         flag = 99
-        align1 = mock_align(query_name="align1", flag=flag)
-        align2 = mock_align(query_name="align2", flag=flag^BamFlag.PROPER_PAIR)
-        align3 = mock_align(query_name="align3", flag=flag)
+        align1 = self.mock_align(query_name="align1", flag=flag)
+        align2 = self.mock_align(query_name="align2", flag=flag^BamFlag.PROPER_PAIR)
+        align3 = self.mock_align(query_name="align3", flag=flag)
         base = [align1, align2, align3]
         excluded_writer = MockAlignWriter()
 
@@ -583,9 +442,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
     def test_filter_alignments_excludesSecondaryAligns(self):
         flag = 99
-        align1 = mock_align(query_name="align1", flag=flag)
-        align2 = mock_align(query_name="align2", flag=flag | BamFlag.SECONDARY)
-        align3 = mock_align(query_name="align3", flag=flag)
+        align1 = self.mock_align(query_name="align1", flag=flag)
+        align2 = self.mock_align(query_name="align2", flag=flag | BamFlag.SECONDARY)
+        align3 = self.mock_align(query_name="align3", flag=flag)
         base = [align1, align2, align3]
         excluded_writer = MockAlignWriter()
 
@@ -601,10 +460,10 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
     def test_filter_alignments_excludesSupplementaryAligns(self):
         flag = 99
-        align1 = mock_align(query_name="align1", flag=flag)
-        align2 = mock_align(query_name="align2",
+        align1 = self.mock_align(query_name="align1", flag=flag)
+        align2 = self.mock_align(query_name="align2",
                             flag=flag | BamFlag.SUPPLEMENTARY)
-        align3 = mock_align(query_name="align3", flag=flag)
+        align3 = self.mock_align(query_name="align3", flag=flag)
         base = [align1, align2, align3]
         excluded_writer = MockAlignWriter()
 
@@ -621,9 +480,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 
     def test_filter_alignments_excludesQCFails(self):
         flag = 99
-        align1 = mock_align(query_name="align1", flag=flag)
-        align2 = mock_align(query_name="align2", flag=flag | BamFlag.QCFAIL)
-        align3 = mock_align(query_name="align3", flag=flag)
+        align1 = self.mock_align(query_name="align1", flag=flag)
+        align2 = self.mock_align(query_name="align2", flag=flag | BamFlag.QCFAIL)
+        align3 = self.mock_align(query_name="align3", flag=flag)
         base = [align1, align2, align3]
         excluded_writer = MockAlignWriter()
 
@@ -638,9 +497,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEqual('qc failed', connor_align.filter_value)
 
     def test_filter_alignments_excludesMapq0(self):
-        align1 = mock_align(query_name="align1", mapping_quality=1)
-        align2 = mock_align(query_name="align2", mapping_quality=0)
-        align3 = mock_align(query_name="align3", mapping_quality=1)
+        align1 = self.mock_align(query_name="align1", mapping_quality=1)
+        align2 = self.mock_align(query_name="align2", mapping_quality=0)
+        align3 = self.mock_align(query_name="align3", mapping_quality=1)
         base = [align1, align2, align3]
         excluded_writer = MockAlignWriter()
 
@@ -655,9 +514,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
         self.assertEqual('mapping quality < 1', connor_align.filter_value)
 
     def test_filter_alignments_excludesCigarUnavailable(self):
-        align1 = mock_align(query_name="align1", cigarstring="6M")
-        align2 = mock_align(query_name="align2", cigarstring="*")
-        align3 = mock_align(query_name="align3", cigarstring="6M")
+        align1 = self.mock_align(query_name="align1", cigarstring="6M")
+        align2 = self.mock_align(query_name="align2", cigarstring="*")
+        align3 = self.mock_align(query_name="align3", cigarstring="6M")
         base = [align1, align2, align3]
         excluded_writer = MockAlignWriter()
 
@@ -707,9 +566,9 @@ class AlignWriterTest(BaseConnorTestCase):
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
-            align1 = ConnorAlign(mock_align(query_name="align1"))
-            align2 = ConnorAlign(mock_align(query_name="align2"))
-            align3 = ConnorAlign(mock_align(query_name="align3"))
+            align1 = ConnorAlign(self.mock_align(query_name="align1"))
+            align2 = ConnorAlign(self.mock_align(query_name="align2"))
+            align3 = ConnorAlign(self.mock_align(query_name="align3"))
             family = None
             writer = samtools.AlignWriter(header, bam_path)
 
@@ -730,15 +589,15 @@ class AlignWriterTest(BaseConnorTestCase):
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
-            align1 = ConnorAlign(mock_align(query_name='align1'))
-            align2 = ConnorAlign(mock_align(query_name='align2'))
-            align3 = ConnorAlign(mock_align(query_name='align3'))
+            align1 = ConnorAlign(self.mock_align(query_name='align1'))
+            align2 = ConnorAlign(self.mock_align(query_name='align2'))
+            align3 = ConnorAlign(self.mock_align(query_name='align3'))
 
-            tag1 = BamTag('X1','Z', 'desc',
+            tag1 = bamtag.BamTag('X1','Z', 'desc',
                           get_value=lambda family,pair,align: family)
-            tag2 = BamTag('X2','Z', 'desc',
+            tag2 = bamtag.BamTag('X2','Z', 'desc',
                           get_value=lambda family,pair,align: pair)
-            tag3 = BamTag('X3','Z', 'desc',
+            tag3 = bamtag.BamTag('X3','Z', 'desc',
                           get_value=lambda family,pair,align: align.query_name)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1, tag2, tag3])
@@ -776,12 +635,12 @@ class AlignWriterTest(BaseConnorTestCase):
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
-            align1 = ConnorAlign(mock_align(query_name='align1'))
-            align2 = ConnorAlign(mock_align(query_name='align2'))
-            align3 = ConnorAlign(mock_align(query_name='align3'))
+            align1 = ConnorAlign(self.mock_align(query_name='align1'))
+            align2 = ConnorAlign(self.mock_align(query_name='align2'))
+            align3 = ConnorAlign(self.mock_align(query_name='align3'))
 
             get_value = lambda family, pair, align: 'Yes' if align.query_name == 'align2' else None
-            tag1 = BamTag('X1','Z', 'desc', get_value=get_value)
+            tag1 = bamtag.BamTag('X1','Z', 'desc', get_value=get_value)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1])
 
@@ -812,10 +671,10 @@ class AlignWriterTest(BaseConnorTestCase):
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
-            align1 = ConnorAlign(mock_align(query_name='align1'))
+            align1 = ConnorAlign(self.mock_align(query_name='align1'))
             align1.set_tag('X1', 'No', 'Z')
 
-            tag1 = BamTag('X1','Z', 'desc',
+            tag1 = bamtag.BamTag('X1','Z', 'desc',
                           get_value = lambda family, pair, align: None)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1])
@@ -845,8 +704,8 @@ class AlignWriterTest(BaseConnorTestCase):
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}],
                       'CO': ['comment1', 'comment2']}
-            tag1 = BamTag('X1','Z', 'annotates family', get_value=None)
-            tag2 = BamTag('X2','Z', 'annotates alignment', get_value=None)
+            tag1 = bamtag.BamTag('X1','Z', 'annotates family', get_value=None)
+            tag2 = bamtag.BamTag('X2','Z', 'annotates alignment', get_value=None)
             writer = samtools.AlignWriter(header, bam_path, [tag2, tag1])
             writer.close()
 
@@ -874,16 +733,16 @@ class AlignWriterTest(BaseConnorTestCase):
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
-            align1 = ConnorAlign(mock_align(query_name='align1',
+            align1 = ConnorAlign(self.mock_align(query_name='align1',
                                             reference_start=100))
-            align2 = ConnorAlign(mock_align(query_name='align2',
+            align2 = ConnorAlign(self.mock_align(query_name='align2',
                                             reference_start=200))
-            align3 = ConnorAlign(mock_align(query_name='align3',
+            align3 = ConnorAlign(self.mock_align(query_name='align3',
                                             reference_start=300))
 
-            tag1 = BamTag('X1','Z', 'desc',
+            tag1 = bamtag.BamTag('X1','Z', 'desc',
                           get_value=lambda family, pair, align: family)
-            tag2 = BamTag('X2','Z', 'desc',
+            tag2 = bamtag.BamTag('X2','Z', 'desc',
                           get_value=lambda family, pair, align: align.query_name)
 
             writer = samtools.AlignWriter(header, bam_path, [tag1, tag2])
@@ -908,7 +767,7 @@ class AlignWriterTest(BaseConnorTestCase):
             header = { 'HD': {'VN': '1.0'},
                       'SQ': [{'LN': 1575, 'SN': 'chr1'},
                              {'LN': 1584, 'SN': 'chr2'}] }
-            align1 = ConnorAlign(mock_align(query_name='align1',
+            align1 = ConnorAlign(self.mock_align(query_name='align1',
                                             reference_start=100))
 
             writer = samtools.AlignWriter(header, bam_path, [])
@@ -918,47 +777,6 @@ class AlignWriterTest(BaseConnorTestCase):
         info_log_lines = self.mock_logger._log_calls['INFO']
         self.assertEqual(1, len(info_log_lines))
         self.assertRegexpMatches(info_log_lines[0], 'destination.bam')
-
-class BamTagTest(BaseConnorTestCase):
-    def test_init_setsHeaderComment(self):
-        tag = BamTag('foo', 'Z', 'foo description', lambda fam, align: None)
-        self.assertEqual('connor\tBAM tag\tfoo: foo description',
-                         tag.header_comment)
-
-    def test_set_tag(self):
-        def get_value (family, pair, align):
-            return family + ':' + pair + ':' + align.query_name
-        tag = BamTag('X9', 'Z', 'foo description', get_value)
-        connor_align = ConnorAlign(mock_align())
-
-        tag.set_tag('family1', 'pair1', connor_align)
-
-        self.assertEqual([('X9', 'family1:pair1:align1')],
-                         connor_align.get_tags())
-
-    def test_set_tag_NoneReplacedWIthNullObject(self):
-        def get_value(family, pair, align):
-            return ':'.join([type(family).__name__,
-                             type(pair).__name__,
-                             type(align).__name__])
-        tag = BamTag('X9', 'Z', 'foo description', get_value)
-        connor_align = ConnorAlign(mock_align(query_name='baz'))
-
-        tag.set_tag(None, None, connor_align)
-
-        self.assertEqual([('X9', '_NullObject:_NullObject:ConnorAlign')], connor_align.get_tags())
-
-
-    def test_lt_sortsByNameThenDescription(self):
-        base = BamTag('X2', 'i', 'Desc B', None)
-        self.assertEqual(False, base.__lt__(base))
-        self.assertEqual(False, base.__lt__(BamTag('X2','i', 'Desc B', None)))
-
-        self.assertEqual(True, base.__lt__(BamTag('X2','i', 'Desc C', None)))
-        self.assertEqual(True, base.__lt__(BamTag('X3','i', 'Desc B', None)))
-
-        self.assertEqual(False, base.__lt__(BamTag('X1','i', 'Desc B', None)))
-        self.assertEqual(False, base.__lt__(BamTag('X2','i', 'Desc A', None)))
 
 
 class LoggingWriterTest(BaseConnorTestCase):

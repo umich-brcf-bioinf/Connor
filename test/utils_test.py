@@ -56,6 +56,14 @@ class BaseConnorTestCase(unittest.TestCase):
         unittest.TestCase.tearDown(self)
 
     @staticmethod
+    def check_sysout_safe():
+        try:
+            # nosetest and pylint fight over stdout; run nosetest -s to be safe
+            sys.stdout.fileno() #pylint disable=pointless-statement
+        except Exception: #pylint disable=broad=except
+            raise SkipTest("sysout unsafe to test: run nosetest with -s option")
+
+    @staticmethod
     def create_file(path, filename, contents):
         filename = os.path.join(path, filename)
         with open(filename, 'wt') as new_file:
@@ -69,6 +77,24 @@ class BaseConnorTestCase(unittest.TestCase):
         bam_filename = sam_filename.replace(".sam", ".bam")
         BaseConnorTestCase.pysam_bam_from_sam(sam_filename, bam_filename, index)
         return bam_filename
+
+    @staticmethod
+    def mock_align(**kwargs):
+        a = pysamwrapper.aligned_segment()
+        a.query_name = "align1"
+        a.flag = 99
+        a.reference_id = 0
+        a.reference_start = 32
+        a.mapping_quality = 20
+        a.cigar = ((0,7),)
+        a.next_reference_id = 0
+        a.next_reference_start=199
+        a.template_length=167
+        #query_qualities must be set after query_sequence
+        a.query_sequence=kwargs.pop('query_sequence', 'AGCTTAG')
+        for (key, value) in kwargs.items():
+            setattr(a, key, value)
+        return a
 
     @staticmethod
     def pysam_bam_from_sam(sam_filename, bam_filename, index=True):
@@ -99,13 +125,6 @@ class BaseConnorTestCase(unittest.TestCase):
         #pylint: disable=redundant-unittest-assert
         self.assertTrue(True)
 
-    @staticmethod
-    def check_sysout_safe():
-        try:
-            # nosetest and pylint fight over stdout; run nosetest -s to be safe
-            sys.stdout.fileno() #pylint disable=pointless-statement
-        except Exception: #pylint disable=broad=except
-            raise SkipTest("sysout unsafe to test: run nosetest with -s option")
 
 class FilteredGeneratorTest(BaseConnorTestCase):
     def test_filter_passesAllThroughWhenNoFilters(self):

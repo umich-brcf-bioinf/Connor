@@ -19,7 +19,6 @@ import connor.utils as utils
 from connor.connor import _CoordinateFamilyHolder
 from connor.samtools import ConnorAlign
 from test.samtools_test import MockAlignWriter
-from test.samtools_test import mock_align
 import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
@@ -55,7 +54,7 @@ def _mock_tag_family(align_pairs=None,
                      filter_value=filter_value,
                      included_pair_count=included_pair_count)
 
-# #TODO: cgates: replace this with samtools_test.mock_align
+# #TODO: cgates: replace this with self.mock_align
 class MockAlignSegment(object):
     #pylint: disable=too-many-instance-attributes
     def __init__(self,
@@ -156,13 +155,13 @@ class TagFamiliyTest(BaseConnorTestCase):
 
     def test_is_consensus_template(self):
         def pair(name):
-            left = ConnorAlign(mock_align(query_name=name))
-            right = ConnorAlign(mock_align(query_name=name))
+            left = ConnorAlign(self.mock_align(query_name=name))
+            right = ConnorAlign(self.mock_align(query_name=name))
             return samtools.PairedAlignment(left, right)
         pairA = pair('alignA')
-        alignA = ConnorAlign(mock_align(query_name='alignA'))
-        alignB = ConnorAlign(mock_align(query_name='alignB'))
-        alignC = ConnorAlign(mock_align(query_name='alignC'))
+        alignA = ConnorAlign(self.mock_align(query_name='alignA'))
+        alignB = ConnorAlign(self.mock_align(query_name='alignB'))
+        alignC = ConnorAlign(self.mock_align(query_name='alignC'))
         tag_family = connor._TagFamily(umt=("AAA", "CCC"),
                                        alignments=[pairA],
                                        inexact_match_count=0,
@@ -173,8 +172,8 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEqual(False, tag_family.is_consensus_template(alignC))
 
     def test_umt(self):
-        left = ConnorAlign(mock_align())
-        right = ConnorAlign(mock_align())
+        left = ConnorAlign(self.mock_align())
+        right = ConnorAlign(self.mock_align())
         pair1 = samtools.PairedAlignment(left, right)
 
         input_umt = ('AAANNN', 'CCCNNN')
@@ -261,9 +260,8 @@ class TagFamiliyTest(BaseConnorTestCase):
         self.assertEquals("TNTnnn",
                           consensus_pair.right.query_sequence)
 
-    @staticmethod
-    def connor_align(query_name, query_sequence, mapping_quality):
-        return ConnorAlign(mock_align(query_name=query_name,
+    def connor_align(self, query_name, query_sequence, mapping_quality):
+        return ConnorAlign(self.mock_align(query_name=query_name,
                                       query_sequence=query_sequence,
                                       mapping_quality=mapping_quality))
 
@@ -448,8 +446,8 @@ class TagFamiliyTest(BaseConnorTestCase):
 
     def test_init_addsFilterForMinority(self):
         def pair(name, c1, c2):
-            left = ConnorAlign(mock_align(query_name=name, cigarstring=c1))
-            right = ConnorAlign(mock_align(query_name=name, cigarstring=c2))
+            left = ConnorAlign(self.mock_align(query_name=name, cigarstring=c1))
+            right = ConnorAlign(self.mock_align(query_name=name, cigarstring=c2))
             return samtools.PairedAlignment(left, right)
         pairA = pair('alignA', '3S3M', '3S3M')
         pairB = pair('alignB', '3S3M', '3S3M')
@@ -478,8 +476,8 @@ class TagFamiliyTest(BaseConnorTestCase):
 
     def test_included_pair_count(self):
         def pair(c1, c2):
-            left = ConnorAlign(mock_align(cigarstring=c1))
-            right = ConnorAlign(mock_align(cigarstring=c2))
+            left = ConnorAlign(self.mock_align(cigarstring=c1))
+            right = ConnorAlign(self.mock_align(cigarstring=c2))
             return samtools.PairedAlignment(left, right)
         pairA = pair("3S3M", "3S3M")
         pairB = pair("3S3M", "3S3M")
@@ -642,10 +640,10 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
 
 class ConnorTest(BaseConnorTestCase):
     def test_build_coordinate_pairs_singlePair(self):
-        align1L = ConnorAlign(mock_align(query_name='1',
+        align1L = ConnorAlign(self.mock_align(query_name='1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name='1',
+        align1R = ConnorAlign(self.mock_align(query_name='1',
                                          reference_start=200,
                                          next_reference_start=100))
         aligns = [align1L, align1R]
@@ -658,16 +656,16 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual(align1R, actual_pair.right)
 
     def test_build_coordinate_pairs_oneCoordinate(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align2L = ConnorAlign(mock_align(query_name = '2',
+        align2L = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=100,
                                          next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=200,
                                          next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
+        align2R = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=200,
                                          next_reference_start=100))
         aligns = [align1L, align2L, align1R, align2R]
@@ -682,22 +680,22 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual(align2R, pairs['2'].right)
 
     def test_build_coordinate_pairs_twoCoordinatesSameRight(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align2L = ConnorAlign(mock_align(query_name = '2',
+        align2L = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=100,
                                          next_reference_start=200))
-        align3L = ConnorAlign(mock_align(query_name = '3',
+        align3L = ConnorAlign(self.mock_align(query_name = '3',
                                          reference_start=125,
                                          next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=200,
                                          next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
+        align2R = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=200,
                                          next_reference_start=100))
-        align3R = ConnorAlign(mock_align(query_name = '3',
+        align3R = ConnorAlign(self.mock_align(query_name = '3',
                                          reference_start=200,
                                          next_reference_start=125))
         aligns = [align1L, align2L, align3L, align1R, align2R, align3R]
@@ -709,10 +707,10 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual(set(['1', '2', '3']), actual_pair_names)
 
     def test_build_coordinate_pairs_identicalCoordinates(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=100))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=100))
         aligns = [align1L, align1R]
@@ -725,13 +723,13 @@ class ConnorTest(BaseConnorTestCase):
 
 
     def test_build_coordinate_pairs_orphanedRightIsSafe(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=200,
                                          next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
+        align2R = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=200,
                                          next_reference_start=100))
         aligns = [align1L, align1R, align2R]
@@ -743,13 +741,13 @@ class ConnorTest(BaseConnorTestCase):
         self.assertEqual(set(['1']), actual_pair_names)
 
     def test_build_coordinate_pairs_orphanedRightWrittenToExcluded(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align2R = ConnorAlign(mock_align(query_name = '2',
+        align2R = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=150,
                                          next_reference_start=100))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=200,
                                          next_reference_start=100))
         aligns = [align1L, align1R, align2R]
@@ -766,13 +764,13 @@ class ConnorTest(BaseConnorTestCase):
                          actual_align.filter_value)
 
     def test_build_coordinate_pairs_whenExhasutedRemaindersWrittenToExcluded(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=200,
                                          next_reference_start=100))
-        align3L = ConnorAlign(mock_align(query_name = '3',
+        align3L = ConnorAlign(self.mock_align(query_name = '3',
                                          reference_start=150,
                                          next_reference_start=250))
         aligns = [align1L, align3L, align1R]
@@ -789,19 +787,19 @@ class ConnorTest(BaseConnorTestCase):
                          actual_align.filter_value)
 
     def test_build_coordinate_pairs_lookForPassedPops(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
+        align1L = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=100,
                                          next_reference_start=200))
-        align2L = ConnorAlign(mock_align(query_name = '2',
+        align2L = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=100,
                                          next_reference_start=200))
-        align3L = ConnorAlign(mock_align(query_name = '3',
+        align3L = ConnorAlign(self.mock_align(query_name = '3',
                                          reference_start=300,
                                          next_reference_start=400))
-        align1R = ConnorAlign(mock_align(query_name = '1',
+        align1R = ConnorAlign(self.mock_align(query_name = '1',
                                          reference_start=200,
                                          next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
+        align2R = ConnorAlign(self.mock_align(query_name = '2',
                                          reference_start=200,
                                          next_reference_start=100))
 

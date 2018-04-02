@@ -2,6 +2,7 @@
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
+import os
 
 from testfixtures.tempdirectory import TempDirectory
 
@@ -23,10 +24,10 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            bam = create_bam(tmp_dir.path,
-                             "input.sam",
-                             sam_contents,
-                              index=False)
+            bam = self.create_bam(tmp_dir.path,
+                                  "input.sam",
+                                  sam_contents,
+                                  index=False)
             pysamwrapper.sort_and_index_bam(bam)
             alignments = pysamwrapper.alignment_file(bam, "rb").fetch()
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
@@ -43,10 +44,10 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
             try:
                 os.chdir(tmp_dir.path)
                 os.mkdir("tmp")
-                bam = create_bam(os.path.join(tmp_dir.path, "tmp"),
-                                 "input.sam",
-                                 sam_contents,
-                                 index=False)
+                bam = self.create_bam(os.path.join(tmp_dir.path, "tmp"),
+                                      "input.sam",
+                                      sam_contents,
+                                      index=False)
                 bam_filename = os.path.basename(bam)
 
                 pysamwrapper.sort_and_index_bam(os.path.join("tmp", bam_filename))

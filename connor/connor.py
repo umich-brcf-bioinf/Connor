@@ -34,6 +34,7 @@ from sortedcontainers import SortedSet
 import connor
 import connor.command_validator as command_validator
 import connor.samtools as samtools
+import connor.consam.bamtag as bamtag
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.familyhandler as familyhandler
 import connor.utils as utils
@@ -500,7 +501,7 @@ def main(command_line_args=None):
         log.info('connor begins (v{})', __version__)
         log.info('logging to [{}]', args.log_file)
         utils.log_environment_info(log, args)
-        bam_tags = samtools._build_bam_tags()
+        bam_tags = bamtag.build_bam_tags()
         base_annotated_writer = samtools.build_writer(args.input_bam,
                                                       args.annotated_output_bam,
                                                       bam_tags,
