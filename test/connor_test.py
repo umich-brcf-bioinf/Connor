@@ -14,6 +14,7 @@ except ImportError:
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
 from connor import samtools
+import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 from connor.connor import _CoordinateFamilyHolder
 from connor.samtools import ConnorAlign
@@ -1163,9 +1164,9 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 "input.sam",
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        "input.sam",
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(simplify_pg_header=True,
                              original_command_line='foo')
@@ -1183,7 +1184,7 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                                      annotated_writer,
                                      self.mock_logger)
             consensus_writer.close()
-            alignments = samtools.alignment_file(output_bam, "rb").fetch()
+            alignments = pysamwrapper.alignment_file(output_bam, "rb").fetch()
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
@@ -1210,9 +1211,9 @@ readNameC2|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        'input.sam',
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
             args = Namespace(input_bam=input_bam,
                              output_bam=output_bam,
@@ -1261,9 +1262,9 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 "input.sam",
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        "input.sam",
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
@@ -1282,7 +1283,7 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
                                      annotated_writer,
                                      self.mock_logger)
             consensus_writer.close()
-            alignments = samtools_test.pysam_alignments_from_bam(output_bam)
+            alignments = self.pysam_alignments_from_bam(output_bam)
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
@@ -1306,9 +1307,9 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        'input.sam',
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
             output_log = os.path.join(tmp_dir.path, 'output.log')
             old_dedup_alignments = connor._dedup_alignments

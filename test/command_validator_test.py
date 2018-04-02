@@ -85,7 +85,7 @@ class CommandValidatorTest(BaseConnorTestCase):
 @SQ|SN:chr10|LN:135534747
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=False)
@@ -109,7 +109,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @SQ|SN:chr10|LN:135534747
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -124,7 +124,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @SQ|SN:chr10|LN:135534747
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=False)
@@ -141,7 +141,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @PG|ID:foo|PN:bwa
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -157,7 +157,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @PG|ID:foo|PN:connor
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -175,7 +175,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @SQ|SN:chr10|LN:135534747
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -190,7 +190,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @PG|ID:bwa|VN:1.3
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -205,7 +205,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @PG|ID:foo|PN:connor
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -224,7 +224,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @SQ|SN:chr10|LN:135534747
 '''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -240,7 +240,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 @SQ|SN:chr10|LN:135534747
 readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -255,7 +255,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
 readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
         sam_contents = sam_contents.format(flag='16').replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -275,7 +275,7 @@ readNameA1|{paired_flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
         sam_contents = sam_contents.format(unpaired_flag='16', paired_flag='99')
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -291,7 +291,7 @@ readNameA1|{paired_flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
 readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
         sam_contents = sam_contents.format(flag='16').replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -321,7 +321,7 @@ readNameA5|147|chr10|100|20|5M3S|=|300|200|AAAAANNN|>>>>>>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -347,7 +347,7 @@ readNameA5|147|chr10|100|20|5M3S|=|300|200|AAAAANNN|>>>>>>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -374,7 +374,7 @@ readNameA5|147|chr10|100|20|5M3S|=|300|200|AAAAANNN|>>>>>>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -402,7 +402,7 @@ readNameA5|147|chr10|100|20|5M3S|=|300|200|AAAAANNN|>>>>>>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -430,7 +430,7 @@ readNameA5|147|chr10|100|20|5M3S|=|300|200|AAAAANNN|>>>>>>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -468,7 +468,7 @@ readNameA0|147|chr10|100|20|3M|=|300|200|AAA|>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -504,7 +504,7 @@ readNameA0|147|chr10|100|20|3M|=|300|200|AAA|>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -543,7 +543,7 @@ readNameA0|147|chr10|100|20|3M|=|300|200|AAA|>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)
@@ -582,7 +582,7 @@ readNameA0|147|chr10|100|20|3M|=|300|200|AAA|>>>
 '''
         sam_contents = sam_contents.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam_path = samtools_test.create_bam(tmp_dir.path,
+            input_bam_path = self.create_bam(tmp_dir.path,
                                                       "input.sam",
                                                       sam_contents,
                                                       index=True)

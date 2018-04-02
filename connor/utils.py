@@ -15,7 +15,6 @@ import sys
 
 import pysam
 
-
 class UsageError(Exception):
     '''Raised for malformed command or invalid arguments.'''
     def __init__(self, msg, *args):
@@ -153,3 +152,9 @@ def log_environment_info(log, args):
     log.debug('platform_uname|{}', platform.uname())
     log.debug('platform_python_version|{}', platform.python_version())
     log.debug('pysam_version|{}', pysam.__version__)
+
+def _byte_array_to_string(sequence):
+    if isinstance(sequence, str):
+        return sequence
+    else:
+        return str(sequence.decode("utf-8"))

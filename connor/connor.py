@@ -34,6 +34,7 @@ from sortedcontainers import SortedSet
 import connor
 import connor.command_validator as command_validator
 import connor.samtools as samtools
+import connor.consam.pysamwrapper as pysamwrapper
 import connor.familyhandler as familyhandler
 import connor.utils as utils
 from connor.samtools import LoggingWriter
@@ -458,7 +459,7 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
                                                    annotated_writer,
                                                    log)
 
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
     coord_family_holder = _CoordinateFamilyHolder()
     supplemental_log = _build_supplemental_log(coord_family_holder)
     progress_gen = _progress_logger(bamfile.fetch(),

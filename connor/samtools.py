@@ -1,24 +1,15 @@
-"""Simplifies discrepancies in how different versions pysam wrap samtools"""
+'''Connor-specific utils and classes for working with alignments'''
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict, OrderedDict
 from copy import deepcopy
 import os
-import re
-from pkg_resources import parse_version
-
-import pysam
 
 import connor
+from connor.consam.bamflag import BamFlag
+import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 
 DEFAULT_TAG_LENGTH = 6
-
-def _byte_array_to_string(sequence):
-    if isinstance(sequence, str):
-        return sequence
-    else:
-        return str(sequence.decode("utf-8"))
-
 
 class AlignWriter(object):
     class _NullWriter(object):
@@ -37,7 +28,9 @@ class AlignWriter(object):
             self._tags = sorted(tags)
         new_header = self._add_header_lines(header, self._tags)
         self._bam_path = bam_path
-        self._bam_file = pysam.AlignmentFile(bam_path, "wb", header=new_header)
+        self._bam_file = pysamwrapper.alignment_file(bam_path,
+                                                     'wb',
+                                                     header=new_header)
 
     @staticmethod
     def _add_header_lines(original_header, tags):
@@ -63,7 +56,7 @@ class AlignWriter(object):
         self._bam_file.close()
         if log:
             log.info("sorting/indexing [{}]".format(self._bam_path))
-        sort_and_index_bam(self._bam_path)
+        pysamwrapper.sort_and_index_bam(self._bam_path)
 
 
 class LoggingWriter(object):
@@ -263,21 +256,6 @@ class BamTag(object):
         connor_align.set_tag(self._tag_name, value, self._tag_type)
 
 
-class BamFlag(object):
-    PAIRED = 1
-    PROPER_PAIR = 2
-    UNMAP = 4
-    MUNMAP = 8
-    REVERSE = 16
-    MREVERSE = 32
-    READ1 = 64
-    READ2 = 128
-    SECONDARY = 256
-    QCFAIL = 512
-    DUP = 1024
-    SUPPLEMENTARY = 2048
-
-
 class PairedAlignment(object):
     '''Represents the left and right align pairs from an single sequence.'''
     def __init__(self,
@@ -327,10 +305,10 @@ class PairedAlignment(object):
         left_qual = self.left.query_qualities
         right_qual = self.right.query_qualities
         left_query_frag = self.left.query_sequence[len(umt[0]):]
-        left_query_frag_str = _byte_array_to_string(left_query_frag)
+        left_query_frag_str = utils._byte_array_to_string(left_query_frag)
         self.left.query_sequence = umt[0] + left_query_frag_str
         right_query_frag = self.right.query_sequence[:-len(umt[1])]
-        right_query_frag_str = _byte_array_to_string(right_query_frag)
+        right_query_frag_str = utils._byte_array_to_string(right_query_frag)
         self.right.query_sequence = right_query_frag_str + umt[1]
         self.umt = umt
         self.left.query_qualities = left_qual
@@ -351,137 +329,6 @@ class PairedAlignment(object):
                                     self.right.reference_start,
                                     self.right.query_sequence)
 
-
-class _Pysam8Wrapper(object):
-    @staticmethod
-    def is_compatible_version(pysam_version):
-        return parse_version(pysam_version) < parse_version('0.9')
-
-    @staticmethod
-    def aligned_segment():
-        return pysam.AlignedSegment()
-
-    @staticmethod
-    def get_header_dict(input_bam):
-        return input_bam.header
-
-    @staticmethod
-    def index(bam_filepath):
-        pysam.index(bam_filepath, catch_stdout=False)
-
-    @staticmethod
-    def sort(input_bam_filepath, output_bam_filepath):
-        output_bam_filepath_prefix = os.path.splitext(output_bam_filepath)[0]
-        pysam.sort(input_bam_filepath,
-                   output_bam_filepath_prefix,
-                   catch_stdout=False)
-    @staticmethod
-    def idxstats(input_bam_filepath):
-        return pysam.idxstats(input_bam_filepath)
-
-
-class _Pysam9Wrapper(object):
-    @staticmethod
-    def is_compatible_version(pysam_version):
-        return parse_version('0.9') <= parse_version(pysam_version) < parse_version('0.10')
-
-    @staticmethod
-    def aligned_segment():
-        return pysam.AlignedSegment()
-
-    @staticmethod
-    def get_header_dict(input_bam):
-        return input_bam.header
-
-    @staticmethod
-    def index(bam_filepath):
-        pysam.samtools.index(bam_filepath, catch_stdout=False)
-
-    @staticmethod
-    def sort(input_bam_filepath, output_bam_filepath):
-        pysam.samtools.sort(input_bam_filepath,
-                            '-o',
-                            output_bam_filepath,
-                            catch_stdout=False)
-
-    @staticmethod
-    def idxstats(input_bam_filepath):
-        result = pysam.samtools.idxstats(input_bam_filepath)
-        return _byte_array_to_string(result).split('\n')
-
-
-class _Pysam10_11_12_13Wrapper(object):
-    @staticmethod
-    def is_compatible_version(pysam_version):
-        return parse_version('0.10') <= parse_version(pysam_version) < parse_version('0.14')
-
-    @staticmethod
-    def aligned_segment():
-        return pysam.AlignedSegment()
-
-    @staticmethod
-    def get_header_dict(input_bam):
-        return input_bam.header
-
-    @staticmethod
-    def index(bam_filepath):
-        pysam.samtools.index(bam_filepath, catch_stdout=False)
-
-    @staticmethod
-    def sort(input_bam_filepath, output_bam_filepath):
-        pysam.samtools.sort('-o',
-                            output_bam_filepath,
-                            input_bam_filepath,
-                            catch_stdout=False)
-
-    @staticmethod
-    def idxstats(input_bam_filepath):
-        result = pysam.samtools.idxstats(input_bam_filepath)
-        return _byte_array_to_string(result).split('\n')
-
-
-class _Pysam14Wrapper(object):
-    @staticmethod
-    def is_compatible_version(pysam_version):
-        return parse_version(pysam_version) >= parse_version('0.14')
-
-    @staticmethod
-    def aligned_segment():
-        return pysam.AlignedSegment()
-
-    @staticmethod
-    def get_header_dict(input_bam):
-        return input_bam.header.to_dict()
-
-    @staticmethod
-    def index(bam_filepath):
-        pysam.samtools.index(bam_filepath, catch_stdout=False)
-
-    @staticmethod
-    def sort(input_bam_filepath, output_bam_filepath):
-        pysam.samtools.sort('-o',
-                            output_bam_filepath,
-                            input_bam_filepath,
-                            catch_stdout=False)
-
-    @staticmethod
-    def idxstats(input_bam_filepath):
-        result = pysam.samtools.idxstats(input_bam_filepath)
-        return _byte_array_to_string(result).split('\n')
-
-
-def _get_pysam_wrapper():
-    pysam_wrappers = [_Pysam14Wrapper(),
-                      _Pysam10_11_12_13Wrapper(),
-                      _Pysam9Wrapper(),
-                      _Pysam8Wrapper()]
-    for wrapper in pysam_wrappers:
-        if wrapper.is_compatible_version(pysam.__version__):
-            return wrapper
-    msg = 'no wrapper compatible with pysam version {}'.format(pysam.__version__)
-    raise RuntimeError(msg)
-
-SAMTOOLS_UTIL = _get_pysam_wrapper()
 
 class ConnorAlign(object):
     # cgates: FYI, you can use dynamic delegation via __setattr__ and
@@ -620,26 +467,6 @@ def filter_alignments(pysam_alignments, excluded_writer=AlignWriter.NULL):
         else:
             yield connor_align
 
-def alignment_file(filename, mode, template=None):
-    return pysam.AlignmentFile(filename, mode, template)
-
-def sort(input_bam_filepath, output_bam_filepath):
-    SAMTOOLS_UTIL.sort(input_bam_filepath, output_bam_filepath)
-
-def index(bam_filepath):
-    SAMTOOLS_UTIL.index(bam_filepath)
-
-def sort_and_index_bam(bam_filename):
-    output_dir = os.path.dirname(bam_filename)
-    output_root = os.path.splitext(os.path.basename(bam_filename))[0]
-    sorted_bam_filename = os.path.join(output_dir,
-                                       output_root + ".sorted.bam")
-    sort(bam_filename, sorted_bam_filename)
-    os.rename(sorted_bam_filename, bam_filename)
-    index(bam_filename)
-
-def get_header_dict(bamfile):
-    return SAMTOOLS_UTIL.get_header_dict(bamfile)
 
 CONNOR_PG_ID='connor'
 CONNOR_PG_PN='connor'
@@ -659,8 +486,8 @@ def build_writer(input_bam, output_bam, tags, args):
     if not output_bam:
         return AlignWriter.NULL
     else:
-        input_bam = alignment_file(input_bam, 'rb')
-        header_dict = get_header_dict(input_bam)
+        input_bam = pysamwrapper.alignment_file(input_bam, 'rb')
+        header_dict = pysamwrapper.get_header_dict(input_bam)
         input_bam.close()
         _set_pg_header(header_dict,
                        args.simplify_pg_header,
@@ -670,7 +497,7 @@ def build_writer(input_bam, output_bam, tags, args):
 def total_align_count(input_bam):
     '''Returns count of all mapped alignments in input BAM (based on index)'''
     count = 0
-    for line in SAMTOOLS_UTIL.idxstats(input_bam):
+    for line in pysamwrapper.idxstats(input_bam):
         if line:
             chrom, _, mapped, unmapped = line.strip().split('\t')
             if chrom != '*':

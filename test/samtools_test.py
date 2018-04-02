@@ -12,13 +12,14 @@ import pysam
 from testfixtures.tempdirectory import TempDirectory
 
 import connor
-from connor.samtools import BamFlag
+from connor.consam.bamflag import BamFlag
+import connor.consam.pysamwrapper as pysamwrapper
+import connor.samtools as samtools
 from connor.samtools import BamTag
 from connor.samtools import ConnorAlign
 from connor.samtools import filter_alignments
-import connor.samtools as samtools
 from test.utils_test import MicroMock
-import test.utils_test as utils_test
+from test.utils_test import BaseConnorTestCase
 
 
 class MockAlignWriter(object):
@@ -36,7 +37,7 @@ class MockAlignWriter(object):
         self._close_was_called = True
 
 def mock_align(**kwargs):
-    a = samtools.SAMTOOLS_UTIL.aligned_segment()
+    a = pysamwrapper.aligned_segment()
     a.query_name = "align1"
     a.flag = 99
     a.reference_id = 0
@@ -52,37 +53,8 @@ def mock_align(**kwargs):
         setattr(a, key, value)
     return a
 
-def _create_file(path, filename, contents):
-    filename = os.path.join(path, filename)
-    with open(filename, 'wt') as new_file:
-        new_file.write(contents)
-        new_file.flush()
-    return filename
 
-def create_bam(path, filename, sam_contents, index=True):
-    sam_filename = _create_file(path, filename, sam_contents)
-    bam_filename = sam_filename.replace(".sam", ".bam")
-    pysam_bam_from_sam(sam_filename, bam_filename, index)
-    return bam_filename
-
-def pysam_bam_from_sam(sam_filename, bam_filename, index=True):
-    infile = samtools.alignment_file(sam_filename, "r")
-    outfile = samtools.alignment_file(bam_filename, "wb", template=infile)
-    for s in infile:
-        outfile.write(s)
-    infile.close()
-    outfile.close()
-    if index:
-        samtools.index(bam_filename)
-
-def pysam_alignments_from_bam(bam_filename):
-    infile = samtools.alignment_file(bam_filename, "rb")
-    aligned_segments = [s for s in infile]
-    infile.close()
-    return aligned_segments
-
-
-class ConnorAlignTest(utils_test.BaseConnorTestCase):
+class ConnorAlignTest(BaseConnorTestCase):
     def test_eq(self):
         pysam_align = mock_align(query_name="align1")
         base =  ConnorAlign(pysam_align)
@@ -220,7 +192,7 @@ class ConnorAlignTest(utils_test.BaseConnorTestCase):
         self.assertEqual('neither', ConnorAlign(pysam_align).orientation)
 
 
-class PairedAlignmentTest(utils_test.BaseConnorTestCase):
+class PairedAlignmentTest(BaseConnorTestCase):
     def test_init(self):
         left_align = mock_align(query_name="alignA",
                                 query_sequence="AAATTT" "GGGG")
@@ -374,7 +346,7 @@ class PairedAlignmentTest(utils_test.BaseConnorTestCase):
                                 ('G',))
 
 
-class SamtoolsTest(utils_test.BaseConnorTestCase):
+class SamtoolsTest(BaseConnorTestCase):
     @staticmethod
     def get_tag(tags, name):
         for tag in tags:
@@ -513,11 +485,11 @@ readNameZ1|77|*|0|0|*|*|0|0|TTTTT|>>>>>
 readNameZ1|141|*|0|0|*|*|0|0|GGGGG|>>>>>
 '''.replace("|", "\t")
         with TempDirectory() as tmp_dir:
-            input_bam = create_bam(tmp_dir.path,
-                                   'input.sam',
-                                   sam_contents,
-                                   index=False)
-            samtools.sort_and_index_bam(input_bam)
+            input_bam = self.create_bam(tmp_dir.path,
+                                       'input.sam',
+                                       sam_contents,
+                                       index=False)
+            pysamwrapper.sort_and_index_bam(input_bam)
             actual_count = samtools.total_align_count(input_bam)
             self.assertEqual(6, actual_count)
 
@@ -531,9 +503,9 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = create_bam(tmp_dir.path,
-                                   'input.sam',
-                                   sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        'input.sam',
+                                        sam_contents)
             annotated_output_bam = os.path.join(tmp_dir.path, 'annotated.bam')
             tags = []
             args = Namespace(original_command_line=['command-line'],
@@ -544,7 +516,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                                   args)
             actual_writer.close()
 
-            actual_output = samtools.alignment_file(annotated_output_bam, 'rb',)
+            actual_output = pysamwrapper.alignment_file(annotated_output_bam, 'rb',)
             expected_header = {'HD': {'SO': 'coordinate',
                                       'VN': '1.4'},
                                'SQ': [{'SN': 'chr10', 'LN': 135534747}],
@@ -556,7 +528,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                        'CL':'command-line'
                                        },
                                       ]}
-            actual_header = samtools.get_header_dict(actual_output)
+            actual_header = pysamwrapper.get_header_dict(actual_output)
             if isinstance(actual_header, OrderedDict):
                 actual_header = dict(actual_header)
             self.assertEqual(expected_header, actual_header)
@@ -567,61 +539,6 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                               tags=[],
                                               args=Namespace())
         self.assertEqual(samtools.AlignWriter.NULL, actual_writer)
-
-    def test_sort_and_index_bam(self):
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameA2|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-'''.replace("|", "\t")
-
-        with TempDirectory() as tmp_dir:
-            bam = create_bam(tmp_dir.path,
-                             "input.sam",
-                             sam_contents,
-                              index=False)
-            samtools.sort_and_index_bam(bam)
-            alignments = samtools.alignment_file(bam, "rb").fetch()
-            aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
-            self.assertEquals(6, len(aligns))
-            self.assertEquals([("readNameA1", 100),
-                               ("readNameA2", 100),
-                               ("readNameB1", 200),
-                               ("readNameA1", 300),
-                               ("readNameA2", 300),
-                               ("readNameB1", 400)],
-                              aligns)
-
-            original_dir = os.getcwd()
-            try:
-                os.chdir(tmp_dir.path)
-                os.mkdir("tmp")
-                bam = create_bam(os.path.join(tmp_dir.path, "tmp"),
-                                 "input.sam",
-                                 sam_contents,
-                                 index=False)
-                bam_filename = os.path.basename(bam)
-
-                samtools.sort_and_index_bam(os.path.join("tmp", bam_filename))
-
-                alignments = samtools.alignment_file(bam, "rb").fetch()
-                aligns = [(a.query_name,
-                           a.reference_start + 1) for a in alignments]
-                self.assertEquals(6, len(aligns))
-                self.assertEquals([("readNameA1", 100),
-                                   ("readNameA2", 100),
-                                   ("readNameB1", 200),
-                                   ("readNameA1", 300),
-                                   ("readNameA2", 300),
-                                   ("readNameB1", 400)],
-                                  aligns)
-            finally:
-                os.chdir(original_dir)
 
     def test_filter_alignments_passthorughIncludedAligns(self):
         align1 = mock_align(query_name="align1")
@@ -755,7 +672,7 @@ readNameA2|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
         self.assertEqual('cigar unavailable', connor_align.filter_value)
 
 
-class AlignWriterTest(utils_test.BaseConnorTestCase):
+class AlignWriterTest(BaseConnorTestCase):
     @staticmethod
     def fix_pysam_inconsistent_tag_type(t_type):
         try:
@@ -801,7 +718,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write(family, None, align3)
             writer.close()
 
-            bamfile = samtools.alignment_file(bam_path, 'rb')
+            bamfile = pysamwrapper.alignment_file(bam_path, 'rb')
             actual_query_names = [align.query_name for align in bamfile.fetch()]
             bamfile.close()
 
@@ -831,7 +748,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write('familyC', 'pair3', align3)
             writer.close()
 
-            bamfile = samtools.alignment_file(bam_path, 'rb')
+            bamfile = pysamwrapper.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
             bamfile.close()
 
@@ -873,7 +790,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write('familyC', None, align3)
             writer.close()
 
-            bamfile = samtools.alignment_file(bam_path, 'rb')
+            bamfile = pysamwrapper.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
             bamfile.close()
 
@@ -906,7 +823,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write('familyA', None, align1)
             writer.close()
 
-            bamfile = samtools.alignment_file(bam_path, 'rb')
+            bamfile = pysamwrapper.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
             bamfile.close()
 
@@ -933,8 +850,8 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer = samtools.AlignWriter(header, bam_path, [tag2, tag1])
             writer.close()
 
-            bamfile = samtools.alignment_file(bam_path, 'rb')
-            actual_header = dict(samtools.get_header_dict(bamfile))
+            bamfile = pysamwrapper.alignment_file(bam_path, 'rb')
+            actual_header = dict(pysamwrapper.get_header_dict(bamfile))
             bamfile.close()
 
         expected_header = deepcopy(header)
@@ -976,7 +893,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
             writer.write('familyB', None, align2)
             writer.close()
 
-            bamfile = samtools.alignment_file(bam_path, 'rb')
+            bamfile = pysamwrapper.alignment_file(bam_path, 'rb')
             actual_aligns = [a for a in bamfile.fetch()]
             bamfile.close()
 
@@ -1002,7 +919,7 @@ class AlignWriterTest(utils_test.BaseConnorTestCase):
         self.assertEqual(1, len(info_log_lines))
         self.assertRegexpMatches(info_log_lines[0], 'destination.bam')
 
-class BamTagTest(utils_test.BaseConnorTestCase):
+class BamTagTest(BaseConnorTestCase):
     def test_init_setsHeaderComment(self):
         tag = BamTag('foo', 'Z', 'foo description', lambda fam, align: None)
         self.assertEqual('connor\tBAM tag\tfoo: foo description',
@@ -1044,7 +961,7 @@ class BamTagTest(utils_test.BaseConnorTestCase):
         self.assertEqual(False, base.__lt__(BamTag('X2','i', 'Desc A', None)))
 
 
-class LoggingWriterTest(utils_test.BaseConnorTestCase):
+class LoggingWriterTest(BaseConnorTestCase):
     def test_close_logsFilterStats(self):
         base_writer = MockAlignWriter()
         writer = samtools.LoggingWriter(base_writer, self.mock_logger)

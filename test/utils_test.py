@@ -9,6 +9,7 @@ import unittest
 
 from nose.exc import SkipTest
 
+import connor.consam.pysamwrapper  as pysamwrapper
 import connor.utils as utils
 from testfixtures.tempdirectory import TempDirectory
 
@@ -53,6 +54,39 @@ class BaseConnorTestCase(unittest.TestCase):
 
     def tearDown(self):
         unittest.TestCase.tearDown(self)
+
+    @staticmethod
+    def create_file(path, filename, contents):
+        filename = os.path.join(path, filename)
+        with open(filename, 'wt') as new_file:
+            new_file.write(contents)
+            new_file.flush()
+        return filename
+
+    @staticmethod
+    def create_bam(path, filename, sam_contents, index=True):
+        sam_filename = BaseConnorTestCase.create_file(path, filename, sam_contents)
+        bam_filename = sam_filename.replace(".sam", ".bam")
+        BaseConnorTestCase.pysam_bam_from_sam(sam_filename, bam_filename, index)
+        return bam_filename
+
+    @staticmethod
+    def pysam_bam_from_sam(sam_filename, bam_filename, index=True):
+        infile = pysamwrapper.alignment_file(sam_filename, "r")
+        outfile = pysamwrapper.alignment_file(bam_filename, "wb", template=infile)
+        for s in infile:
+            outfile.write(s)
+        infile.close()
+        outfile.close()
+        if index:
+            pysamwrapper.index(bam_filename)
+
+    @staticmethod
+    def pysam_alignments_from_bam(bam_filename):
+        infile = pysamwrapper.alignment_file(bam_filename, "rb")
+        aligned_segments = [s for s in infile]
+        infile.close()
+        return aligned_segments
 
     @staticmethod
     def byte_array_to_string(sequence):

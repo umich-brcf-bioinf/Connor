@@ -14,6 +14,7 @@ except ImportError:
     iter_zip = zip
 import os
 import connor.samtools as samtools
+import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 
 _SAMPLE_SIZE = 1000
@@ -51,7 +52,7 @@ def _log_force_or_raise(args, log, msg):
 
 def _sample_bamfile(input_bam, extractor_function):
     stats = {'forward': [], 'reverse': []}
-    bamfile = samtools.alignment_file(input_bam, 'rb')
+    bamfile = pysamwrapper.alignment_file(input_bam, 'rb')
     try:
         for align in _balanced_strand_gen(bamfile.fetch(), _SAMPLE_SIZE):
             stats[_strand(align)].append(extractor_function(align))
@@ -73,14 +74,14 @@ def _check_input_bam_exists(args, log=None): #pylint: disable=unused-argument
 
 def _check_input_bam_valid(args, log=None): #pylint: disable=unused-argument
     try:
-        bamfile = samtools.alignment_file(args.input_bam, 'rb')
+        bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
         bamfile.close()
     except ValueError:
         raise utils.UsageError(("Specified input [{}] not a valid BAM. Review "
                                 "inputs and try again.").format(args.input_bam))
 
 def _check_input_bam_indexed(args, log=None): #pylint: disable=unused-argument
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
     try:
         bamfile.fetch()
     except ValueError:
@@ -90,8 +91,8 @@ def _check_input_bam_indexed(args, log=None): #pylint: disable=unused-argument
         bamfile.close()
 
 def _check_input_bam_not_deduped(args, log=None):
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
-    header_dict = samtools.get_header_dict(bamfile)
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
+    header_dict = pysamwrapper.get_header_dict(bamfile)
     bamfile.close()
     names = set([pg_item.get('PN', None) for pg_item in header_dict.get('PG', [])])
     if samtools.CONNOR_PG_PN in names:
@@ -100,7 +101,7 @@ def _check_input_bam_not_deduped(args, log=None):
         _log_force_or_raise(args, log, msg)
 
 def _check_input_bam_not_empty(args, log=None): #pylint: disable=unused-argument
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
     try:
         next(bamfile.fetch())
     except StopIteration:
@@ -110,7 +111,7 @@ def _check_input_bam_not_empty(args, log=None): #pylint: disable=unused-argument
         bamfile.close()
 
 def _check_input_bam_paired(args, log=None): #pylint: disable=unused-argument
-    bamfile = samtools.alignment_file(args.input_bam, 'rb')
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
     try:
         for alignment in itertools.islice(bamfile.fetch(), _SAMPLE_SIZE):
             if alignment.is_paired:
