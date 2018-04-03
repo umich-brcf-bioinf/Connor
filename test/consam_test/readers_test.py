@@ -4,7 +4,7 @@
 #pylint: disable=deprecated-method
 from __future__ import print_function, absolute_import, division
 
-from connor.samtools import ConnorAlign
+from connor.consam.alignments import ConnorAlign
 from connor.consam.bamflag import BamFlag
 import connor.consam.readers as readers
 

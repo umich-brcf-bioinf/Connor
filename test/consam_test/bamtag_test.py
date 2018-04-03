@@ -3,9 +3,10 @@
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
 
+from connor.consam.alignments import ConnorAlign
 from connor.consam import bamtag
 from connor.consam.bamtag import BamTag
-from connor.samtools import ConnorAlign
+
 from test.utils_test import MicroMock
 from test.utils_test import BaseConnorTestCase
 

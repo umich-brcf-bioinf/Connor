@@ -1,4 +1,4 @@
-"""Simplifies discrepancies in how different versions pysam wrap samtools"""
+"""Simplifies discrepancies in how different pysam versions wrap samtools"""
 from __future__ import print_function, absolute_import, division
 import os
 from pkg_resources import parse_version

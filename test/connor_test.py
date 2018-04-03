@@ -13,14 +13,14 @@ except ImportError:
     from io import StringIO
 from testfixtures.tempdirectory import TempDirectory
 import connor.connor as connor
-from connor import samtools
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 from connor.connor import _CoordinateFamilyHolder
 import connor.consam.writers as writers
-from connor.samtools import ConnorAlign
-from test.samtools_test import MockAlignWriter
-import test.samtools_test as samtools_test
+from connor.consam.alignments import ConnorAlign
+from connor.consam.alignments import PairedAlignment
+
+from test.consam_test.alignments_test import MockAlignWriter
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 
@@ -113,7 +113,7 @@ def align_seg(query_name, #pylint: disable=dangerous-default-value
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
     alignR = align_seg(q, rn, rs, nrs, s2)
-    return samtools.PairedAlignment(alignL, alignR, tag_length)
+    return PairedAlignment(alignL, alignR, tag_length)
 
 
 class TagFamiliyTest(BaseConnorTestCase):
@@ -158,7 +158,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         def pair(name):
             left = ConnorAlign(self.mock_align(query_name=name))
             right = ConnorAlign(self.mock_align(query_name=name))
-            return samtools.PairedAlignment(left, right)
+            return PairedAlignment(left, right)
         pairA = pair('alignA')
         alignA = ConnorAlign(self.mock_align(query_name='alignA'))
         alignB = ConnorAlign(self.mock_align(query_name='alignB'))
@@ -175,7 +175,7 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_umt(self):
         left = ConnorAlign(self.mock_align())
         right = ConnorAlign(self.mock_align())
-        pair1 = samtools.PairedAlignment(left, right)
+        pair1 = PairedAlignment(left, right)
 
         input_umt = ('AAANNN', 'CCCNNN')
         actual_tag_family = connor._TagFamily(input_umt,
@@ -269,15 +269,15 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_consensus_qualities_maxMappingQualityScores(self):
         alignAL = self.connor_align('alignA', 'nGT', 30)
         alignAR = self.connor_align('alignA', 'nCT', 25)
-        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
+        pairA = PairedAlignment(alignAL, alignAR, tag_length=1)
 
         alignBL = self.connor_align('alignB', 'nGT', 20)
         alignBR = self.connor_align('alignB', 'nCT', 15)
-        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
+        pairB = PairedAlignment(alignBL, alignBR, tag_length=1)
 
         alignCL = self.connor_align('alignC', 'nGT', 10)
         alignCR = self.connor_align('alignC', 'nCT', 5)
-        pairC = samtools.PairedAlignment(alignCL, alignCR, tag_length=1)
+        pairC = PairedAlignment(alignCL, alignCR, tag_length=1)
 
         alignments = [pairA, pairB, pairC]
         input_umts = ("n", "n")
@@ -298,15 +298,15 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_select_template_alignment_pair_picksMaxQualityScores(self):
         alignAL = self.connor_align('alignA', 'nGT', 20)
         alignAR = self.connor_align('alignA', 'nCT', 15)
-        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
+        pairA = PairedAlignment(alignAL, alignAR, tag_length=1)
 
         alignBL = self.connor_align('alignB', "nGT", 30)
         alignBR = self.connor_align('alignB', "nCT", 25)
-        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
+        pairB = PairedAlignment(alignBL, alignBR, tag_length=1)
 
         alignCL = self.connor_align('alignC', "nGT", 10)
         alignCR = self.connor_align('alignC', "nCT", 5)
-        pairC = samtools.PairedAlignment(alignCL, alignCR, tag_length=1)
+        pairC = PairedAlignment(alignCL, alignCR, tag_length=1)
 
         alignment_pairs = [pairA, pairB, pairC]
 
@@ -317,11 +317,11 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_select_template_alignment_pair_breaksTiesByQueryName(self):
         alignAL = self.connor_align('alignA', "nGT", 20)
         alignAR = self.connor_align('alignA', "nCT", 15)
-        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
+        pairA = PairedAlignment(alignAL, alignAR, tag_length=1)
 
         alignBL = self.connor_align('alignB', "nGT", 20)
         alignBR = self.connor_align('alignB', "nCT", 15)
-        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
+        pairB = PairedAlignment(alignBL, alignBR, tag_length=1)
         alignment_pairs = [pairA, pairB]
 
         actual_template = connor._TagFamily._select_template_alignment_pair(alignment_pairs)
@@ -449,7 +449,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         def pair(name, c1, c2):
             left = ConnorAlign(self.mock_align(query_name=name, cigarstring=c1))
             right = ConnorAlign(self.mock_align(query_name=name, cigarstring=c2))
-            return samtools.PairedAlignment(left, right)
+            return PairedAlignment(left, right)
         pairA = pair('alignA', '3S3M', '3S3M')
         pairB = pair('alignB', '3S3M', '3S3M')
         pairC = pair('alignC', '3S1I3M', '3S3M')
@@ -479,7 +479,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         def pair(c1, c2):
             left = ConnorAlign(self.mock_align(cigarstring=c1))
             right = ConnorAlign(self.mock_align(cigarstring=c2))
-            return samtools.PairedAlignment(left, right)
+            return PairedAlignment(left, right)
         pairA = pair("3S3M", "3S3M")
         pairB = pair("3S3M", "3S3M")
         pairC = pair("3S1I3M", "3S3M")
@@ -510,7 +510,7 @@ class CoordinateFamilyHolder(BaseConnorTestCase):
                                        query_sequence='AAATTTT',
                                        reference_end=right_end,
                                        reference_name=reference_name))
-        return samtools.PairedAlignment(alignL, alignR)
+        return PairedAlignment(alignL, alignR)
 
     def test_build_coordinate_families_noFamilies(self):
         holder = _CoordinateFamilyHolder()
@@ -917,7 +917,7 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                                                      output_bam,
                                                      tags=[],
                                                      args=args)
-            annotated_writer = samtools_test.MockAlignWriter()
+            annotated_writer = MockAlignWriter()
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
@@ -965,8 +965,8 @@ readNameC2|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                              umt_distance_threshold=1,
                              annotated_output_bam=None)
             connor._dedup_alignments(args,
-                                     samtools_test.MockAlignWriter(),
-                                     samtools_test.MockAlignWriter(),
+                                     MockAlignWriter(),
+                                     MockAlignWriter(),
                                      self.mock_logger)
 
             log_iter = iter(self.mock_logger._log_calls['INFO'])

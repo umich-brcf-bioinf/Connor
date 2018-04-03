@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from connor.consam.bamflag import BamFlag
 import connor.consam.writers as writers
-import connor.samtools as samtools
+import connor.consam.alignments as alignments
 import connor.utils as utils
 
 def _filter_alignments(pysam_alignments,
@@ -25,7 +25,7 @@ def _filter_alignments(pysam_alignments,
                     }
     generator = utils.FilteredGenerator(filters)
     for pysam_align, filter_value in generator.filter(pysam_alignments):
-        connor_align = samtools.ConnorAlign(pysam_align, filter_value)
+        connor_align = alignments.ConnorAlign(pysam_align, filter_value)
         if filter_value:
             excluded_writer.write(family=None,
                                   paired_align=None,
@@ -45,7 +45,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             key = (alignment.reference_id, alignment.next_reference_start)
             if key in coords and alignment.query_name in coords[key]:
                 align1 = coords[key].pop(alignment.query_name)
-                yield samtools.PairedAlignment(align1, alignment)
+                yield alignments.PairedAlignment(align1, alignment)
             else:
                 coords[key][alignment.query_name] = alignment
         else:
@@ -56,7 +56,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             if not len(coord):
                 del coords[key]
             if l_align:
-                yield samtools.PairedAlignment(l_align, alignment)
+                yield alignments.PairedAlignment(l_align, alignment)
             else:
                 alignment.filter_value = MISSING_MATE_FILTER
                 excluded_writer.write(None, None, alignment)

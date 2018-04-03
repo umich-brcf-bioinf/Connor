@@ -14,8 +14,8 @@ import connor
 from connor.consam.bamflag import BamFlag
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.bamtag as bamtag
-import connor.samtools as samtools
-from connor.samtools import ConnorAlign
+from connor.consam.alignments import ConnorAlign
+from connor.consam.alignments import PairedAlignment
 
 from test.consam_test.writers_test import MockAlignWriter
 from test.utils_test import MicroMock
@@ -166,7 +166,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
         right_align = self.mock_align(query_name="alignA",
                                  query_sequence="TTTT" "CCCGGG")
         tag_length = 6
-        actual_paired_alignment = samtools.PairedAlignment(left_align,
+        actual_paired_alignment = PairedAlignment(left_align,
                                                          right_align,
                                                          tag_length)
 
@@ -182,7 +182,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
         self.assertRaisesRegexp(ValueError,
                                 (r'Inconsistent query names '
                                  r'\(alignA != alignB\)'),
-                                samtools.PairedAlignment,
+                                PairedAlignment,
                                 left,
                                 right,
                                 tag_length=1)
@@ -194,7 +194,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
         right = MicroMock(query_name='A',
                          cigarstring='16S32M64S',
                           query_sequence='AAAAAA')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual(('1S2M4S', '16S32M64S'), paired_alignment.cigars())
         self.assertEqual('1S2M4S~16S32M64S',
                          paired_alignment.cigars('{left}~{right}'))
@@ -209,7 +209,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
                           reference_start=200,
                           reference_end=250,
                           query_sequence='AAAAAA')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual((101,251), paired_alignment.positions())
         self.assertEqual('101~251',
                          paired_alignment.positions('{left}~{right}'))
@@ -217,28 +217,28 @@ class PairedAlignmentTest(BaseConnorTestCase):
     def test_filter_value(self):
         left = ConnorAlign(self.mock_align(), filter_value=None)
         right = ConnorAlign(self.mock_align(), filter_value=None)
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual(None, paired_alignment.filter_value)
 
         left = ConnorAlign(self.mock_align(), filter_value='')
         right = ConnorAlign(self.mock_align(), filter_value='')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual(None, paired_alignment.filter_value)
 
         left = ConnorAlign(self.mock_align(), filter_value='foo')
         right = ConnorAlign(self.mock_align(), filter_value=None)
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual(('foo', None), paired_alignment.filter_value)
 
         left = ConnorAlign(self.mock_align(), filter_value=None)
         right = ConnorAlign(self.mock_align(), filter_value='bar')
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual((None, 'bar'), paired_alignment.filter_value)
 
     def test_query_name(self):
         left = self.mock_align(query_name="alignA", reference_start=100)
         right = self.mock_align(query_name="alignA", reference_start=200)
-        paired_alignment = samtools.PairedAlignment(left, right, tag_length=1)
+        paired_alignment = PairedAlignment(left, right, tag_length=1)
         self.assertEqual("alignA", paired_alignment.query_name)
 
     def test_eq(self):
@@ -246,10 +246,10 @@ class PairedAlignmentTest(BaseConnorTestCase):
         right = self.mock_align(reference_start=200, next_reference_start=100)
         other = self.mock_align(reference_start=0, next_reference_start=500)
 
-        base = samtools.PairedAlignment(left, right)
-        self.assertEquals(base, samtools.PairedAlignment(left, right))
-        self.assertNotEquals(base, samtools.PairedAlignment(other, right))
-        self.assertNotEquals(base, samtools.PairedAlignment(left, other))
+        base = PairedAlignment(left, right)
+        self.assertEquals(base, PairedAlignment(left, right))
+        self.assertNotEquals(base, PairedAlignment(other, right))
+        self.assertNotEquals(base, PairedAlignment(left, other))
 
     def test_hash(self):
         left_A = self.mock_align(query_name="alignA", reference_start=100)
@@ -258,24 +258,24 @@ class PairedAlignmentTest(BaseConnorTestCase):
         right_B = self.mock_align(query_name="alignA", reference_start=200)
 
         actual_set = set()
-        base = samtools.PairedAlignment(left_A, right_A)
+        base = PairedAlignment(left_A, right_A)
         actual_set.add(base)
         self.assertEquals(1, len(actual_set))
 
         actual_set.add(base)
         self.assertEquals(1, len(actual_set))
 
-        actual_set.add(samtools.PairedAlignment(left_A, right_A))
+        actual_set.add(PairedAlignment(left_A, right_A))
         self.assertEquals(1, len(actual_set))
 
-        equivalent_pair = samtools.PairedAlignment(left_B, right_B)
+        equivalent_pair = PairedAlignment(left_B, right_B)
         actual_set.add(equivalent_pair)
         self.assertEquals(1, len(actual_set))
 
     def test_replace_umt(self):
         left_A = self.mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
         right_A = self.mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
-        paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
+        paired_align = PairedAlignment(left_A, right_A, tag_length=2)
 
         paired_align.replace_umt(('GG','TT'))
 
@@ -293,7 +293,7 @@ class PairedAlignmentTest(BaseConnorTestCase):
     def test_replace_umt_errorIfInconsistentUmtLength(self):
         left_A = self.mock_align(query_sequence='AANN', query_qualities=[1,2,3,4])
         right_A = self.mock_align(query_sequence='NNCC', query_qualities=[5,6,7,8])
-        paired_align = samtools.PairedAlignment(left_A, right_A, tag_length=2)
+        paired_align = PairedAlignment(left_A, right_A, tag_length=2)
 
         self.assertRaisesRegexp(ValueError,
                                 r'Each UMT must match tag_length \(2\)',

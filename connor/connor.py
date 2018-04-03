@@ -33,11 +33,11 @@ from sortedcontainers import SortedSet
 
 import connor
 import connor.command_validator as command_validator
+import connor.consam.alignments as alignments
 import connor.consam.bamtag as bamtag
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.readers as readers
 import connor.consam.writers as writers
-import connor.samtools as samtools
 import connor.familyhandler as familyhandler
 import connor.utils as utils
 
@@ -184,7 +184,7 @@ class _TagFamily(object):
                 template_pair.left.query_qualities
         right_align.query_qualities = \
                 template_pair.right.query_qualities
-        consensus_pair = samtools.PairedAlignment(left_align,
+        consensus_pair = alignments.PairedAlignment(left_align,
                                                    right_align,
                                                    tag_length=len(umt[0]))
         consensus_pair.replace_umt(umt)

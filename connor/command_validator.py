@@ -14,7 +14,6 @@ except ImportError:
     iter_zip = zip
 import os
 import connor.consam.writers as writers
-import connor.samtools as samtools
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 

@@ -12,7 +12,6 @@ from testfixtures.tempdirectory import TempDirectory
 import connor.command_validator as validator
 import connor.utils as utils
 from connor.utils import UsageError
-import test.samtools_test as samtools_test
 from test.utils_test import BaseConnorTestCase
 
 

@@ -9,11 +9,12 @@ import os
 
 from testfixtures.tempdirectory import TempDirectory
 
-import connor
-import connor.consam.pysamwrapper as pysamwrapper
+from connor import __version__
+from connor.consam.alignments import ConnorAlign
 import connor.consam.bamtag as bamtag
+import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.writers as writers
-from connor.samtools import ConnorAlign
+
 from test.utils_test import MicroMock
 from test.utils_test import BaseConnorTestCase
 
@@ -65,7 +66,7 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
                                       {'ID':'GATK', 'PN':'foo', 'VN':'1.0.3471'},
                                       {'ID':'connor',
                                        'PN':'connor',
-                                       'VN':connor.__version__,
+                                       'VN':__version__,
                                        'CL':'command-line'
                                        },
                                       ]}

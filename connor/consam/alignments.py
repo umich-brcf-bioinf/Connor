@@ -1,19 +1,12 @@
-'''Connor-specific utils and classes for working with alignments'''
+'''Connor-specific classes for working with alignments'''
 from __future__ import print_function, absolute_import, division
-from collections import defaultdict, OrderedDict
-from copy import deepcopy
-import os
 
-import connor
-from connor.consam.bamflag import BamFlag
-import connor.consam.pysamwrapper as pysamwrapper
-import connor.consam.writers as writers
 import connor.utils as utils
 
 DEFAULT_TAG_LENGTH = 6
 
 class PairedAlignment(object):
-    '''Represents the left and right align pairs from an single sequence.'''
+    '''Represents the left and right aligns from a single paired sequence.'''
     def __init__(self,
                  left_alignment,
                  right_alignment,
@@ -87,6 +80,7 @@ class PairedAlignment(object):
 
 
 class ConnorAlign(object):
+    '''Wraps pysam alignment adding ability to track filtering criteria'''
     # cgates: FYI, you can use dynamic delegation via __setattr__ and
     # __getattr__ but it's awkward and about twice as slow
     def __init__(self, pysam_align_segment, filter_value=None):
