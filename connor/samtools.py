@@ -197,29 +197,3 @@ class ConnorAlign(object):
     @template_length.setter
     def template_length(self, value):
         self.pysam_align_segment.template_length = value
-
-
-def filter_alignments(pysam_alignments,
-                      excluded_writer=writers.AlignWriter.NULL):
-    filters = {'cigar unavailable': \
-                    lambda a: a.cigarstring is None,
-                'mapping quality < 1': \
-                    lambda a: a.mapping_quality < 1,
-                'not in proper pair': \
-                    lambda a: a.flag & BamFlag.PROPER_PAIR == 0,
-                'qc failed': \
-                    lambda a: a.flag & BamFlag.QCFAIL != 0,
-                'secondary alignment': \
-                    lambda a: a.flag & BamFlag.SECONDARY != 0,
-                'supplementary alignment': \
-                    lambda a: a.flag & BamFlag.SUPPLEMENTARY != 0,
-                    }
-    generator = utils.FilteredGenerator(filters)
-    for pysam_align, filter_value in generator.filter(pysam_alignments):
-        connor_align = ConnorAlign(pysam_align, filter_value)
-        if filter_value:
-            excluded_writer.write(family=None,
-                                  paired_align=None,
-                                  connor_align=connor_align)
-        else:
-            yield connor_align

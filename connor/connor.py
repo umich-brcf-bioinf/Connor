@@ -33,12 +33,13 @@ from sortedcontainers import SortedSet
 
 import connor
 import connor.command_validator as command_validator
-import connor.samtools as samtools
 import connor.consam.bamtag as bamtag
 import connor.consam.pysamwrapper as pysamwrapper
+import connor.consam.readers as readers
+import connor.consam.writers as writers
+import connor.samtools as samtools
 import connor.familyhandler as familyhandler
 import connor.utils as utils
-import connor.consam.writers as writers
 
 __version__ = connor.__version__
 
@@ -189,37 +190,6 @@ class _TagFamily(object):
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
-#TODO: cgates: reduce complexity
-def _build_coordinate_pairs(connor_alignments, excluded_writer):
-    MISSING_MATE_FILTER = 'read mate was missing or excluded'
-    coords = defaultdict(dict)
-    for alignment in connor_alignments:
-        if alignment.orientation == 'left':
-            key = (alignment.reference_id, alignment.next_reference_start)
-            coords[key][alignment.query_name] = alignment
-        elif alignment.orientation == 'neither':
-            key = (alignment.reference_id, alignment.next_reference_start)
-            if key in coords and alignment.query_name in coords[key]:
-                align1 = coords[key].pop(alignment.query_name)
-                yield samtools.PairedAlignment(align1, alignment)
-            else:
-                coords[key][alignment.query_name] = alignment
-        else:
-            key = (alignment.reference_id, alignment.reference_start)
-            coord = coords[key]
-            l_align = coord.pop(alignment.query_name, None)
-            # Clear empty coordinate dict
-            if not len(coord):
-                del coords[key]
-            if l_align:
-                yield samtools.PairedAlignment(l_align, alignment)
-            else:
-                alignment.filter_value = MISSING_MATE_FILTER
-                excluded_writer.write(None, None, alignment)
-    for aligns in coords.values():
-        for align in aligns.values():
-            align.filter_value = MISSING_MATE_FILTER
-            excluded_writer.write(None, None, align)
 
 class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
@@ -340,6 +310,68 @@ def _hamming_dist(str1, str2):
     assert len(str1) == len(str2)
     return sum(utils.iter_map(operator.ne, str1, str2))
 
+def _rank_tags(tagged_paired_aligns):
+    '''Return the list of tags ranked from most to least popular.'''
+    tag_count_dict = defaultdict(int)
+    for paired_align in tagged_paired_aligns:
+        tag_count_dict[paired_align.umt] += 1
+    tags_by_count = utils.sort_dict(tag_count_dict)
+    ranked_tags = [tag_count[0] for tag_count in tags_by_count]
+    return ranked_tags
+
+def _build_family_filter(args):
+    min_family_size = args.min_family_size_threshold
+    too_small_msg = 'family too small (<{})'.format(min_family_size)
+    def family_size_filter(family):
+        if family.included_pair_count < min_family_size:
+            return too_small_msg
+        else:
+            return None
+    return family_size_filter
+
+def _build_supplemental_log(coordinate_holder):
+    def supplemental_progress_log(log):
+        log.debug("{}mb peak memory", utils.peak_memory())
+        log.debug("{} pending alignment pairs; {} peak pairs",
+                  coordinate_holder.pending_pair_count,
+                  coordinate_holder.pending_pair_peak_count)
+    return supplemental_progress_log
+
+def _dedup_alignments(args, consensus_writer, annotated_writer, log):
+    log.info('reading input bam [{}]', args.input_bam)
+
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
+    total_aligns = pysamwrapper.total_align_count(args.input_bam)
+    coord_family_holder = _CoordinateFamilyHolder()
+    supplemental_log = _build_supplemental_log(coord_family_holder)
+    paired_align_gen = readers.paired_reader(bamfile,
+                                             total_aligns,
+                                             log,
+                                             supplemental_log,
+                                             annotated_writer)
+    coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
+
+    family_filter = _build_family_filter(args)
+    handlers = familyhandler.build_family_handlers(args,
+                                                   consensus_writer,
+                                                   annotated_writer,
+                                                   log)
+    for coord_family in coord_family_gen:
+        ranked_tags = _rank_tags(coord_family)
+        tag_families = _build_tag_families(coord_family,
+                                           ranked_tags,
+                                           args.umt_distance_threshold,
+                                           args.consensus_freq_threshold,
+                                           family_filter)
+        for handler in handlers:
+            for tag_family in tag_families:
+                handler.handle(tag_family)
+
+    for handler in handlers:
+        handler.end()
+
+    bamfile.close()
+
 def _parse_command_line_args(arguments):
     parser = _ConnorArgumentParser( \
         formatter_class=argparse.RawTextHelpFormatter,
@@ -403,90 +435,6 @@ def _parse_command_line_args(arguments):
     if not args.log_file:
         args.log_file = args.output_bam + ".log"
     return args
-
-def _rank_tags(tagged_paired_aligns):
-    '''Return the list of tags ranked from most to least popular.'''
-    tag_count_dict = defaultdict(int)
-    for paired_align in tagged_paired_aligns:
-        tag_count_dict[paired_align.umt] += 1
-    tags_by_count = utils.sort_dict(tag_count_dict)
-    ranked_tags = [tag_count[0] for tag_count in tags_by_count]
-    return ranked_tags
-
-def _progress_logger(base_generator,
-                     total_rows,
-                     log,
-                     supplemental_log=lambda x: None):
-    row_count = 0
-    next_breakpoint = 0
-    for item in base_generator:
-        row_count += 1
-        progress = 100 * row_count / total_rows
-        if progress >= next_breakpoint and progress < 100:
-            log.info("{}% ({}/{}) alignments processed",
-                     next_breakpoint,
-                     row_count,
-                     total_rows)
-            supplemental_log(log)
-            next_breakpoint = 10 * int(progress/10) + 10
-        yield item
-    log.info("100% ({}/{}) alignments processed", row_count, total_rows)
-    supplemental_log(log)
-
-def _build_family_filter(args):
-    min_family_size = args.min_family_size_threshold
-    too_small_msg = 'family too small (<{})'.format(min_family_size)
-    def family_size_filter(family):
-        if family.included_pair_count < min_family_size:
-            return too_small_msg
-        else:
-            return None
-    return family_size_filter
-
-def _build_supplemental_log(coordinate_holder):
-    def supplemental_progress_log(log):
-        log.debug("{}mb peak memory", utils.peak_memory())
-        log.debug("{} pending alignment pairs; {} peak pairs",
-                  coordinate_holder.pending_pair_count,
-                  coordinate_holder.pending_pair_peak_count)
-    return supplemental_progress_log
-
-def _dedup_alignments(args, consensus_writer, annotated_writer, log):
-    log.info('reading input bam [{}]', args.input_bam)
-    total_aligns = pysamwrapper.total_align_count(args.input_bam)
-    family_filter = _build_family_filter(args)
-    handlers = familyhandler.build_family_handlers(args,
-                                                   consensus_writer,
-                                                   annotated_writer,
-                                                   log)
-
-    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
-    coord_family_holder = _CoordinateFamilyHolder()
-    supplemental_log = _build_supplemental_log(coord_family_holder)
-    progress_gen = _progress_logger(bamfile.fetch(),
-                                    total_aligns,
-                                    log,
-                                    supplemental_log)
-    filtered_aligns_gen = samtools.filter_alignments(progress_gen,
-                                                     annotated_writer)
-    paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
-                                                    annotated_writer)
-    coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
-    for coord_family in coord_family_gen:
-        ranked_tags = _rank_tags(coord_family)
-        tag_families = _build_tag_families(coord_family,
-                                           ranked_tags,
-                                           args.umt_distance_threshold,
-                                           args.consensus_freq_threshold,
-                                           family_filter)
-        for handler in handlers:
-            for tag_family in tag_families:
-                handler.handle(tag_family)
-
-    for handler in handlers:
-        handler.end()
-
-    bamfile.close()
 
 def main(command_line_args=None):
     '''Connor entry point.  See help for more info'''

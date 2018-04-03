@@ -7,7 +7,6 @@ from collections import OrderedDict
 from copy import deepcopy
 import os
 
-
 import pysam
 from testfixtures.tempdirectory import TempDirectory
 
@@ -17,24 +16,10 @@ import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.bamtag as bamtag
 import connor.samtools as samtools
 from connor.samtools import ConnorAlign
-from connor.samtools import filter_alignments
+
+from test.consam_test.writers_test import MockAlignWriter
 from test.utils_test import MicroMock
 from test.utils_test import BaseConnorTestCase
-
-
-class MockAlignWriter(object):
-    def __init__(self):
-        self._write_calls = []
-        self.bam_file_path = "foo.bam"
-        self._close_was_called = False
-
-    #pylint: disable=unused-argument
-    def write(self, family, paired_align, connor_align):
-        self._write_calls.append((family, connor_align))
-
-    #pylint: disable=unused-argument
-    def close(self, log=None):
-        self._close_was_called = True
 
 class ConnorAlignTest(BaseConnorTestCase):
     def test_eq(self):
@@ -326,136 +311,3 @@ class PairedAlignmentTest(BaseConnorTestCase):
                                 r'Each UMT must match tag_length \(2\)',
                                 paired_align.replace_umt,
                                 ('G',))
-
-
-class SamtoolsTest(BaseConnorTestCase):
-    def test_filter_alignments_passthorughIncludedAligns(self):
-        align1 = self.mock_align(query_name="align1")
-        base = [align1]
-        excluded_writer = MockAlignWriter()
-
-        aligns = [align for align in filter_alignments(base,
-                                                       excluded_writer)]
-
-        self.assertEqual([ConnorAlign(align1)],aligns)
-        self.assertEqual(0, len(excluded_writer._write_calls))
-
-    def test_filter_alignments_skipsWriteIfNoExcludedWriter(self):
-        flag = 99
-        align1 = self.mock_align(query_name="align1", flag=flag)
-        align2 = self.mock_align(query_name="align2", flag=flag^BamFlag.PROPER_PAIR)
-        align3 = self.mock_align(query_name="align3", flag=flag)
-        base = [align1, align2, align3]
-
-        query_names = [x.query_name for x in filter_alignments(base)]
-
-        self.assertEqual(["align1", "align3"], query_names)
-
-
-    def test_filter_alignments_excludesUnpairedAligns(self):
-        flag = 99
-        align1 = self.mock_align(query_name="align1", flag=flag)
-        align2 = self.mock_align(query_name="align2", flag=flag^BamFlag.PROPER_PAIR)
-        align3 = self.mock_align(query_name="align3", flag=flag)
-        base = [align1, align2, align3]
-        excluded_writer = MockAlignWriter()
-
-        query_names = [x.query_name for x in filter_alignments(base,
-                                                               excluded_writer)]
-
-        self.assertEqual(["align1", "align3"], query_names)
-        self.assertEqual(1, len(excluded_writer._write_calls))
-        (family, connor_align) = excluded_writer._write_calls[0]
-        self.assertEqual(None, family)
-        self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('not in proper pair', connor_align.filter_value)
-
-    def test_filter_alignments_excludesSecondaryAligns(self):
-        flag = 99
-        align1 = self.mock_align(query_name="align1", flag=flag)
-        align2 = self.mock_align(query_name="align2", flag=flag | BamFlag.SECONDARY)
-        align3 = self.mock_align(query_name="align3", flag=flag)
-        base = [align1, align2, align3]
-        excluded_writer = MockAlignWriter()
-
-        names = [x.query_name for x in filter_alignments(base,
-                                                         excluded_writer)]
-
-        self.assertEqual(["align1", "align3"], names)
-        self.assertEqual(1, len(excluded_writer._write_calls))
-        (family, connor_align) = excluded_writer._write_calls[0]
-        self.assertEqual(None, family)
-        self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('secondary alignment', connor_align.filter_value)
-
-    def test_filter_alignments_excludesSupplementaryAligns(self):
-        flag = 99
-        align1 = self.mock_align(query_name="align1", flag=flag)
-        align2 = self.mock_align(query_name="align2",
-                            flag=flag | BamFlag.SUPPLEMENTARY)
-        align3 = self.mock_align(query_name="align3", flag=flag)
-        base = [align1, align2, align3]
-        excluded_writer = MockAlignWriter()
-
-        names = [x.query_name for x in filter_alignments(base,
-                                                         excluded_writer)]
-
-        self.assertEqual(["align1", "align3"], names)
-        self.assertEqual(1, len(excluded_writer._write_calls))
-        (family, connor_align) = excluded_writer._write_calls[0]
-        self.assertEqual(None, family)
-        self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('supplementary alignment', connor_align.filter_value)
-
-
-    def test_filter_alignments_excludesQCFails(self):
-        flag = 99
-        align1 = self.mock_align(query_name="align1", flag=flag)
-        align2 = self.mock_align(query_name="align2", flag=flag | BamFlag.QCFAIL)
-        align3 = self.mock_align(query_name="align3", flag=flag)
-        base = [align1, align2, align3]
-        excluded_writer = MockAlignWriter()
-
-        names = [x.query_name for x in filter_alignments(base,
-                                                         excluded_writer)]
-
-        self.assertEqual(["align1", "align3"], names)
-        self.assertEqual(1, len(excluded_writer._write_calls))
-        (family, connor_align) = excluded_writer._write_calls[0]
-        self.assertEqual(None, family)
-        self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('qc failed', connor_align.filter_value)
-
-    def test_filter_alignments_excludesMapq0(self):
-        align1 = self.mock_align(query_name="align1", mapping_quality=1)
-        align2 = self.mock_align(query_name="align2", mapping_quality=0)
-        align3 = self.mock_align(query_name="align3", mapping_quality=1)
-        base = [align1, align2, align3]
-        excluded_writer = MockAlignWriter()
-
-        names = [x.query_name for x in filter_alignments(base,
-                                                         excluded_writer)]
-
-        self.assertEqual(["align1", "align3"], names)
-        self.assertEqual(1, len(excluded_writer._write_calls))
-        (family, connor_align) = excluded_writer._write_calls[0]
-        self.assertEqual(None, family)
-        self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('mapping quality < 1', connor_align.filter_value)
-
-    def test_filter_alignments_excludesCigarUnavailable(self):
-        align1 = self.mock_align(query_name="align1", cigarstring="6M")
-        align2 = self.mock_align(query_name="align2", cigarstring="*")
-        align3 = self.mock_align(query_name="align3", cigarstring="6M")
-        base = [align1, align2, align3]
-        excluded_writer = MockAlignWriter()
-
-        names = [x.query_name for x in filter_alignments(base,
-                                                         excluded_writer)]
-
-        self.assertEqual(["align1", "align3"], names)
-        self.assertEqual(1, len(excluded_writer._write_calls))
-        (family, connor_align) = excluded_writer._write_calls[0]
-        self.assertEqual(None, family)
-        self.assertEqual(align2.query_name, connor_align.query_name)
-        self.assertEqual('cigar unavailable', connor_align.filter_value)
