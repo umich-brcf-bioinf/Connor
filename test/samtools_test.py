@@ -329,29 +329,6 @@ class PairedAlignmentTest(BaseConnorTestCase):
 
 
 class SamtoolsTest(BaseConnorTestCase):
-    def test_total_align_count(self):
-        self.check_sysout_safe()
-        sam_contents = \
-'''@HD|VN:1.4|GO:none|SO:coordinate
-@SQ|SN:chr10|LN:135534747
-readNameB1|147|chr10|400|0|5M|=|200|100|CCCCC|>>>>>
-readNameA1|147|chr10|300|0|5M|=|100|100|AAAAA|>>>>>
-readNameA1|99|chr10|100|0|5M|=|300|200|AAAAA|>>>>>
-readNameB1|99|chr10|200|0|5M|=|400|200|CCCCC|>>>>>
-readNameC1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
-readNameC1|12|chr10|400|0|*|=|200|100|CCCCC|>>>>>
-readNameZ1|77|*|0|0|*|*|0|0|TTTTT|>>>>>
-readNameZ1|141|*|0|0|*|*|0|0|GGGGG|>>>>>
-'''.replace("|", "\t")
-        with TempDirectory() as tmp_dir:
-            input_bam = self.create_bam(tmp_dir.path,
-                                       'input.sam',
-                                       sam_contents,
-                                       index=False)
-            pysamwrapper.sort_and_index_bam(input_bam)
-            actual_count = samtools.total_align_count(input_bam)
-            self.assertEqual(6, actual_count)
-
     def test_filter_alignments_passthorughIncludedAligns(self):
         align1 = self.mock_align(query_name="align1")
         base = [align1]

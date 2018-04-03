@@ -223,13 +223,3 @@ def filter_alignments(pysam_alignments,
                                   connor_align=connor_align)
         else:
             yield connor_align
-
-def total_align_count(input_bam):
-    '''Returns count of all mapped alignments in input BAM (based on index)'''
-    count = 0
-    for line in pysamwrapper.idxstats(input_bam):
-        if line:
-            chrom, _, mapped, unmapped = line.strip().split('\t')
-            if chrom != '*':
-                count += int(mapped) + int(unmapped)
-    return count

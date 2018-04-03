@@ -39,7 +39,6 @@ import connor.consam.pysamwrapper as pysamwrapper
 import connor.familyhandler as familyhandler
 import connor.utils as utils
 import connor.consam.writers as writers
-from connor.consam.writers import LoggingWriter
 
 __version__ = connor.__version__
 
@@ -454,7 +453,7 @@ def _build_supplemental_log(coordinate_holder):
 
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
-    total_aligns = samtools.total_align_count(args.input_bam)
+    total_aligns = pysamwrapper.total_align_count(args.input_bam)
     family_filter = _build_family_filter(args)
     handlers = familyhandler.build_family_handlers(args,
                                                    consensus_writer,
@@ -507,7 +506,7 @@ def main(command_line_args=None):
                                                       args.annotated_output_bam,
                                                       bam_tags,
                                                       args)
-        annotated_writer = LoggingWriter(base_annotated_writer, log)
+        annotated_writer = writers.LoggingWriter(base_annotated_writer, log)
         consensus_writer = writers.build_writer(args.input_bam,
                                                  args.output_bam,
                                                  bam_tags,

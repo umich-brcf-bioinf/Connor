@@ -148,8 +148,8 @@ def alignment_file(filename, mode, header=None, template=None):
         return pysam.AlignmentFile(filename, mode, template=template)
     return pysam.AlignmentFile(filename, mode)
 
-def get_header_dict(bamfile):
-    return _WRAPPER.get_header_dict(bamfile)
+def get_header_dict(bam):
+    return _WRAPPER.get_header_dict(bam)
 
 def idxstats(bam_filepath):
     return _WRAPPER.idxstats(bam_filepath)
@@ -160,11 +160,21 @@ def index(bam_filepath):
 def sort(input_bam_filepath, output_bam_filepath):
     _WRAPPER.sort(input_bam_filepath, output_bam_filepath)
 
-def sort_and_index_bam(bam_filename):
-    output_dir = os.path.dirname(bam_filename)
-    output_root = os.path.splitext(os.path.basename(bam_filename))[0]
+def sort_and_index_bam(bam_filepath):
+    output_dir = os.path.dirname(bam_filepath)
+    output_root = os.path.splitext(os.path.basename(bam_filepath))[0]
     sorted_bam_filename = os.path.join(output_dir,
                                        output_root + ".sorted.bam")
-    sort(bam_filename, sorted_bam_filename)
-    os.rename(sorted_bam_filename, bam_filename)
-    index(bam_filename)
+    sort(bam_filepath, sorted_bam_filename)
+    os.rename(sorted_bam_filename, bam_filepath)
+    index(bam_filepath)
+
+def total_align_count(bam_filepath):
+    '''Returns count of all mapped alignments in input BAM (based on index)'''
+    count = 0
+    for line in idxstats(bam_filepath):
+        if line:
+            chrom, _, mapped, unmapped = line.strip().split('\t')
+            if chrom != '*':
+                count += int(mapped) + int(unmapped)
+    return count
