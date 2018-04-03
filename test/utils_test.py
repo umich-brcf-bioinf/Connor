@@ -1,5 +1,5 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
-#pylint: disable=unused-argument
+#pylint: disable=unused-argument, missing-docstring, protected-access
 
 from argparse import Namespace
 from collections import defaultdict
@@ -8,10 +8,10 @@ import sys
 import unittest
 
 from nose.exc import SkipTest
+from testfixtures.tempdirectory import TempDirectory
 
 import connor.consam.pysamwrapper  as pysamwrapper
 import connor.utils as utils
-from testfixtures.tempdirectory import TempDirectory
 
 
 class MicroMock(object):
@@ -118,8 +118,7 @@ class BaseConnorTestCase(unittest.TestCase):
     def byte_array_to_string(sequence):
         if isinstance(sequence, str):
             return sequence
-        else:
-            return str(sequence.decode("utf-8"))
+        return str(sequence.decode("utf-8"))
 
     def ok(self):
         #pylint: disable=redundant-unittest-assert
@@ -306,6 +305,8 @@ class UtilsTest(BaseConnorTestCase):
                          other_stuff='baz')
         utils.log_environment_info(self.mock_logger, args)
         log_text = '\n'.join(self.mock_logger._log_calls['DEBUG'])
+        #using deprecated method because it works in py2.7
+        #pylint: disable=deprecated-method
         self.assertRegexpMatches(log_text, 'command_line.*foo bar')
         self.assertRegexpMatches(log_text, 'command_options.*foo.*bar')
         self.assertRegexpMatches(log_text, 'command_options.*baz')

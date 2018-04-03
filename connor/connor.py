@@ -33,7 +33,7 @@ from sortedcontainers import SortedSet
 
 import connor
 import connor.command_validator as command_validator
-import connor.consam.alignments as alignments
+from connor.consam.alignments import PairedAlignment
 import connor.consam.bamtag as bamtag
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.readers as readers
@@ -71,7 +71,7 @@ class _TagFamily(object):
                  alignments,
                  inexact_match_count,
                  consensus_threshold,
-                 family_filter=lambda x: None):
+                 family_filter=lambda _: None):
         self.umi_sequence = _TagFamily.umi_sequence
         _TagFamily.umi_sequence += 1
         self._umt = umt
@@ -184,7 +184,7 @@ class _TagFamily(object):
                 template_pair.left.query_qualities
         right_align.query_qualities = \
                 template_pair.right.query_qualities
-        consensus_pair = alignments.PairedAlignment(left_align,
+        consensus_pair = PairedAlignment(left_align,
                                                    right_align,
                                                    tag_length=len(umt[0]))
         consensus_pair.replace_umt(umt)
@@ -273,7 +273,7 @@ def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
                         hamming_threshold,
                         consensus_threshold,
-                        family_filter=lambda x: None):
+                        family_filter=lambda _: None):
     '''Partition paired aligns into families.
 
     Each read is considered against each ranked tag until all reads are
@@ -322,20 +322,19 @@ def _rank_tags(tagged_paired_aligns):
 def _build_family_filter(args):
     min_family_size = args.min_family_size_threshold
     too_small_msg = 'family too small (<{})'.format(min_family_size)
-    def family_size_filter(family):
+    def _family_size_filter(family):
         if family.included_pair_count < min_family_size:
             return too_small_msg
-        else:
-            return None
-    return family_size_filter
+        return None
+    return _family_size_filter
 
 def _build_supplemental_log(coordinate_holder):
-    def supplemental_progress_log(log):
+    def _supplemental_progress_log(log):
         log.debug("{}mb peak memory", utils.peak_memory())
         log.debug("{} pending alignment pairs; {} peak pairs",
                   coordinate_holder.pending_pair_count,
                   coordinate_holder.pending_pair_peak_count)
-    return supplemental_progress_log
+    return _supplemental_progress_log
 
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)

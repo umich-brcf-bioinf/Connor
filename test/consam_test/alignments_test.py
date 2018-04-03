@@ -2,24 +2,13 @@
 #pylint: disable=protected-access, missing-docstring, too-many-locals
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
-from argparse import Namespace
-from collections import OrderedDict
-from copy import deepcopy
-import os
 
-import pysam
-from testfixtures.tempdirectory import TempDirectory
+from test.utils_test import MicroMock
+from test.utils_test import BaseConnorTestCase
 
-import connor
-from connor.consam.bamflag import BamFlag
-import connor.consam.pysamwrapper as pysamwrapper
-import connor.consam.bamtag as bamtag
 from connor.consam.alignments import ConnorAlign
 from connor.consam.alignments import PairedAlignment
 
-from test.consam_test.writers_test import MockAlignWriter
-from test.utils_test import MicroMock
-from test.utils_test import BaseConnorTestCase
 
 class ConnorAlignTest(BaseConnorTestCase):
     def test_eq(self):

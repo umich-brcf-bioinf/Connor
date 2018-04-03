@@ -3,12 +3,12 @@
 #pylint: disable=too-many-arguments,deprecated-method
 from __future__ import print_function, absolute_import, division
 
+from test.utils_test import MicroMock
+from test.utils_test import BaseConnorTestCase
+
 from connor.consam.alignments import ConnorAlign
 from connor.consam import bamtag
 from connor.consam.bamtag import BamTag
-
-from test.utils_test import MicroMock
-from test.utils_test import BaseConnorTestCase
 
 
 class BamTagPackageTest(BaseConnorTestCase):

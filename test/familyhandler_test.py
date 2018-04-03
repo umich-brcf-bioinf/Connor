@@ -4,6 +4,11 @@
 from __future__ import print_function, absolute_import, division
 from argparse import Namespace
 
+from test.connor_test import _mock_tag_family
+from test.consam_test.writers_test import MockAlignWriter
+from test.utils_test import BaseConnorTestCase
+from test.utils_test import MicroMock
+
 from connor.familyhandler import build_family_handlers
 from connor.familyhandler import _FamilySizeStatHandler
 from connor.familyhandler import _MatchStatHandler
@@ -11,18 +16,14 @@ from connor.familyhandler import _WriteAnnotatedAlignsHandler
 from connor.familyhandler import _WriteConsensusHandler
 from connor.consam.alignments import ConnorAlign
 
-from test.connor_test import _mock_tag_family
-import test.consam_test.alignments_test as alignments_test
-from test.utils_test import BaseConnorTestCase
-from test.utils_test import MicroMock
 
 class FamilyHandlerTest(BaseConnorTestCase):
     def test_build_family_handlers(self):
         args = Namespace(umt_distance_threshold=1,
                          min_family_size_threshold=3)
         handlers = build_family_handlers(args,
-                                         alignments_test.MockAlignWriter(),
-                                         alignments_test.MockAlignWriter(),
+                                         MockAlignWriter(),
+                                         MockAlignWriter(),
                                          self.mock_logger)
         actual_handler_names = [x.__class__.__name__ for x in handlers]
 
@@ -202,7 +203,7 @@ class WriteConsensusHandlerTest(BaseConnorTestCase):
         family_2 = _mock_tag_family(consensus=self._mock_align_pair("readB"),
                                     filter_value=None)
         families = [family_1, family_2]
-        writer = alignments_test.MockAlignWriter()
+        writer = MockAlignWriter()
 
         handler = _WriteConsensusHandler(writer)
         for family in families:
@@ -219,7 +220,7 @@ class WriteConsensusHandlerTest(BaseConnorTestCase):
         family_2 = _mock_tag_family(consensus=self._mock_align_pair("readB"),
                                     filter_value='foo')
         families = [family_1, family_2]
-        writer = alignments_test.MockAlignWriter()
+        writer = MockAlignWriter()
 
         handler = _WriteConsensusHandler(writer)
         for family in families:
@@ -244,7 +245,7 @@ class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
         family_A = _mock_tag_family(align_pairs=set([pairA1, pairA2]))
         family_B = _mock_tag_family(align_pairs=set([pairB1, pairB2]))
         families = [family_A, family_B]
-        writer = alignments_test.MockAlignWriter()
+        writer = MockAlignWriter()
 
         handler = _WriteAnnotatedAlignsHandler(writer)
         for family in families:
@@ -269,7 +270,7 @@ class WriteAnnotatedAlignsHandlerTest(BaseConnorTestCase):
                                                      pairA4,
                                                      pairA3]))
         families = [family_A]
-        writer = alignments_test.MockAlignWriter()
+        writer = MockAlignWriter()
 
         handler = _WriteAnnotatedAlignsHandler(writer)
         for family in families:

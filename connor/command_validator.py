@@ -11,6 +11,7 @@ import itertools
 try:
     from itertools import izip as iter_zip
 except ImportError:
+    #pylint: disable=invalid-name
     iter_zip = zip
 import os
 import connor.consam.writers as writers

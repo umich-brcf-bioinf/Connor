@@ -1,10 +1,13 @@
+'''connor utils'''
 from __future__ import print_function, absolute_import, division
 
 from datetime import datetime
 import getpass
 try:
+    #pylint: disable=unused-import
     from itertools import map as iter_map
 except ImportError:
+    #pylint: disable=invalid-name
     iter_map = map
 import logging
 import os
@@ -21,6 +24,7 @@ class UsageError(Exception):
         super(UsageError, self).__init__(msg, *args)
 
 class CountingGenerator(object):
+    '''Decorates a generator adding a total count of iterated items'''
     def __init__(self):
         self.item_count = 0
 
@@ -153,8 +157,7 @@ def log_environment_info(log, args):
     log.debug('platform_python_version|{}', platform.python_version())
     log.debug('pysam_version|{}', pysam.__version__)
 
-def _byte_array_to_string(sequence):
+def byte_array_to_string(sequence):
     if isinstance(sequence, str):
         return sequence
-    else:
-        return str(sequence.decode("utf-8"))
+    return str(sequence.decode("utf-8"))

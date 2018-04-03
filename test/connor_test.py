@@ -11,7 +11,12 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
+
+from test.consam_test.writers_test import MockAlignWriter
+from test.utils_test import BaseConnorTestCase
+from test.utils_test import MicroMock
 from testfixtures.tempdirectory import TempDirectory
+
 import connor.connor as connor
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
@@ -19,10 +24,6 @@ from connor.connor import _CoordinateFamilyHolder
 import connor.consam.writers as writers
 from connor.consam.alignments import ConnorAlign
 from connor.consam.alignments import PairedAlignment
-
-from test.consam_test.alignments_test import MockAlignWriter
-from test.utils_test import BaseConnorTestCase
-from test.utils_test import MicroMock
 
 
 def _mock_connor_align(query_name,

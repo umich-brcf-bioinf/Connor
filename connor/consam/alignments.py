@@ -27,23 +27,20 @@ class PairedAlignment(object):
     def filter_value(self):
         if self.left.filter_value or self.right.filter_value:
             return (self.left.filter_value, self.right.filter_value)
-        else:
-            return None
+        return None
 
     def cigars(self, format_string=None):
         if format_string:
             return format_string.format(left=self.left.cigarstring,
                                         right=self.right.cigarstring)
-        else:
-            return self.left.cigarstring, self.right.cigarstring
+        return self.left.cigarstring, self.right.cigarstring
 
     def positions(self, format_string=None):
         left_value = self.left.reference_start + 1
         right_value = self.right.reference_end + 1
         if format_string:
             return format_string.format(left=left_value, right=right_value)
-        else:
-            return left_value, right_value
+        return left_value, right_value
 
     def replace_umt(self, umt):
         if not (umt[0] or umt[1]) or \
@@ -54,10 +51,10 @@ class PairedAlignment(object):
         left_qual = self.left.query_qualities
         right_qual = self.right.query_qualities
         left_query_frag = self.left.query_sequence[len(umt[0]):]
-        left_query_frag_str = utils._byte_array_to_string(left_query_frag)
+        left_query_frag_str = utils.byte_array_to_string(left_query_frag)
         self.left.query_sequence = umt[0] + left_query_frag_str
         right_query_frag = self.right.query_sequence[:-len(umt[1])]
-        right_query_frag_str = utils._byte_array_to_string(right_query_frag)
+        right_query_frag_str = utils.byte_array_to_string(right_query_frag)
         self.right.query_sequence = right_query_frag_str + umt[1]
         self.umt = umt
         self.left.query_qualities = left_qual

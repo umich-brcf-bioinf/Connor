@@ -1,7 +1,8 @@
-'''Defines tags to be added to output BAM file(s)'''
+''' Defines tags to be added to output BAM file(s)'''
 from __future__ import print_function, absolute_import, division
 
 class BamTag(object):
+    '''Holds the tag name, type, descrption, and value extractor for an output BAM tag'''
     HEADER_FORMAT = 'connor|BAM tag|{}: {}'.replace('|', '\t')
 
     class _NullObject(object):
@@ -38,18 +39,19 @@ class BamTag(object):
 
 
 def build_bam_tags():
+    '''builds the list of BAM tags to be added to output BAMs'''
     #pylint: disable=unused-argument
-    def combine_filters(fam, paired_align, align):
+    def _combine_filters(fam, paired_align, align):
         filters = [x.filter_value for x in [fam, align] if x and x.filter_value]
         if filters:
             return ";".join(filters).replace('; ', ';')
-        else:
-            return None
+        return None
+
     boolean_tag_value = {True:1}
     tags = [
         BamTag("X0", "Z",
                ("filter (why the alignment was excluded)"),
-               combine_filters),
+               _combine_filters),
         BamTag("X1", "Z",
                ("leftmost~rightmost matched pair positions"),
                lambda fam, pair, align: pair.positions('{left}~{right}')),

@@ -7,6 +7,8 @@ from collections import OrderedDict
 from copy import deepcopy
 import os
 
+from test.utils_test import MicroMock
+from test.utils_test import BaseConnorTestCase
 from testfixtures.tempdirectory import TempDirectory
 
 from connor import __version__
@@ -14,9 +16,6 @@ from connor.consam.alignments import ConnorAlign
 import connor.consam.bamtag as bamtag
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.writers as writers
-
-from test.utils_test import MicroMock
-from test.utils_test import BaseConnorTestCase
 
 
 class MockAlignWriter(object):

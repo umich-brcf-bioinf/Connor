@@ -4,13 +4,12 @@
 #pylint: disable=deprecated-method
 from __future__ import print_function, absolute_import, division
 
-from connor.consam.alignments import ConnorAlign
-from connor.consam.bamflag import BamFlag
-import connor.consam.readers as readers
-
 from test.consam_test.writers_test import MockAlignWriter
 from test.utils_test import BaseConnorTestCase
 
+from connor.consam.alignments import ConnorAlign
+from connor.consam.bamflag import BamFlag
+import connor.consam.readers as readers
 
 class ReadersTest(BaseConnorTestCase):
     def test_filter_alignments_passthorughIncludedAligns(self):

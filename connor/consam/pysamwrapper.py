@@ -62,7 +62,7 @@ class _Pysam9Wrapper(object):
     @staticmethod
     def idxstats(input_bam_filepath):
         result = pysam.samtools.idxstats(input_bam_filepath)
-        return utils._byte_array_to_string(result).split('\n')
+        return utils.byte_array_to_string(result).split('\n')
 
 
 class _Pysam10_11_12_13Wrapper(object):
@@ -92,7 +92,7 @@ class _Pysam10_11_12_13Wrapper(object):
     @staticmethod
     def idxstats(input_bam_filepath):
         result = pysam.samtools.idxstats(input_bam_filepath)
-        return utils._byte_array_to_string(result).split('\n')
+        return utils.byte_array_to_string(result).split('\n')
 
 
 class _Pysam14Wrapper(object):
@@ -122,7 +122,7 @@ class _Pysam14Wrapper(object):
     @staticmethod
     def idxstats(input_bam_filepath):
         result = pysam.samtools.idxstats(input_bam_filepath)
-        return utils._byte_array_to_string(result).split('\n')
+        return utils.byte_array_to_string(result).split('\n')
 
 
 def _get_pysam_wrapper():

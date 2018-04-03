@@ -7,13 +7,12 @@ from __future__ import print_function, absolute_import, division
 from argparse import Namespace
 import os
 
+from test.utils_test import BaseConnorTestCase
 from testfixtures.tempdirectory import TempDirectory
 
 import connor.command_validator as validator
 import connor.utils as utils
 from connor.utils import UsageError
-from test.utils_test import BaseConnorTestCase
-
 
 
 class MockTask(object):

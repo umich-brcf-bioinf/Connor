@@ -1,5 +1,4 @@
-#! /usr/bin/env python
-'''Utils/classes for reading aligments'''
+'''Utils for reading aligments'''
 from __future__ import print_function, absolute_import, division
 from collections import defaultdict
 
@@ -7,6 +6,8 @@ from connor.consam.bamflag import BamFlag
 import connor.consam.writers as writers
 import connor.consam.alignments as alignments
 import connor.utils as utils
+
+_MISSING_MATE_FILTER_TEXT = 'read mate was missing or excluded'
 
 def _filter_alignments(pysam_alignments,
                       excluded_writer=writers.AlignWriter.NULL):
@@ -35,7 +36,6 @@ def _filter_alignments(pysam_alignments,
 
 #TODO: cgates: reduce complexity
 def _build_coordinate_pairs(connor_alignments, excluded_writer):
-    MISSING_MATE_FILTER = 'read mate was missing or excluded'
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
@@ -53,16 +53,16 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             coord = coords[key]
             l_align = coord.pop(alignment.query_name, None)
             # Clear empty coordinate dict
-            if not len(coord):
+            if not coord:
                 del coords[key]
             if l_align:
                 yield alignments.PairedAlignment(l_align, alignment)
             else:
-                alignment.filter_value = MISSING_MATE_FILTER
+                alignment.filter_value = _MISSING_MATE_FILTER_TEXT
                 excluded_writer.write(None, None, alignment)
     for aligns in coords.values():
         for align in aligns.values():
-            align.filter_value = MISSING_MATE_FILTER
+            align.filter_value = _MISSING_MATE_FILTER_TEXT
             excluded_writer.write(None, None, align)
 
 def _progress_logger(base_generator,
@@ -90,12 +90,13 @@ def paired_reader(bamfile,
                   log,
                   supplemental_log,
                   annotated_writer):
-        progress_gen = _progress_logger(bamfile.fetch(),
-                                        total_aligns,
-                                        log,
-                                        supplemental_log)
-        filtered_aligns_gen = _filter_alignments(progress_gen,
-                                                 annotated_writer)
-        paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
-                                                   annotated_writer)
-        return paired_align_gen
+    '''Given a BAM file, return a generator that yields filtered, paired reads'''
+    progress_gen = _progress_logger(bamfile.fetch(),
+                                    total_aligns,
+                                    log,
+                                    supplemental_log)
+    filtered_aligns_gen = _filter_alignments(progress_gen,
+                                             annotated_writer)
+    paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
+                                               annotated_writer)
+    return paired_align_gen

@@ -9,6 +9,7 @@ import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 
 class AlignWriter(object):
+    '''Given header, and path, makes BAM; appends Connor headers/tags and indexes on close'''
     class _NullWriter(object):
         def write(self, family, paired_align, connor_align):
             pass
@@ -235,11 +236,11 @@ def _set_pg_header(header, simplify_pg_header, command_line):
 def build_writer(input_bam, output_bam, tags, args):
     if not output_bam:
         return AlignWriter.NULL
-    else:
-        input_bam = pysamwrapper.alignment_file(input_bam, 'rb')
-        header_dict = pysamwrapper.get_header_dict(input_bam)
-        input_bam.close()
-        _set_pg_header(header_dict,
-                       args.simplify_pg_header,
-                       args.original_command_line)
-        return AlignWriter(header_dict, output_bam, tags)
+
+    input_bam = pysamwrapper.alignment_file(input_bam, 'rb')
+    header_dict = pysamwrapper.get_header_dict(input_bam)
+    input_bam.close()
+    _set_pg_header(header_dict,
+                   args.simplify_pg_header,
+                   args.original_command_line)
+    return AlignWriter(header_dict, output_bam, tags)

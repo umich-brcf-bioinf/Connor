@@ -14,6 +14,7 @@ def build_family_handlers(args,
 class _WriteConsensusHandler(object):
     def __init__(self, consensus_writer):
         self._writer = consensus_writer
+
     def handle(self, family):
         if not family.filter_value:
             self._writer.write(family,

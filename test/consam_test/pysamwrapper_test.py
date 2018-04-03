@@ -4,10 +4,10 @@
 from __future__ import print_function, absolute_import, division
 import os
 
+from test.utils_test import BaseConnorTestCase
 from testfixtures.tempdirectory import TempDirectory
 
 import connor.consam.pysamwrapper as pysamwrapper
-from test.utils_test import BaseConnorTestCase
 
 
 class PysamWrapperTest(BaseConnorTestCase):
