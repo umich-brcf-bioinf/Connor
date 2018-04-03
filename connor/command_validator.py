@@ -13,6 +13,7 @@ try:
 except ImportError:
     iter_zip = zip
 import os
+import connor.consam.writers as writers
 import connor.samtools as samtools
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
@@ -95,7 +96,7 @@ def _check_input_bam_not_deduped(args, log=None):
     header_dict = pysamwrapper.get_header_dict(bamfile)
     bamfile.close()
     names = set([pg_item.get('PN', None) for pg_item in header_dict.get('PG', [])])
-    if samtools.CONNOR_PG_PN in names:
+    if writers.CONNOR_PG_PN in names:
         msg = ('Specified input [{}] has already been processed with '
                'Connor.').format(args.input_bam)
         _log_force_or_raise(args, log, msg)

@@ -38,7 +38,8 @@ import connor.consam.bamtag as bamtag
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.familyhandler as familyhandler
 import connor.utils as utils
-from connor.samtools import LoggingWriter
+import connor.consam.writers as writers
+from connor.consam.writers import LoggingWriter
 
 __version__ = connor.__version__
 
@@ -502,12 +503,12 @@ def main(command_line_args=None):
         log.info('logging to [{}]', args.log_file)
         utils.log_environment_info(log, args)
         bam_tags = bamtag.build_bam_tags()
-        base_annotated_writer = samtools.build_writer(args.input_bam,
+        base_annotated_writer = writers.build_writer(args.input_bam,
                                                       args.annotated_output_bam,
                                                       bam_tags,
                                                       args)
         annotated_writer = LoggingWriter(base_annotated_writer, log)
-        consensus_writer = samtools.build_writer(args.input_bam,
+        consensus_writer = writers.build_writer(args.input_bam,
                                                  args.output_bam,
                                                  bam_tags,
                                                  args)

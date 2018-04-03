@@ -17,6 +17,7 @@ from connor import samtools
 import connor.consam.pysamwrapper as pysamwrapper
 import connor.utils as utils
 from connor.connor import _CoordinateFamilyHolder
+import connor.consam.writers as writers
 from connor.samtools import ConnorAlign
 from test.samtools_test import MockAlignWriter
 import test.samtools_test as samtools_test
@@ -1168,7 +1169,7 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(simplify_pg_header=True,
                              original_command_line='foo')
-            consensus_writer = samtools.build_writer(input_bam,
+            consensus_writer = writers.build_writer(input_bam,
                                                      output_bam,
                                                      tags=[],
                                                      args=args)
@@ -1270,11 +1271,11 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
                              umt_distance_threshold=1,
                              simplify_pg_header=False,
                              original_command_line='foo')
-            consensus_writer = samtools.build_writer(input_bam,
+            consensus_writer = writers.build_writer(input_bam,
                                                      output_bam,
                                                      [],
                                                      args)
-            annotated_writer = samtools.AlignWriter.NULL
+            annotated_writer = writers.AlignWriter.NULL
 
             connor._dedup_alignments(args,
                                      consensus_writer,
