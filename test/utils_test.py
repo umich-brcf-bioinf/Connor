@@ -1,5 +1,5 @@
 #pylint: disable=invalid-name, too-few-public-methods, too-many-public-methods
-#pylint: disable=unused-argument
+#pylint: disable=unused-argument, missing-docstring, protected-access
 
 from argparse import Namespace
 from collections import defaultdict
@@ -8,9 +8,10 @@ import sys
 import unittest
 
 from nose.exc import SkipTest
-
-import connor.utils as utils
 from testfixtures.tempdirectory import TempDirectory
+
+import connor.consam.pysamwrapper  as pysamwrapper
+import connor.utils as utils
 
 
 class MicroMock(object):
@@ -55,23 +56,74 @@ class BaseConnorTestCase(unittest.TestCase):
         unittest.TestCase.tearDown(self)
 
     @staticmethod
-    def byte_array_to_string(sequence):
-        if isinstance(sequence, str):
-            return sequence
-        else:
-            return str(sequence.decode("utf-8"))
-
-    def ok(self):
-        #pylint: disable=redundant-unittest-assert
-        self.assertTrue(True)
-
-    @staticmethod
     def check_sysout_safe():
         try:
             # nosetest and pylint fight over stdout; run nosetest -s to be safe
             sys.stdout.fileno() #pylint disable=pointless-statement
         except Exception: #pylint disable=broad=except
             raise SkipTest("sysout unsafe to test: run nosetest with -s option")
+
+    @staticmethod
+    def create_file(path, filename, contents):
+        filename = os.path.join(path, filename)
+        with open(filename, 'wt') as new_file:
+            new_file.write(contents)
+            new_file.flush()
+        return filename
+
+    @staticmethod
+    def create_bam(path, filename, sam_contents, index=True):
+        sam_filename = BaseConnorTestCase.create_file(path, filename, sam_contents)
+        bam_filename = sam_filename.replace(".sam", ".bam")
+        BaseConnorTestCase.pysam_bam_from_sam(sam_filename, bam_filename, index)
+        return bam_filename
+
+    @staticmethod
+    def mock_align(**kwargs):
+        a = pysamwrapper.aligned_segment()
+        a.query_name = "align1"
+        a.flag = 99
+        a.reference_id = 0
+        a.reference_start = 32
+        a.mapping_quality = 20
+        a.cigar = ((0,7),)
+        a.next_reference_id = 0
+        a.next_reference_start=199
+        a.template_length=167
+        #query_qualities must be set after query_sequence
+        a.query_sequence=kwargs.pop('query_sequence', 'AGCTTAG')
+        for (key, value) in kwargs.items():
+            setattr(a, key, value)
+        return a
+
+    @staticmethod
+    def pysam_bam_from_sam(sam_filename, bam_filename, index=True):
+        infile = pysamwrapper.alignment_file(sam_filename, "r")
+        outfile = pysamwrapper.alignment_file(bam_filename, "wb", template=infile)
+        for s in infile:
+            outfile.write(s)
+        infile.close()
+        outfile.close()
+        if index:
+            pysamwrapper.index(bam_filename)
+
+    @staticmethod
+    def pysam_alignments_from_bam(bam_filename):
+        infile = pysamwrapper.alignment_file(bam_filename, "rb")
+        aligned_segments = [s for s in infile]
+        infile.close()
+        return aligned_segments
+
+    @staticmethod
+    def byte_array_to_string(sequence):
+        if isinstance(sequence, str):
+            return sequence
+        return str(sequence.decode("utf-8"))
+
+    def ok(self):
+        #pylint: disable=redundant-unittest-assert
+        self.assertTrue(True)
+
 
 class FilteredGeneratorTest(BaseConnorTestCase):
     def test_filter_passesAllThroughWhenNoFilters(self):
@@ -253,6 +305,8 @@ class UtilsTest(BaseConnorTestCase):
                          other_stuff='baz')
         utils.log_environment_info(self.mock_logger, args)
         log_text = '\n'.join(self.mock_logger._log_calls['DEBUG'])
+        #using deprecated method because it works in py2.7
+        #pylint: disable=deprecated-method
         self.assertRegexpMatches(log_text, 'command_line.*foo bar')
         self.assertRegexpMatches(log_text, 'command_options.*foo.*bar')
         self.assertRegexpMatches(log_text, 'command_options.*baz')

@@ -1,10 +1,13 @@
+'''connor utils'''
 from __future__ import print_function, absolute_import, division
 
 from datetime import datetime
 import getpass
 try:
+    #pylint: disable=unused-import
     from itertools import map as iter_map
 except ImportError:
+    #pylint: disable=invalid-name
     iter_map = map
 import logging
 import os
@@ -15,13 +18,13 @@ import sys
 
 import pysam
 
-
 class UsageError(Exception):
     '''Raised for malformed command or invalid arguments.'''
     def __init__(self, msg, *args):
         super(UsageError, self).__init__(msg, *args)
 
 class CountingGenerator(object):
+    '''Decorates a generator adding a total count of iterated items'''
     def __init__(self):
         self.item_count = 0
 
@@ -153,3 +156,8 @@ def log_environment_info(log, args):
     log.debug('platform_uname|{}', platform.uname())
     log.debug('platform_python_version|{}', platform.python_version())
     log.debug('pysam_version|{}', pysam.__version__)
+
+def byte_array_to_string(sequence):
+    if isinstance(sequence, str):
+        return sequence
+    return str(sequence.decode("utf-8"))

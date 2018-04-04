@@ -3,7 +3,7 @@ Installing Connor
 Connor requires python 2.7 or later and has been tested with:
 
 * Python 2.7, 3.4 - 3.6
-* pysam 0.8.4 - 0.12.0
+* pysam 0.8.4 - 0.14.0
 * OSX and \*nix RHEL6/7
 
 Connor does not work in Windows OS because it depends on the python library
@@ -29,6 +29,11 @@ Installing
 
   ``$ pip install connor``
 
+* You can also install Connor via the conda envirionment/package manager
+  using the bioconda channel:
+
+  ``$ conda install -c bioconda connor``
+
 * If you don't have root permissions, you can install connor locally:
 
   ``$ pip install connor --user``
@@ -47,10 +52,6 @@ Uninstalling
 
 Advanced / Connor developers
 ----------------------------
-Connor has been tested with virtualenv and Conda. (Note Conda's pysam version
-lags behind so if you're using conda and installing modules manually, we
-recommend you install pysam via 'pip install' instead of 'conda install').
-
 If you already have prerequisite modules installed, you can also clone from
 github and run directly from the source like so:
 
