@@ -46,7 +46,8 @@ __version__ = connor.__version__
 DEFAULT_CONSENSUS_FREQ_THRESHOLD=0.6
 DEFAULT_MIN_FAMILY_SIZE_THRESHOLD = 3
 DEFAULT_UMT_DISTANCE_THRESHOLD = 1
-
+FILTER_ORDERS = ['count', 'name']
+DEFAULT_FILTER_ORDER = FILTER_ORDERS[0]
 
 DESCRIPTION=\
 '''Deduplicates BAM file based on custom inline DNA barcodes.
@@ -62,7 +63,7 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         '''Suppress default exit behavior'''
         raise utils.UsageError(message)
 
-
+#TODO: cgates consider extracting to family module 
 class _TagFamily(object):
     umi_sequence = 0
 
@@ -190,7 +191,7 @@ class _TagFamily(object):
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
-
+#TODO: cgates consider extracting to family module 
 class _CoordinateFamilyHolder(object):
     '''Encapsulates how stream of paired aligns are iteratively released as
     sets of pairs which share the same coordinate (coordinate families)'''
@@ -336,6 +337,7 @@ def _build_supplemental_log(coordinate_holder):
                   coordinate_holder.pending_pair_peak_count)
     return _supplemental_progress_log
 
+#TODO: cgates push bamfile handling into readers.paired_reder
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
 
@@ -425,6 +427,12 @@ def _parse_command_line_args(arguments):
  combined into a single family. Lower threshold make more families with more
  consistent UMTs; 0 implies UMI must match
  exactly.""".format(DEFAULT_UMT_DISTANCE_THRESHOLD))
+    parser.add_argument("--filter_order",
+                        choices=FILTER_ORDERS,
+                        default = DEFAULT_FILTER_ORDER,
+                        help=\
+"""={}; determines how filters will be ordered in the log
+ results""".format(DEFAULT_FILTER_ORDER))
     parser.add_argument('--simplify_pg_header',
                         action="store_true",
                         default=False,
@@ -453,7 +461,10 @@ def main(command_line_args=None):
                                                       args.annotated_output_bam,
                                                       bam_tags,
                                                       args)
-        annotated_writer = writers.LoggingWriter(base_annotated_writer, log)
+        sort_filter_by_name = args.filter_order == 'name'
+        annotated_writer = writers.LoggingWriter(base_annotated_writer,
+                                                 log,
+                                                 sort_filter_by_name)
         consensus_writer = writers.build_writer(args.input_bam,
                                                  args.output_bam,
                                                  bam_tags,

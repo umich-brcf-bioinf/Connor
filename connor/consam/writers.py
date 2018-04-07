@@ -66,11 +66,12 @@ class LoggingWriter(object):
 
     UNPLACED_FAMILY = UnplacedFamily()
 
-    def __init__(self, base_writer, log):
+    def __init__(self, base_writer, log, sort_filters_by_name=False):
         self._base_writer = base_writer
         self._log = log
         self._align_filter_stats = defaultdict(int)
         self._family_filter_stats = defaultdict(set)
+        self._sort_filters_by_name = sort_filters_by_name
 
     def write(self, family, paired_align, connor_align):
         if not family:
@@ -83,13 +84,12 @@ class LoggingWriter(object):
         else:
             self._base_writer.write(family, paired_align, connor_align)
 
-    @staticmethod
-    def _filter_counts(filter_dict):
+    def _filter_counts(self, filter_dict):
         '''Returns an immutable ordered dict of filter:counts; when an item
         would be filtered by multiple filters, all are listed in alpha order;
         the dict itself is ordered by descending count, filter name.
         '''
-        return OrderedDict(utils.sort_dict(filter_dict))
+        return OrderedDict(utils.sort_dict(filter_dict, self._sort_filters_by_name))
 
     @staticmethod
     def _log_line(text, count, total, filter_name):
@@ -106,7 +106,7 @@ class LoggingWriter(object):
         for (fam_filter, align_filter), cnt in self._align_filter_stats.items():
             if fam_filter == LoggingWriter.UNPLACED_FAMILY.filter_value and align_filter:
                 unplaced_aligns[align_filter] = cnt
-        return LoggingWriter._filter_counts(unplaced_aligns)
+        return self._filter_counts(unplaced_aligns)
 
     @staticmethod
     def _discarded_filter_value(fam_filter, align_filter):
@@ -128,7 +128,7 @@ class LoggingWriter(object):
                                                                  align_filter)
             if filter_value:
                 discarded_aligns[filter_value] = cnt
-        return LoggingWriter._filter_counts(discarded_aligns)
+        return self._filter_counts(discarded_aligns)
 
     @property
     def _family_stats(self):
@@ -145,7 +145,7 @@ class LoggingWriter(object):
         total_count = included_count + discarded_count
         return (included_count,
                 total_count,
-                LoggingWriter._filter_counts(filter_counts))
+                self._filter_counts(filter_counts))
 
     @property
     def _align_stats(self):

@@ -865,7 +865,9 @@ class ConnorTest(BaseConnorTestCase):
                          namespace.umt_distance_threshold)
         self.assertEquals(['command', 'input.bam', 'output.bam'],
                           namespace.original_command_line)
-        self.assertEqual(11, len(vars(namespace)))
+        self.assertEquals('count',
+                          namespace.filter_order)
+        self.assertEqual(12, len(vars(namespace)))
 
     def test_parse_command_line_args_throwsConnorUsageError(self):
         self.assertRaises(utils.UsageError,
