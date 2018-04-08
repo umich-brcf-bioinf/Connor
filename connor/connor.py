@@ -28,7 +28,6 @@ import connor
 from connor.command_parser import parse_command_line_args
 import connor.command_validator as command_validator
 import connor.consam.bamtag as bamtag
-import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.readers as readers
 import connor.consam.writers as writers
 from connor.family import CoordinateFamilyHolder
@@ -126,16 +125,12 @@ def _build_supplemental_log(coordinate_holder):
                   coordinate_holder.pending_pair_peak_count)
     return _supplemental_progress_log
 
-#TODO: cgates push bamfile handling into readers.paired_reder
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
 
-    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
-    total_aligns = pysamwrapper.total_align_count(args.input_bam)
     coord_family_holder = CoordinateFamilyHolder()
     supplemental_log = _build_supplemental_log(coord_family_holder)
-    paired_align_gen = readers.paired_reader(bamfile,
-                                             total_aligns,
+    paired_align_gen = readers.paired_reader_from_bamfile(args.input_bam,
                                              log,
                                              supplemental_log,
                                              annotated_writer)
@@ -159,8 +154,6 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
 
     for handler in handlers:
         handler.end()
-
-    bamfile.close()
 
 
 def main(command_line_args=None):
