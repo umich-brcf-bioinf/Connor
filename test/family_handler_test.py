@@ -9,11 +9,11 @@ from test.consam_test.writers_test import MockAlignWriter
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
 
-from connor.familyhandler import build_family_handlers
-from connor.familyhandler import _FamilySizeStatHandler
-from connor.familyhandler import _MatchStatHandler
-from connor.familyhandler import _WriteAnnotatedAlignsHandler
-from connor.familyhandler import _WriteConsensusHandler
+from connor.family_handler import build_family_handlers
+from connor.family_handler import _FamilySizeStatHandler
+from connor.family_handler import _MatchStatHandler
+from connor.family_handler import _WriteAnnotatedAlignsHandler
+from connor.family_handler import _WriteConsensusHandler
 from connor.consam.alignments import ConnorAlign
 
 

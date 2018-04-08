@@ -1,4 +1,4 @@
-'''Classes to help define tag and cooridnate families.'''
+'''Classes to help define tag and coordinate families.'''
 from __future__ import print_function, absolute_import, division
 try:
     from builtins import range as iter_range

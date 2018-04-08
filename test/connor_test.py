@@ -19,7 +19,6 @@ from testfixtures.tempdirectory import TempDirectory
 
 import connor.connor as connor
 import connor.consam.pysamwrapper as pysamwrapper
-import connor.utils as utils
 import connor.consam.writers as writers
 from connor.consam.alignments import ConnorAlign
 from connor.consam.alignments import PairedAlignment
@@ -322,39 +321,6 @@ class ConnorTest(BaseConnorTestCase):
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
         self.assertEqual(expected_tags, actual_tags)
 
-    def test_parse_command_line_args(self):
-        namespace = connor._parse_command_line_args(["command",
-                                                     "input.bam",
-                                                     "output.bam"])
-        self.assertEqual("input.bam", namespace.input_bam)
-        self.assertEqual("output.bam", namespace.output_bam)
-        self.assertEqual(False, namespace.force)
-        self.assertEqual(False, namespace.simplify_pg_header)
-        self.assertEqual(False, namespace.verbose)
-        self.assertEqual("output.bam.log", namespace.log_file)
-        self.assertEqual(None, namespace.annotated_output_bam)
-        self.assertEqual(connor.DEFAULT_CONSENSUS_FREQ_THRESHOLD,
-                         namespace.consensus_freq_threshold)
-        self.assertEqual(connor.DEFAULT_MIN_FAMILY_SIZE_THRESHOLD,
-                         namespace.min_family_size_threshold)
-        self.assertEqual(connor.DEFAULT_UMT_DISTANCE_THRESHOLD,
-                         namespace.umt_distance_threshold)
-        self.assertEquals(['command', 'input.bam', 'output.bam'],
-                          namespace.original_command_line)
-        self.assertEquals('count',
-                          namespace.filter_order)
-        self.assertEqual(12, len(vars(namespace)))
-
-    def test_parse_command_line_args_throwsConnorUsageError(self):
-        self.assertRaises(utils.UsageError,
-                          connor._parse_command_line_args,
-                          ["command", "input"])
-        self.assertRaises(utils.UsageError,
-                          connor._parse_command_line_args,
-                          ["command",
-                           "input",
-                           "output",
-                           "something else"])
 
     def test_rank_tags_breaksTiesByTag(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "NNNGGG")
