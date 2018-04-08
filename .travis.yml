@@ -1,17 +1,20 @@
 language: python
 python:
-    - "2.7"
+#     - "2.7"
     # - "3.4"
     # - "3.5"
     - "3.6"
 env:
+    global:
+    - CC_TEST_REPORTER_ID=5684ebe19ec80ce9b4a8cfeab8c6d4e5a5ecc31e264d43bacee8e5050e07224b
+
     matrix:
-    - PYSAM_VERSION=0.8.4
-    - PYSAM_VERSION=0.9.0
-    - PYSAM_VERSION=0.10.0
-    - PYSAM_VERSION=0.11.0
-    - PYSAM_VERSION=0.12.0
-    - PYSAM_VERSION=0.13.0
+#     - PYSAM_VERSION=0.8.4
+#     - PYSAM_VERSION=0.9.0
+#     - PYSAM_VERSION=0.10.0
+#     - PYSAM_VERSION=0.11.0
+#     - PYSAM_VERSION=0.12.0
+#     - PYSAM_VERSION=0.13.0
     - PYSAM_VERSION=0.14.0
 
 install:
@@ -19,15 +22,23 @@ install:
     - pip install -vvv --use-wheel --find-links=./ pysam==$PYSAM_VERSION
     - pip install -r requirements.txt
     - pip install coverage
-    - pip install codeclimate-test-reporter
+#    - pip install codeclimate-test-reporter
+
+before_script:
+    - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+    - chmod +x ./cc-test-reporter
+    - ./cc-test-reporter before-build
 
 script:
     - nosetests -s --with-coverage --verbose --cover-package=connor
     - nosetests -s examples
 
-after_success:
-# note CODECLIMATE_REPO_TOKEN must be set in travis env vars
-    - codeclimate-test-reporter
+after_script:
+  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
+
+# after_success:
+# # note CODECLIMATE_REPO_TOKEN must be set in travis env vars
+#     - codeclimate-test-reporter
 
 notifications:
     email:

@@ -136,8 +136,8 @@ class TagFamily(object):
         right_align.query_qualities = \
                 template_pair.right.query_qualities
         consensus_pair = PairedAlignment(left_align,
-                                                   right_align,
-                                                   tag_length=len(umt[0]))
+                                         right_align,
+                                         tag_length=len(umt[0]))
         consensus_pair.replace_umt(umt)
         return consensus_pair
 
