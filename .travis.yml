@@ -28,6 +28,7 @@ before_script:
 script:
     - nosetests -s --with-coverage --verbose --cover-package=connor
     - nosetests -s examples
+    - coverage xml
 
 after_script:
     # note CC_TEST_REPORTER_ID must be set in travis env vars
