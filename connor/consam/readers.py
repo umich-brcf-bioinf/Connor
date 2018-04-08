@@ -6,6 +6,7 @@ from connor.consam.bamflag import BamFlag
 import connor.consam.writers as writers
 import connor.consam.alignments as alignments
 import connor.utils as utils
+from connor.consam import pysamwrapper
 
 _MISSING_MATE_FILTER_TEXT = 'read mate was missing or excluded'
 
@@ -85,13 +86,12 @@ def _progress_logger(base_generator,
     log.info("100% ({}/{}) alignments processed", row_count, total_rows)
     supplemental_log(log)
 
-def paired_reader(bamfile,
+def _paired_reader(bamfile_gen,
                   total_aligns,
                   log,
                   supplemental_log,
                   annotated_writer):
-    '''Given a BAM file, return a generator that yields filtered, paired reads'''
-    progress_gen = _progress_logger(bamfile.fetch(),
+    progress_gen = _progress_logger(bamfile_gen,
                                     total_aligns,
                                     log,
                                     supplemental_log)
@@ -100,3 +100,22 @@ def paired_reader(bamfile,
     paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
                                                annotated_writer)
     return paired_align_gen
+
+def _bamfile_generator(bam_filename):
+    bamfile = pysamwrapper.alignment_file(bam_filename, 'rb')
+    for align in bamfile.fetch():
+        yield align
+    bamfile.close()
+
+def paired_reader_from_bamfile(bam_filename,
+                               log,
+                               supplemental_log,
+                               annotated_writer):
+    '''Given a BAM file, return a generator that yields filtered, paired reads'''
+    total_aligns = pysamwrapper.total_align_count(bam_filename)
+    bamfile_generator  = _bamfile_generator(bam_filename)
+    return _paired_reader(bamfile_generator,
+                          total_aligns,
+                          log,
+                          supplemental_log,
+                          annotated_writer)

@@ -138,9 +138,14 @@ class Logger(object):
         self._log("WARNING", self._file_logger.warning, message, *args)
         self.warning_occurred = True
 
-def sort_dict(key_counts):
-    return sorted(key_counts.items(), key=lambda x: (-1 * x[1], x[0]))
-
+def sort_dict(key_counts, by_key=False):
+    '''Accept a dict of key:values (numerics) returning list of key-value tuples ordered by desc values.
+    
+    If by_key=True, sorts by dict key.'''
+    sort_key = lambda x: (-1 * x[1], x[0])
+    if by_key:
+        sort_key = lambda x: x[0]
+    return sorted(key_counts.items(), key=sort_key)
 
 def peak_memory():
     peak_memory_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss

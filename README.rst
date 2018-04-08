@@ -99,6 +99,9 @@ Connor help
                             combined into a single family. Lower threshold make more families with more
                             consistent UMTs; 0 implies UMT must match
                             exactly.
+     --filter_order {count,name}
+                          =count; determines how filters will be ordered in the log
+                          results
 
 ====
 

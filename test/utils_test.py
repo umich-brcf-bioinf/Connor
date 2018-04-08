@@ -3,6 +3,7 @@
 
 from argparse import Namespace
 from collections import defaultdict
+from collections import OrderedDict
 import os
 import sys
 import unittest
@@ -314,3 +315,22 @@ class UtilsTest(BaseConnorTestCase):
         self.assertRegexpMatches(log_text, 'platform_uname')
         self.assertRegexpMatches(log_text, 'python_version')
         self.assertRegexpMatches(log_text, 'pysam_version')
+
+    def test_sort_dict_defautsToSortByDescValueThenName(self):
+        key_counts = {'b2': 30, 'b1': 30, 'a': 10, 'c': 20}
+        actual_counts = utils.sort_dict(key_counts)
+        expected_counts = [('b1',30),
+                           ('b2', 30),
+                           ('c', 20),
+                           ('a', 10)]
+        self.assertEqual(expected_counts, actual_counts)
+
+    def test_sort_dict_byKeySortByKey(self):
+        key_counts = {'b2': 30, 'b1': 30, 'a': 10, 'c': 20}
+        actual_counts = utils.sort_dict(key_counts, by_key=True)
+        expected_counts = [('a', 10),
+                           ('b1',30),
+                           ('b2', 30),
+                           ('c', 20)]
+        self.assertEqual(expected_counts, actual_counts)
+

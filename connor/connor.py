@@ -17,28 +17,22 @@ original reads.'''
 ##   limitations under the License.
 from __future__ import print_function, absolute_import, division
 import argparse
-try:
-    from builtins import range as iter_range
-except ImportError:
-    from __builtin__ import xrange as iter_range
-from collections import defaultdict, Counter
-from copy import deepcopy
+from collections import defaultdict
 from functools import partial
 import operator
 import sys
 import traceback
 import time
 
-from sortedcontainers import SortedSet
-
 import connor
+from connor.command_parser import parse_command_line_args
 import connor.command_validator as command_validator
-from connor.consam.alignments import PairedAlignment
 import connor.consam.bamtag as bamtag
-import connor.consam.pysamwrapper as pysamwrapper
 import connor.consam.readers as readers
 import connor.consam.writers as writers
-import connor.familyhandler as familyhandler
+from connor.family import CoordinateFamilyHolder
+from connor.family import TagFamily
+import connor.family_handler as family_handler
 import connor.utils as utils
 
 __version__ = connor.__version__
@@ -46,7 +40,8 @@ __version__ = connor.__version__
 DEFAULT_CONSENSUS_FREQ_THRESHOLD=0.6
 DEFAULT_MIN_FAMILY_SIZE_THRESHOLD = 3
 DEFAULT_UMT_DISTANCE_THRESHOLD = 1
-
+FILTER_ORDERS = ['count', 'name']
+DEFAULT_FILTER_ORDER = FILTER_ORDERS[0]
 
 DESCRIPTION=\
 '''Deduplicates BAM file based on custom inline DNA barcodes.
@@ -62,212 +57,6 @@ class _ConnorArgumentParser(argparse.ArgumentParser):
         '''Suppress default exit behavior'''
         raise utils.UsageError(message)
 
-
-class _TagFamily(object):
-    umi_sequence = 0
-
-    def __init__(self,
-                 umt,
-                 alignments,
-                 inexact_match_count,
-                 consensus_threshold,
-                 family_filter=lambda _: None):
-        self.umi_sequence = _TagFamily.umi_sequence
-        _TagFamily.umi_sequence += 1
-        self._umt = umt
-        (self.distinct_cigar_count,
-         majority_cigar) = _TagFamily._get_dominant_cigar_stats(alignments)
-        self.align_pairs = alignments
-        self._mark_minority_cigar(majority_cigar)
-        self.inexact_match_count = inexact_match_count
-        self.consensus_threshold = consensus_threshold
-        self.consensus = self._build_consensus(umt, self.align_pairs)
-        self.included_pair_count = sum([1 for p in self.align_pairs if not p.filter_value])
-        self.filter_value = family_filter(self)
-
-    def umt(self, format_string=None):
-        if format_string:
-            return format_string.format(left=self._umt[0], right=self._umt[1])
-        else:
-            return self._umt
-
-    @staticmethod
-    def _get_cigarstring_tuple(paired_alignment):
-        return (paired_alignment.left.cigarstring,
-                paired_alignment.right.cigarstring)
-
-    def _mark_minority_cigar(self, majority_cigar):
-        for pair in self.align_pairs:
-            if _TagFamily._get_cigarstring_tuple(pair) != majority_cigar:
-                pair.left.filter_value = "minority CIGAR"
-                pair.right.filter_value = "minority CIGAR"
-
-    def _generate_consensus_sequence(self, alignment_pairs):
-        def consensus_sequence(alignments):
-            consensus_seq = self._simple_consensus_sequence(alignments)
-            if not consensus_seq:
-                consensus_seq = self._complex_consensus_sequence(alignments)
-            return consensus_seq
-        left_alignments = []
-        right_alignments = []
-        for align_pair in alignment_pairs:
-            left_alignments.append(align_pair.left)
-            right_alignments.append(align_pair.right)
-        left_consensus_seq = consensus_sequence(left_alignments)
-        right_consensus_seq = consensus_sequence(right_alignments)
-        return (left_consensus_seq, right_consensus_seq)
-
-    def _simple_consensus_sequence(self, alignments):
-        seq_counter = Counter([a.query_sequence for a in alignments])
-        consensus_seq = None
-        if len(seq_counter) == 1:
-            consensus_seq = next(iter(alignments)).query_sequence
-        elif len(seq_counter) == 2:
-            majority_seq, majority_count = seq_counter.most_common(1)[0]
-            total = len(alignments)
-            if majority_count / total > self.consensus_threshold:
-                consensus_seq = majority_seq
-        return consensus_seq
-
-    def _complex_consensus_sequence(self, alignments):
-        consensus = []
-        for i in iter_range(0, len(alignments[0].query_sequence)):
-            counter = Counter([s.query_sequence[i:i+1] for s in alignments])
-            base = counter.most_common(1)[0][0]
-            freq = counter[base] / sum(counter.values())
-            if freq >= self.consensus_threshold:
-                consensus.append(base)
-            else:
-                consensus.append("N")
-        return "".join(consensus)
-
-    @staticmethod
-    def _select_template_alignment_pair(alignment_pairs):
-        top_alignment_pair = None
-        best_template = (0, None)
-        for alignment_pair in alignment_pairs:
-            query_name = alignment_pair.left.query_name
-            qual_sum = alignment_pair.left.mapping_quality + \
-                    alignment_pair.right.mapping_quality
-            if (-qual_sum, query_name) < best_template:
-                best_template = (-qual_sum, query_name)
-                top_alignment_pair = alignment_pair
-        return top_alignment_pair
-
-
-    @staticmethod
-    def _get_dominant_cigar_stats(alignments):
-        counter = Counter([_TagFamily._get_cigarstring_tuple(s) for s in alignments])
-        number_distict_cigars = len(counter)
-        top_two_cigar_count = counter.most_common(2)
-        dominant_cigar = top_two_cigar_count[0][0]
-        dominant_cigar_count = top_two_cigar_count[0][1]
-        if number_distict_cigars > 1 and dominant_cigar_count == top_two_cigar_count[1][1]:
-            dominant_cigar = sorted(counter.most_common(),
-                                    key=lambda x: (-x[1], x[0]))[0][0]
-        return number_distict_cigars, dominant_cigar
-
-    def is_consensus_template(self, connor_align):
-        return self.consensus.left.query_name == connor_align.query_name
-
-    def _build_consensus(self, umt, align_pairs):
-        included_pairs = [p for p in align_pairs if not p.filter_value]
-        template_pair = _TagFamily._select_template_alignment_pair(included_pairs)
-
-        left_align = deepcopy(template_pair.left, {})
-        right_align = deepcopy(template_pair.right, {})
-        (left_sequence,
-         right_sequence) = self._generate_consensus_sequence(included_pairs)
-        left_align.query_sequence = left_sequence
-        right_align.query_sequence = right_sequence
-        left_align.query_qualities = \
-                template_pair.left.query_qualities
-        right_align.query_qualities = \
-                template_pair.right.query_qualities
-        consensus_pair = PairedAlignment(left_align,
-                                                   right_align,
-                                                   tag_length=len(umt[0]))
-        consensus_pair.replace_umt(umt)
-        return consensus_pair
-
-
-class _CoordinateFamilyHolder(object):
-    '''Encapsulates how stream of paired aligns are iteratively released as
-    sets of pairs which share the same coordinate (coordinate families)'''
-    def __init__(self):
-        self._coordinate_family = defaultdict(partial(defaultdict, list))
-        self._right_coords_in_progress = defaultdict(SortedSet)
-        self.pending_pair_count = 0
-        self.pending_pair_peak_count = 0
-
-    def _add(self, pair):
-        def _start(align):
-            return (align.reference_name, align.reference_start)
-        self._right_coords_in_progress[pair.right.reference_name].add(pair.right.reference_start)
-        right_coord = self._coordinate_family[_start(pair.right)]
-        right_coord[_start(pair.left)].append(pair)
-        self.pending_pair_count += 1
-        self.pending_pair_peak_count = max(self.pending_pair_count,
-                                           self.pending_pair_peak_count)
-
-    def _completed_families(self, reference_name, rightmost_boundary):
-        '''returns one or more families whose end < rightmost boundary'''
-        in_progress = self._right_coords_in_progress[reference_name]
-        while len(in_progress):
-            right_coord = in_progress[0]
-            if right_coord < rightmost_boundary:
-                in_progress.pop(0)
-                left_families = self._coordinate_family.pop((reference_name, right_coord), {})
-                for family in sorted(left_families.values(),
-                                     key=lambda x:x[0].left.reference_start):
-                    family.sort(key=lambda x: x.query_name)
-                    self.pending_pair_count -= len(family)
-                    yield family
-            else:
-                break
-
-    def _remaining_families(self):
-        for left_families in self._coordinate_family.values():
-            for family in left_families.values():
-                self.pending_pair_count -= len(family)
-                yield family
-            left_families.clear()
-        self._coordinate_family.clear()
-
-    #TODO: cgates: reduce complexity
-    def build_coordinate_families(self, paired_aligns):
-        '''Given a stream of paired aligns, return a list of pairs that share
-        same coordinates (coordinate family).  Flushes families in progress
-        when any of:
-        a) incoming right start > family end
-        b) incoming chrom != current chrom
-        c) incoming align stream is exhausted'''
-        rightmost_start = None
-        current_chrom = None
-        def _new_coordinate(pair):
-            return pair.right.reference_start != rightmost_start
-        def _new_chrom(pair):
-            return current_chrom != pair.right.reference_name
-
-        for pair in paired_aligns:
-            if rightmost_start is None:
-                rightmost_start = pair.right.reference_start
-                current_chrom = pair.right.reference_name
-            if _new_chrom(pair):
-                self._right_coords_in_progress[current_chrom].clear()
-                rightmost_start = None
-                current_chrom = None
-                for family in self._remaining_families():
-                    yield family
-            elif _new_coordinate(pair):
-                right = pair.right
-                for family in self._completed_families(right.reference_name,
-                                                       right.reference_start):
-                    yield family
-            self._add(pair)
-
-        for family in self._remaining_families():
-            yield family
 
 def _build_tag_families(tagged_paired_aligns,
                         ranked_tags,
@@ -298,7 +87,7 @@ def _build_tag_families(tagged_paired_aligns,
                 break
     tag_families = []
     for tag in sorted(tag_aligns):
-        tag_family = _TagFamily(tag,
+        tag_family = TagFamily(tag,
                                tag_aligns[tag],
                                tag_inexact_match_count[tag],
                                consensus_threshold,
@@ -339,19 +128,16 @@ def _build_supplemental_log(coordinate_holder):
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
 
-    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
-    total_aligns = pysamwrapper.total_align_count(args.input_bam)
-    coord_family_holder = _CoordinateFamilyHolder()
+    coord_family_holder = CoordinateFamilyHolder()
     supplemental_log = _build_supplemental_log(coord_family_holder)
-    paired_align_gen = readers.paired_reader(bamfile,
-                                             total_aligns,
+    paired_align_gen = readers.paired_reader_from_bamfile(args.input_bam,
                                              log,
                                              supplemental_log,
                                              annotated_writer)
     coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
 
     family_filter = _build_family_filter(args)
-    handlers = familyhandler.build_family_handlers(args,
+    handlers = family_handler.build_family_handlers(args,
                                                    consensus_writer,
                                                    annotated_writer,
                                                    log)
@@ -369,80 +155,15 @@ def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     for handler in handlers:
         handler.end()
 
-    bamfile.close()
-
-def _parse_command_line_args(arguments):
-    parser = _ConnorArgumentParser( \
-        formatter_class=argparse.RawTextHelpFormatter,
-        usage="connor input_bam output_bam",
-        description=(DESCRIPTION),
-        epilog="v"+__version__)
-
-    parser.add_argument("-V",
-                        "--version",
-                        action='version',
-                        version=__version__)
-    parser.add_argument("-v",
-                        "--verbose",
-                        action="store_true",
-                        default=False,
-                        help="print all log messages to console")
-    parser.add_argument('input_bam',
-                        help="path to input BAM")
-    parser.add_argument('output_bam',
-                        help="path to deduplicated output BAM")
-    parser.add_argument('--force',
-                        action="store_true",
-                        default=False,
-                        help="=False. Override validation warnings")
-    parser.add_argument('--log_file',
-                        type=str,
-                        help="={output_filename}.log. Path to verbose log file")
-    parser.add_argument('--annotated_output_bam',
-                        type=str,
-                        help=("path to output BAM containing all original "
-                              "aligns annotated with BAM tags"))
-    parser.add_argument("-f", "--consensus_freq_threshold",
-                        type=float,
-                        default = DEFAULT_CONSENSUS_FREQ_THRESHOLD,
-                        help = \
-"""={} (0..1.0): Ambiguous base calls at a specific position in a family are
- transformed to either majority base call, or N if the majority percentage
- is below this threshold. (Higher threshold results in more Ns in
- consensus.)""".format(DEFAULT_CONSENSUS_FREQ_THRESHOLD))
-    parser.add_argument("-s", "--min_family_size_threshold",
-                        type=int,
-                        default = DEFAULT_MIN_FAMILY_SIZE_THRESHOLD,
-                        help=\
-"""={} (>=0): families with count of original reads < threshold are excluded
- from the deduplicated output. (Higher threshold is more
- stringent.)""".format(DEFAULT_MIN_FAMILY_SIZE_THRESHOLD))
-    parser.add_argument("-d", "--umt_distance_threshold",
-                        type=int,
-                        default = DEFAULT_UMT_DISTANCE_THRESHOLD,
-                        help=\
-"""={} (>=0); UMTs equal to or closer than this Hamming distance will be
- combined into a single family. Lower threshold make more families with more
- consistent UMTs; 0 implies UMI must match
- exactly.""".format(DEFAULT_UMT_DISTANCE_THRESHOLD))
-    parser.add_argument('--simplify_pg_header',
-                        action="store_true",
-                        default=False,
-                        help=argparse.SUPPRESS)
-    args = parser.parse_args(arguments[1:])
-    args.original_command_line = arguments
-    if not args.log_file:
-        args.log_file = args.output_bam + ".log"
-    return args
 
 def main(command_line_args=None):
-    '''Connor entry point.  See help for more info'''
+    '''Connor entry point. See help for more info'''
     log = None
     if not command_line_args:
         command_line_args = sys.argv
     try:
         start_time = time.time()
-        args = _parse_command_line_args(command_line_args)
+        args = parse_command_line_args(command_line_args)
         log = utils.Logger(args)
         command_validator.preflight(args, log)
         log.info('connor begins (v{})', __version__)
@@ -453,7 +174,10 @@ def main(command_line_args=None):
                                                       args.annotated_output_bam,
                                                       bam_tags,
                                                       args)
-        annotated_writer = writers.LoggingWriter(base_annotated_writer, log)
+        sort_filter_by_name = args.filter_order == 'name'
+        annotated_writer = writers.LoggingWriter(base_annotated_writer,
+                                                 log,
+                                                 sort_filter_by_name)
         consensus_writer = writers.build_writer(args.input_bam,
                                                  args.output_bam,
                                                  bam_tags,

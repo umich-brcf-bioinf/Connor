@@ -331,7 +331,7 @@ class AlignWriterTest(BaseConnorTestCase):
 
 
 class LoggingWriterTest(BaseConnorTestCase):
-    def test_close_logsFilterStats(self):
+    def test_close_logsFilterStats_byDefaultSortsFilterByCount(self):
         base_writer = MockAlignWriter()
         writer = writers.LoggingWriter(base_writer, self.mock_logger)
         fam1 = None
@@ -381,9 +381,62 @@ class LoggingWriterTest(BaseConnorTestCase):
                          log_lines[3])
         self.assertEqual(4, len(log_lines))
 
+    def test_close_logsFilterStats_sortsFiltersByName(self):
+        base_writer = MockAlignWriter()
+        sort_filters_by_name = True
+        writer = writers.LoggingWriter(base_writer, self.mock_logger, sort_filters_by_name)
+        fam1 = None
+        al1A = MicroMock(filter_value='low mapping qual')
+        al1B = MicroMock(filter_value='low mapping qual')
+        fam2 = None
+        al2A = MicroMock(filter_value='unpaired read')
+        al2B = MicroMock(filter_value='unpaired read')
+        fam3 = MicroMock(umi_sequence=3, filter_value=None)
+        al3A = MicroMock(filter_value='minority CIGAR')
+        al3B = MicroMock(filter_value=None)
+        fam4 = MicroMock(umi_sequence=4, filter_value=None)
+        al4A = MicroMock(filter_value=None)
+        al4B = MicroMock(filter_value=None)
+        fam5 = MicroMock(umi_sequence=5, filter_value='small family')
+        al5A = MicroMock(filter_value=None)
+        al5B = MicroMock(filter_value=None)
+        family_aligns = [(fam1, al1A), (fam1, al1B),
+                         (fam2, al2A), (fam2, al2B),
+                         (fam3, al3A), (fam3, al3B),
+                         (fam4, al4A), (fam4, al4B),
+                         (fam5, al5A), (fam5, al5B)]
+
+        for family, align in family_aligns:
+            writer.write(family, None, align)
+        writer.close()
+
+        log_lines = self.mock_logger._log_calls['INFO']
+        self.assertEqual('70.00% (7/10) alignments unplaced or discarded',
+                         log_lines[0])
+        self.assertEqual('families discarded: 33.33% (1/3) small family',
+                         log_lines[1])
+        self.assertEqual('30.00% (3/10) alignments included in 2 families',
+                         log_lines[2])
+        self.assertEqual('33.33% deduplication rate (1 - 2 families/3 included alignments)',
+                         log_lines[3])
+        self.assertEqual(4, len(log_lines))
+
+        log_lines = self.mock_logger._log_calls['DEBUG']
+
+        self.assertEqual('alignments unplaced: 20.00% (2/10) low mapping qual',
+                         log_lines[0])
+        self.assertEqual('alignments unplaced: 20.00% (2/10) unpaired read',
+                         log_lines[1])
+        self.assertEqual('alignments discarded: 10.00% (1/10) minority CIGAR',
+                         log_lines[2])
+        self.assertEqual('alignments discarded: 20.00% (2/10) small family',
+                         log_lines[3])
+        self.assertEqual(4, len(log_lines))
+
     def test_close_logsFilterStatsWarnsWhenNoAlignments(self):
         base_writer = MockAlignWriter()
-        writer = writers.LoggingWriter(base_writer, self.mock_logger)
+        sort_filters_by_name = False
+        writer = writers.LoggingWriter(base_writer, self.mock_logger, sort_filters_by_name)
         fam1 = None
         al1A = MicroMock(filter_value='low mapping qual')
         al1B = MicroMock(filter_value='low mapping qual')
