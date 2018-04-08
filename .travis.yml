@@ -5,9 +5,6 @@ python:
     # - "3.5"
     - "3.6"
 env:
-    global:
-        - CC_TEST_REPORTER_ID=5684ebe19ec80ce9b4a8cfeab8c6d4e5a5ecc31e264d43bacee8e5050e07224b
-
     matrix:
 #     - PYSAM_VERSION=0.8.4
 #     - PYSAM_VERSION=0.9.0
@@ -22,7 +19,6 @@ install:
     - pip install -vvv --use-wheel --find-links=./ pysam==$PYSAM_VERSION
     - pip install -r requirements.txt
     - pip install coverage
-#    - pip install codeclimate-test-reporter
 
 before_script:
     - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
@@ -34,11 +30,8 @@ script:
     - nosetests -s examples
 
 after_script:
-  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
-
-# after_success:
-# # note CODECLIMATE_REPO_TOKEN must be set in travis env vars
-#     - codeclimate-test-reporter
+    # note CC_TEST_REPORTER_ID must be set in travis env vars
+    - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
 
 notifications:
     email:
