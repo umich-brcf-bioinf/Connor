@@ -231,33 +231,36 @@ class PairedAlignmentTest(BaseConnorTestCase):
         self.assertEqual("alignA", paired_alignment.query_name)
 
     def test_eq(self):
+        umt_length = 6
         left = self.mock_align(reference_start=100, next_reference_start=200)
         right = self.mock_align(reference_start=200, next_reference_start=100)
         other = self.mock_align(reference_start=0, next_reference_start=500)
 
-        base = PairedAlignment(left, right)
-        self.assertEquals(base, PairedAlignment(left, right))
-        self.assertNotEquals(base, PairedAlignment(other, right))
-        self.assertNotEquals(base, PairedAlignment(left, other))
+        base = PairedAlignment(left, right, umt_length)
+        self.assertEquals(base, PairedAlignment(left, right, umt_length))
+        self.assertNotEquals(base, PairedAlignment(other, right, umt_length))
+        self.assertNotEquals(base, PairedAlignment(left, other, umt_length))
+        self.assertNotEquals(base, PairedAlignment(left, right, 1))
 
     def test_hash(self):
+        umt_length = 6
         left_A = self.mock_align(query_name="alignA", reference_start=100)
         right_A = self.mock_align(query_name="alignA", reference_start=200)
         left_B = self.mock_align(query_name="alignA", reference_start=100)
         right_B = self.mock_align(query_name="alignA", reference_start=200)
 
         actual_set = set()
-        base = PairedAlignment(left_A, right_A)
+        base = PairedAlignment(left_A, right_A, umt_length)
         actual_set.add(base)
         self.assertEquals(1, len(actual_set))
 
         actual_set.add(base)
         self.assertEquals(1, len(actual_set))
 
-        actual_set.add(PairedAlignment(left_A, right_A))
+        actual_set.add(PairedAlignment(left_A, right_A, umt_length))
         self.assertEquals(1, len(actual_set))
 
-        equivalent_pair = PairedAlignment(left_B, right_B)
+        equivalent_pair = PairedAlignment(left_B, right_B, umt_length)
         actual_set.add(equivalent_pair)
         self.assertEquals(1, len(actual_set))
 

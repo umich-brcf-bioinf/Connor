@@ -4,8 +4,9 @@ Changelog
 0.5.1x (MM/DD/YYYY)
 -------------------
 - Extended to support pysam v0.13, v0.14
-- Adjusted so warning instead of error when no families found
+- Added optional command line arg to specify length of unique molecular tag (UMT)
 - Added optional command line arg to sort filters results by name instead of count 
+- Adjusted so warning instead of error when no families found
 - Substantial refactors to clarify implementation
 
 0.5.1 (9/8/2017)

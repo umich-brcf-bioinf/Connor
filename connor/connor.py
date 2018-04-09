@@ -117,23 +117,15 @@ def _build_family_filter(args):
         return None
     return _family_size_filter
 
-def _build_supplemental_log(coordinate_holder):
-    def _supplemental_progress_log(log):
-        log.debug("{}mb peak memory", utils.peak_memory())
-        log.debug("{} pending alignment pairs; {} peak pairs",
-                  coordinate_holder.pending_pair_count,
-                  coordinate_holder.pending_pair_peak_count)
-    return _supplemental_progress_log
-
 def _dedup_alignments(args, consensus_writer, annotated_writer, log):
     log.info('reading input bam [{}]', args.input_bam)
 
     coord_family_holder = CoordinateFamilyHolder()
-    supplemental_log = _build_supplemental_log(coord_family_holder)
-    paired_align_gen = readers.paired_reader_from_bamfile(args.input_bam,
-                                             log,
-                                             supplemental_log,
-                                             annotated_writer)
+    usage_logger = coord_family_holder.build_usage_logger(log)
+    paired_align_gen = readers.paired_reader_from_bamfile(args,
+                                                          log,
+                                                          usage_logger,
+                                                          annotated_writer)
     coord_family_gen = coord_family_holder.build_coordinate_families(paired_align_gen)
 
     family_filter = _build_family_filter(args)

@@ -153,7 +153,8 @@ class ReadersTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align1R]
 
-        actual_pairs = [p for p in readers._build_coordinate_pairs(aligns, None)]
+        umt_length = 6
+        actual_pairs = [p for p in readers._build_coordinate_pairs(umt_length, aligns, None)]
 
         self.assertEqual(1, len(actual_pairs))
         actual_pair = actual_pairs[0]
@@ -175,7 +176,8 @@ class ReadersTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align2L, align1R, align2R]
 
-        actual_pairs = [f for f in readers._build_coordinate_pairs(aligns, None)]
+        umt_length = 6
+        actual_pairs = [f for f in readers._build_coordinate_pairs(umt_length, aligns, None)]
 
         self.assertEqual(2, len(actual_pairs))
         pairs = dict([(pair.query_name, pair) for pair in actual_pairs])
@@ -205,7 +207,8 @@ class ReadersTest(BaseConnorTestCase):
                                          next_reference_start=125))
         aligns = [align1L, align2L, align3L, align1R, align2R, align3R]
 
-        actual_pairs = [f for f in readers._build_coordinate_pairs(aligns, None)]
+        umt_length = 6
+        actual_pairs = [f for f in readers._build_coordinate_pairs(umt_length, aligns, None)]
 
         self.assertEqual(3, len(actual_pairs))
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
@@ -220,7 +223,8 @@ class ReadersTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align1R]
         writer = MockAlignWriter()
-        actual_pairs = [f for f in readers._build_coordinate_pairs(aligns, writer)]
+        umt_length = 6
+        actual_pairs = [f for f in readers._build_coordinate_pairs(umt_length, aligns, writer)]
 
         self.assertEqual(1, len(actual_pairs))
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
@@ -239,7 +243,8 @@ class ReadersTest(BaseConnorTestCase):
                                          next_reference_start=100))
         aligns = [align1L, align1R, align2R]
         writer = MockAlignWriter()
-        actual_pairs = [f for f in readers._build_coordinate_pairs(aligns, writer)]
+        umt_length = 6
+        actual_pairs = [f for f in readers._build_coordinate_pairs(umt_length, aligns, writer)]
 
         self.assertEqual(1, len(actual_pairs))
         actual_pair_names = set([pair.query_name for pair in actual_pairs])
@@ -258,7 +263,8 @@ class ReadersTest(BaseConnorTestCase):
         aligns = [align1L, align1R, align2R]
         writer = MockAlignWriter()
 
-        for _ in readers._build_coordinate_pairs(aligns, writer):
+        umt_length = 6
+        for _ in readers._build_coordinate_pairs(umt_length, aligns, writer):
             pass
 
         self.assertEqual(1, len(writer._write_calls))
@@ -280,8 +286,8 @@ class ReadersTest(BaseConnorTestCase):
                                          next_reference_start=250))
         aligns = [align1L, align3L, align1R]
         writer = MockAlignWriter()
-
-        for _ in readers._build_coordinate_pairs(aligns, writer):
+        umt_length = 6
+        for _ in readers._build_coordinate_pairs(umt_length, aligns, writer):
             pass
 
         self.assertEqual(1, len(writer._write_calls))
@@ -319,8 +325,9 @@ class ReadersTest(BaseConnorTestCase):
 
         aligns = [align1L, align2L, align1R, align2R, align3L, align4L]
         actual_pairs = []
+        umt_length = 6
         try:
-            for pair in readers._build_coordinate_pairs(aligns, None):
+            for pair in readers._build_coordinate_pairs(umt_length, aligns, None):
                 actual_pairs.append(pair)
             self.fail("expected BombError")
         except BombError:
@@ -373,9 +380,9 @@ class ReadersTest(BaseConnorTestCase):
     def test_progress_logger_logsMem(self):
         base_gen = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
         total_rows = len(base_gen)
-        def supplemental_log(logger):
-            logger.debug("foo")
-            logger.debug("bar")
+        def supplemental_log():
+            self.mock_logger.debug("foo")
+            self.mock_logger.debug("bar")
         gen = readers._progress_logger(base_gen,
                                      total_rows,
                                      self.mock_logger,

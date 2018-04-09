@@ -366,7 +366,8 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
-                             umt_distance_threshold=1)
+                             umt_distance_threshold=1,
+                             umt_length=5)
             connor._dedup_alignments(args,
                                      consensus_writer,
                                      annotated_writer,
@@ -408,7 +409,8 @@ readNameC2|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
                              umt_distance_threshold=1,
-                             annotated_output_bam=None)
+                             annotated_output_bam=None,
+                             umt_length=5)
             connor._dedup_alignments(args,
                                      MockAlignWriter(),
                                      MockAlignWriter(),
@@ -459,7 +461,8 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
                              min_family_size_threshold=0,
                              umt_distance_threshold=1,
                              simplify_pg_header=False,
-                             original_command_line='foo')
+                             original_command_line='foo',
+                             umt_length=5)
             consensus_writer = writers.build_writer(input_bam,
                                                      output_bam,
                                                      [],

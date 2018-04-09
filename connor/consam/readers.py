@@ -36,7 +36,7 @@ def _filter_alignments(pysam_alignments,
             yield connor_align
 
 #TODO: cgates: reduce complexity
-def _build_coordinate_pairs(connor_alignments, excluded_writer):
+def _build_coordinate_pairs(umi_length, connor_alignments, excluded_writer):
     coords = defaultdict(dict)
     for alignment in connor_alignments:
         if alignment.orientation == 'left':
@@ -46,7 +46,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             key = (alignment.reference_id, alignment.next_reference_start)
             if key in coords and alignment.query_name in coords[key]:
                 align1 = coords[key].pop(alignment.query_name)
-                yield alignments.PairedAlignment(align1, alignment)
+                yield alignments.PairedAlignment(align1, alignment, umi_length)
             else:
                 coords[key][alignment.query_name] = alignment
         else:
@@ -57,7 +57,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
             if not coord:
                 del coords[key]
             if l_align:
-                yield alignments.PairedAlignment(l_align, alignment)
+                yield alignments.PairedAlignment(l_align, alignment, umi_length)
             else:
                 alignment.filter_value = _MISSING_MATE_FILTER_TEXT
                 excluded_writer.write(None, None, alignment)
@@ -69,7 +69,7 @@ def _build_coordinate_pairs(connor_alignments, excluded_writer):
 def _progress_logger(base_generator,
                      total_rows,
                      log,
-                     supplemental_log=lambda x: None):
+                     log_usage=lambda: None):
     row_count = 0
     next_breakpoint = 0
     for item in base_generator:
@@ -80,24 +80,26 @@ def _progress_logger(base_generator,
                      next_breakpoint,
                      row_count,
                      total_rows)
-            supplemental_log(log)
+            log_usage()
             next_breakpoint = 10 * int(progress/10) + 10
         yield item
     log.info("100% ({}/{}) alignments processed", row_count, total_rows)
-    supplemental_log(log)
+    log_usage()
 
-def _paired_reader(bamfile_gen,
-                  total_aligns,
-                  log,
-                  supplemental_log,
-                  annotated_writer):
+def _paired_reader(umi_length,
+                   bamfile_gen,
+                   total_aligns,
+                   log,
+                   supplemental_log,
+                   annotated_writer):
     progress_gen = _progress_logger(bamfile_gen,
                                     total_aligns,
                                     log,
                                     supplemental_log)
     filtered_aligns_gen = _filter_alignments(progress_gen,
                                              annotated_writer)
-    paired_align_gen = _build_coordinate_pairs(filtered_aligns_gen,
+    paired_align_gen = _build_coordinate_pairs(umi_length,
+                                               filtered_aligns_gen,
                                                annotated_writer)
     return paired_align_gen
 
@@ -107,15 +109,16 @@ def _bamfile_generator(bam_filename):
         yield align
     bamfile.close()
 
-def paired_reader_from_bamfile(bam_filename,
+def paired_reader_from_bamfile(args,
                                log,
-                               supplemental_log,
+                               usage_logger,
                                annotated_writer):
     '''Given a BAM file, return a generator that yields filtered, paired reads'''
-    total_aligns = pysamwrapper.total_align_count(bam_filename)
-    bamfile_generator  = _bamfile_generator(bam_filename)
-    return _paired_reader(bamfile_generator,
+    total_aligns = pysamwrapper.total_align_count(args.input_bam)
+    bamfile_generator  = _bamfile_generator(args.input_bam)
+    return _paired_reader(args.umt_length,
+                          bamfile_generator,
                           total_aligns,
                           log,
-                          supplemental_log,
+                          usage_logger,
                           annotated_writer)
