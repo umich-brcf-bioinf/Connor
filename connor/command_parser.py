@@ -5,11 +5,13 @@ import argparse
 from connor import __version__
 from connor.utils import UsageError
 
+FILTER_ORDERS = ['count', 'name']
+
 DEFAULT_CONSENSUS_FREQ_THRESHOLD=0.6
+DEFAULT_FILTER_ORDER = FILTER_ORDERS[0]
 DEFAULT_MIN_FAMILY_SIZE_THRESHOLD = 3
 DEFAULT_UMT_DISTANCE_THRESHOLD = 1
-FILTER_ORDERS = ['count', 'name']
-DEFAULT_FILTER_ORDER = FILTER_ORDERS[0]
+DEFAULT_UMT_LENGTH = 6
 
 DESCRIPTION=\
 '''Deduplicates BAM file based on custom inline DNA barcodes.
@@ -85,6 +87,11 @@ def parse_command_line_args(arguments):
                         help=\
 """={}; determines how filters will be ordered in the log
  results""".format(DEFAULT_FILTER_ORDER))
+    parser.add_argument("--umt_length",
+                        type=int,
+                        default = DEFAULT_UMT_LENGTH,
+                        help=\
+"""={} (>=1); length of UMT""".format(DEFAULT_UMT_LENGTH))
     parser.add_argument('--simplify_pg_header',
                         action="store_true",
                         default=False,

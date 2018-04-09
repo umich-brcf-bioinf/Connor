@@ -12,6 +12,7 @@ from functools import partial
 from sortedcontainers import SortedSet
 
 from connor.consam.alignments import PairedAlignment
+from connor.utils import peak_memory
 
 class TagFamily(object):
     '''Holds alignments that share same coordinate and UMI (allowing fuzzy UMI matches)'''
@@ -218,3 +219,12 @@ class CoordinateFamilyHolder(object):
 
         for family in self._remaining_families():
             yield family
+
+    def build_usage_logger(self, log):
+        '''Return a method that logs progress/mem usage.'''
+        def _log_usage():
+            log.debug("{}mb peak memory", peak_memory())
+            log.debug("{} pending alignment pairs; {} peak pairs",
+                      self.pending_pair_count,
+                      self.pending_pair_peak_count)
+        return _log_usage

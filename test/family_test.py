@@ -148,7 +148,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         def pair(name):
             left = ConnorAlign(self.mock_align(query_name=name))
             right = ConnorAlign(self.mock_align(query_name=name))
-            return PairedAlignment(left, right)
+            return PairedAlignment(left, right, 3)
         pairA = pair('alignA')
         alignA = ConnorAlign(self.mock_align(query_name='alignA'))
         alignB = ConnorAlign(self.mock_align(query_name='alignB'))
@@ -165,7 +165,7 @@ class TagFamiliyTest(BaseConnorTestCase):
     def test_umt(self):
         left = ConnorAlign(self.mock_align())
         right = ConnorAlign(self.mock_align())
-        pair1 = PairedAlignment(left, right)
+        pair1 = PairedAlignment(left, right, 3)
 
         input_umt = ('AAANNN', 'CCCNNN')
         actual_tag_family = TagFamily(input_umt,
@@ -439,7 +439,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         def pair(name, c1, c2):
             left = ConnorAlign(self.mock_align(query_name=name, cigarstring=c1))
             right = ConnorAlign(self.mock_align(query_name=name, cigarstring=c2))
-            return PairedAlignment(left, right)
+            return PairedAlignment(left, right, 3)
         pairA = pair('alignA', '3S3M', '3S3M')
         pairB = pair('alignB', '3S3M', '3S3M')
         pairC = pair('alignC', '3S1I3M', '3S3M')
@@ -469,7 +469,7 @@ class TagFamiliyTest(BaseConnorTestCase):
         def pair(c1, c2):
             left = ConnorAlign(self.mock_align(cigarstring=c1))
             right = ConnorAlign(self.mock_align(cigarstring=c2))
-            return PairedAlignment(left, right)
+            return PairedAlignment(left, right, 3)
         pairA = pair("3S3M", "3S3M")
         pairB = pair("3S3M", "3S3M")
         pairC = pair("3S1I3M", "3S3M")
@@ -500,7 +500,8 @@ class CoordinateFamilyHolderTest(BaseConnorTestCase):
                                        query_sequence='AAATTTT',
                                        reference_end=right_end,
                                        reference_name=reference_name))
-        return PairedAlignment(alignL, alignR)
+        umt_length = 6
+        return PairedAlignment(alignL, alignR, umt_length)
 
     def test_build_coordinate_families_noFamilies(self):
         holder = CoordinateFamilyHolder()

@@ -3,14 +3,12 @@ from __future__ import print_function, absolute_import, division
 
 import connor.utils as utils
 
-DEFAULT_TAG_LENGTH = 6
-
 class PairedAlignment(object):
     '''Represents the left and right aligns from a single paired sequence.'''
     def __init__(self,
                  left_alignment,
                  right_alignment,
-                 tag_length=DEFAULT_TAG_LENGTH):
+                 tag_length):
         if left_alignment.query_name != right_alignment.query_name:
             msg = 'Inconsistent query names ({} != {})'
             raise ValueError(msg.format(left_alignment.query_name,

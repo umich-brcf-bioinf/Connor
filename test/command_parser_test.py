@@ -31,7 +31,9 @@ class CommandParser(BaseConnorTestCase):
                           namespace.original_command_line)
         self.assertEquals(command_parser.DEFAULT_FILTER_ORDER,
                           namespace.filter_order)
-        self.assertEqual(12, len(vars(namespace)))
+        self.assertEquals(command_parser.DEFAULT_UMT_LENGTH,
+                          namespace.umt_length)
+        self.assertEqual(13, len(vars(namespace)))
 
     def test_parse_command_line_args_throwsConnorUsageError(self):
         self.assertRaises(UsageError,

@@ -102,6 +102,8 @@ Connor help
      --filter_order {count,name}
                           =count; determines how filters will be ordered in the log
                           results
+     --umt_length UMT_LENGTH
+                          =6 (>=1); length of UMT
 
 ====
 
