@@ -135,6 +135,19 @@ def _check_input_bam_properly_paired(args, log=None):
            'alignments.').format(args.input_bam)
     _log_force_or_raise(args, log, msg)
 
+def _check_input_bam_no_secondary(args, log=None):
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
+    try:
+        for alignment in itertools.islice(bamfile.fetch(), _SAMPLE_SIZE):
+            if not alignment.is_secondary:
+                return
+    finally:
+        bamfile.close()
+    msg = ('Specified input [{}] contains secondary alignments. You can use --force to skip this '
+           'warning, but Connor will work faster if you remove secondary aligns from the '
+           'input BAM.').format(args.input_bam)
+    _log_force_or_raise(args, log, msg)
+
 def _strand(align):
     return 'reverse' if align.is_reverse else 'forward'
 
@@ -194,6 +207,7 @@ _VALIDATIONS = [_check_input_bam_exists,
                 _check_input_bam_indexed,
                 _check_input_bam_not_deduped,
                 _check_input_bam_not_empty,
+                _check_input_bam_no_secondary,
                 _check_input_bam_paired,
                 _check_input_bam_properly_paired,
                 _check_input_bam_consistent_length,
