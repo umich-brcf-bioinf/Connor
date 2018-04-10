@@ -111,7 +111,7 @@ def _check_input_bam_not_empty(args, log=None): #pylint: disable=unused-argument
     finally:
         bamfile.close()
 
-def _check_input_bam_paired(args, log=None): #pylint: disable=unused-argument
+def _check_input_bam_paired(args, log=None):
     bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
     try:
         for alignment in itertools.islice(bamfile.fetch(), _SAMPLE_SIZE):
@@ -121,6 +121,18 @@ def _check_input_bam_paired(args, log=None): #pylint: disable=unused-argument
         bamfile.close()
     msg = ('Specified input [{}] does not appear to contain paired '
            'reads.').format(args.input_bam)
+    _log_force_or_raise(args, log, msg)
+
+def _check_input_bam_properly_paired(args, log=None):
+    bamfile = pysamwrapper.alignment_file(args.input_bam, 'rb')
+    try:
+        for alignment in itertools.islice(bamfile.fetch(), _SAMPLE_SIZE):
+            if alignment.is_proper_pair:
+                return
+    finally:
+        bamfile.close()
+    msg = ('Specified input [{}] does not appear to contain any properly paired '
+           'alignments.').format(args.input_bam)
     _log_force_or_raise(args, log, msg)
 
 def _strand(align):
@@ -183,6 +195,7 @@ _VALIDATIONS = [_check_input_bam_exists,
                 _check_input_bam_not_deduped,
                 _check_input_bam_not_empty,
                 _check_input_bam_paired,
+                _check_input_bam_properly_paired,
                 _check_input_bam_consistent_length,
                 _check_overwrite_output]
 

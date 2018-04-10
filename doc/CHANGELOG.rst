@@ -5,7 +5,8 @@ Changelog
 -------------------
 - Extended to support pysam v0.13, v0.14
 - Added optional command line arg to specify length of unique molecular tag (UMT)
-- Added optional command line arg to sort filters results by name instead of count 
+- Added optional command line arg to sort filters results by name instead of count
+- Added validation to check for properly paired alignments 
 - Adjusted so warning instead of error when no families found
 - Substantial refactors to clarify implementation
 
