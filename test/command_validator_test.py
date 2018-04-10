@@ -39,6 +39,7 @@ class CommandValidatorTest(BaseConnorTestCase):
                           '_check_input_bam_indexed',
                           '_check_input_bam_not_deduped',
                           '_check_input_bam_not_empty',
+                          '_check_input_bam_no_secondary',
                           '_check_input_bam_paired',
                           '_check_input_bam_properly_paired',
                           '_check_input_bam_consistent_length',
@@ -246,6 +247,60 @@ readNameA1|99|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''.replace("|", "\t")
             args = Namespace(input_bam=input_bam_path, force=False)
             validator._check_input_bam_not_empty(args)
             self.ok()
+
+    def test_check_input_bam_no_secondary_raisesUsageError(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
+        sam_contents = sam_contents.format(flag='256').replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam_path = self.create_bam(tmp_dir.path,
+                                                      "input.sam",
+                                                      sam_contents,
+                                                      index=True)
+            args = Namespace(input_bam=input_bam_path, force=False)
+            regex = r'\[.*input.bam\] contains secondary alignments\..*'
+            self.assertRaisesRegexp(utils.UsageError,
+                                    regex,
+                                validator._check_input_bam_no_secondary,
+                                    args)
+
+    def test_check_input_bam_no_secondary_ok(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
+        sam_contents = sam_contents.format(flag='1')
+        sam_contents = sam_contents.replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam_path = self.create_bam(tmp_dir.path,
+                                                      "input.sam",
+                                                      sam_contents,
+                                                      index=True)
+            args = Namespace(input_bam=input_bam_path, force=True)
+            validator._check_input_bam_no_secondary(args, self.mock_logger)
+        self.ok()
+        self.assertEqual(0, len(self.mock_logger._log_calls))
+
+    def test_check_input_bam_no_secondary_warnIfForced(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
+        sam_contents = sam_contents.format(flag='256').replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam_path = self.create_bam(tmp_dir.path,
+                                                      "input.sam",
+                                                      sam_contents,
+                                                      index=True)
+            args = Namespace(input_bam=input_bam_path, force=True)
+            validator._check_input_bam_no_secondary(args, self.mock_logger)
+        warnings = self.mock_logger._log_calls['WARNING']
+        self.assertEqual(1, len(warnings))
+        regex = r'\[.*input.bam\] contains secondary alignments\..*forcing'
+        self.assertRegexpMatches(warnings[0], regex)
+
 
     def test_check_input_bam_paired_raisesUsageError(self):
         sam_contents = \
