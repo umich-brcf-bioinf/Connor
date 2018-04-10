@@ -40,6 +40,7 @@ class CommandValidatorTest(BaseConnorTestCase):
                           '_check_input_bam_not_deduped',
                           '_check_input_bam_not_empty',
                           '_check_input_bam_paired',
+                          '_check_input_bam_properly_paired',
                           '_check_input_bam_consistent_length',
                           '_check_overwrite_output'],
                          function_names)
@@ -299,6 +300,62 @@ readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
         self.assertEqual(1, len(warnings))
         regex = (r'\[.*input.bam\] does not appear to contain paired '
                  r'reads.*forcing')
+        self.assertRegexpMatches(warnings[0], regex)
+
+
+    def test_check_input_bam_properly_paired_raisesUsageError(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
+        sam_contents = sam_contents.format(flag='1').replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam_path = self.create_bam(tmp_dir.path,
+                                                      "input.sam",
+                                                      sam_contents,
+                                                      index=True)
+            args = Namespace(input_bam=input_bam_path, force=False)
+            regex = r'\[.*input.bam\] does not appear to contain any properly paired alignments'
+            self.assertRaisesRegexp(utils.UsageError,
+                                    regex,
+                                    validator._check_input_bam_properly_paired,
+                                    args)
+
+    def test_check_input_bam_properly_paired_ok(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|{unpaired_flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>
+readNameA1|{paired_flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
+        sam_contents = sam_contents.format(unpaired_flag='2', paired_flag='99')
+        sam_contents = sam_contents.replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam_path = self.create_bam(tmp_dir.path,
+                                                      "input.sam",
+                                                      sam_contents,
+                                                      index=True)
+            args = Namespace(input_bam=input_bam_path, force=True)
+            validator._check_input_bam_properly_paired(args, self.mock_logger)
+        self.ok()
+        self.assertEqual(0, len(self.mock_logger._log_calls))
+
+    def test_check_input_bam_properly_paired_warnIfForced(self):
+        sam_contents = \
+'''@HD|VN:1.4|GO:none|SO:coordinate
+@SQ|SN:chr10|LN:135534747
+readNameA1|{flag}|chr10|100|20|5M|=|300|200|AAAAA|>>>>>'''
+        sam_contents = sam_contents.format(flag='1').replace("|", "\t")
+        with TempDirectory() as tmp_dir:
+            input_bam_path = self.create_bam(tmp_dir.path,
+                                                      "input.sam",
+                                                      sam_contents,
+                                                      index=True)
+            args = Namespace(input_bam=input_bam_path, force=True)
+            validator._check_input_bam_properly_paired(args, self.mock_logger)
+        warnings = self.mock_logger._log_calls['WARNING']
+        self.assertEqual(1, len(warnings))
+        regex = (r'\[.*input.bam\] does not appear to contain any properly paired '
+                 r'alignments.*forcing')
         self.assertRegexpMatches(warnings[0], regex)
 
 
