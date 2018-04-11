@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.6x (MM/DD/YYYY)
+-------------------
+- tbd
+
 0.6 (4/11/2018)
 -------------------
 - Extended to support pysam v0.13, v0.14
