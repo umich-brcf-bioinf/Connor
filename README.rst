@@ -35,17 +35,17 @@ When analyzing deep-sequence NGS data it is sometimes difficult to distinguish
 sequencing and PCR errors from rare variants; as a result some variants may
 be missed and some will be identified with an inaccurate variant frequency. To
 address this, researchers can attach random barcode sequences during sample
-preparation. Upon sequencing, the barcodes act as a signature to trace the set 
+preparation. Upon sequencing, the barcodes act as a signature to trace the set
 of PCR amplified molecules back to the original biological molecules of
 interest thereby differentiating rare variants in the original molecule from
 errors introduced downstream.
 
 Connor accepts a barcoded, paired alignment file (BAM), groups those input
 alignments into families, combines each family into a consensus alignment, and
-emits the set of deduplicated, consensus alignments (BAM). 
+emits the set of deduplicated, consensus alignments (BAM).
 
    *Connor workflow:*
-   
+
    *Sequencing [FASTQ 1/2] -> Aligner [BAM] -> Connor [BAM] -> Variant Detection [VCF]*
 
 Connor first groups original alignments into **alignment families** based on their
@@ -57,7 +57,7 @@ By default, smaller families (<3 align pairs) are excluded.
 
 For more information see:
 
-* `QUICKSTART`_ : get started deduplicating bacoded BAMs.
+* `QUICKSTART`_ : get started deduplicating barcoded BAMs.
 
 * `INSTALL`_ : alternative ways to install.
 
@@ -73,11 +73,11 @@ Connor help
 
   $ connor --help
    usage: connor input_bam output_bam
-   
+
    positional arguments:
      input_bam             path to input BAM
      output_bam            path to deduplicated output BAM
-   
+
    optional arguments:
      -h, --help            show this help message and exit
      -V, --version         show program's version number and exit
@@ -114,4 +114,3 @@ UM BRCF Bioinformatics Core
 .. _INSTALL: doc/INSTALL.rst
 .. _METHODS: doc/METHODS.rst
 .. _QUICKSTART : doc/QUICKSTART.rst
-

@@ -21,7 +21,7 @@ info on requirements and more install options.
 ::
   $ pip install connor --user
   ...
-  Successfully installed Connor-0.5
+  Successfully installed Connor-0.6
 
 Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in your path:
 ::
@@ -32,8 +32,8 @@ Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in yo
   usage: connor input_bam output_bam
   positional arguments:
   ...
-  v0.5
- 
+  v0.6
+
 3. **Download the example data:**
 ::
   $ git clone https://github.com/umich-brcf-bioinf/Connor sample_data
@@ -83,7 +83,7 @@ you can examine the difference between original and deduplicated bams:
   1036 + 0 singletons (0.39%:nan%)
   848 + 0 with mate mapped to a different chr
   834 + 0 with mate mapped to a different chr (mapQ>=5)
-  
+
   $ samtools flagstat sample1-deduped.bam
   21734 + 0 in total (QC-passed reads + QC-failed reads)
   0 + 0 secondary
@@ -125,7 +125,7 @@ tags is in the SAM/BAM header and summarized here:
 * X1: leftmost~rightmost matched pair positions
 * X2: L~R CIGARs
 * X3: unique identifier for this alignment family
-* X4: L~R UMT barcodes for this alignment family; because of fuzzy matching the 
+* X4: L~R UMT barcodes for this alignment family; because of fuzzy matching the
   family UMT may be distinct from the UMT of the original alignment
 * X5: family size (number of align pairs in this family)
 
