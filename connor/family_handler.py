@@ -14,6 +14,7 @@ def build_family_handlers(args,
 class _WriteConsensusHandler(object):
     def __init__(self, consensus_writer):
         self._writer = consensus_writer
+
     def handle(self, family):
         if not family.filter_value:
             self._writer.write(family,
@@ -84,21 +85,22 @@ class _FamilySizeStatHandler(object):
                 self.quartile_3,
                 self.max)
 
-    #TODO: cgates: add guard for empty collection
     def end(self):
         percentile = _FamilySizeStatHandler._percentile
         self.collection.sort()
-        self.min = self.collection[0]
-        self.quartile_1 = percentile(self.collection, 0.25)
-        self.median = percentile(self.collection, 0.50)
-        self.quartile_3 = percentile(self.collection, 0.75)
-        self.max = self.collection[-1]
-        self.mean = sum(self.collection) / len(self.collection)
-
-        self._log.debug(('family_stat|family size distribution (original pair '
-                   'counts: min, 1Q, median, mean, 3Q, max): {}'),
-                  ', '.join(map(lambda x: str(round(x, 2)), self.summary)))
-
+        if self.collection:
+            self.min = self.collection[0]
+            self.quartile_1 = percentile(self.collection, 0.25)
+            self.median = percentile(self.collection, 0.50)
+            self.quartile_3 = percentile(self.collection, 0.75)
+            self.max = self.collection[-1]
+            self.mean = sum(self.collection) / len(self.collection)
+            self._log.debug(
+                    ('family_stat|family size distribution (original pair '
+                     'counts: min, 1Q, median, mean, 3Q, max): {}'),
+                     ', '.join(map(lambda x: str(round(x, 2)), self.summary)))
+        else:
+            self._log.warning('family_stat| no families found')
 
 class _MatchStatHandler(object):
     def __init__(self, args, logger):
@@ -129,4 +131,7 @@ class _MatchStatHandler(object):
 
     @property
     def percent_inexact_match(self):
-        return self.total_inexact_match_count/self.total_pair_count
+        if self.total_pair_count:
+            return self.total_inexact_match_count/self.total_pair_count
+        else:
+            return 0

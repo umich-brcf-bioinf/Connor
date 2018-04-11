@@ -12,35 +12,35 @@ INPUT_DIR=os.path.realpath(os.path.dirname(__file__))
 class ExamplesFunctionalTest(BaseConnorTestCase):
     def test_examples(self):
         with TempDirectory() as output_dir:
-            def out_path(filename):
+            def _out_path(filename):
                 return os.path.join(output_dir.path, filename)
-            def in_path(filename):
+            def _in_path(filename):
                 return os.path.join(INPUT_DIR, filename)
-            input_bam = "sample1-original.bam"
-            output_deduped_bam = "sample1-deduped.bam"
-            output_deduped_bai = output_deduped_bam + ".bai"
-            output_annotated_bam = "sample1-annotated.bam"
-            output_annotated_bai = output_annotated_bam + ".bai"
+            input_bam = 'sample1-original.bam'
+            output_deduped_bam = 'sample1-deduped.bam'
+            output_deduped_bai = output_deduped_bam + '.bai'
+            output_annotated_bam = 'sample1-annotated.bam'
+            output_annotated_bai = output_annotated_bam + '.bai'
 
-            input_bam_path = in_path(input_bam)
-            expect_deduped_bam_path = in_path(output_deduped_bam)
-            expect_deduped_bai_path = in_path(output_deduped_bai)
-            expect_annotated_bam_path = in_path(output_annotated_bam)
-            expect_annotated_bai_path = in_path(output_annotated_bai)
+            input_bam_path = _in_path(input_bam)
+            expect_deduped_bam_path = _in_path(output_deduped_bam)
+            expect_deduped_bai_path = _in_path(output_deduped_bai)
+            expect_annotated_bam_path = _in_path(output_annotated_bam)
+            expect_annotated_bai_path = _in_path(output_annotated_bai)
 
-            output_deduped_bam_path = out_path(output_deduped_bam)
-            output_deduped_bai_path = out_path(output_deduped_bai)
-            output_annotated_bam_path = out_path(output_annotated_bam)
-            output_annotated_bai_path = out_path(output_annotated_bai)
+            output_deduped_bam_path = _out_path(output_deduped_bam)
+            output_deduped_bai_path = _out_path(output_deduped_bai)
+            output_annotated_bam_path = _out_path(output_annotated_bam)
+            output_annotated_bai_path = _out_path(output_annotated_bai)
 
-            connor.main(["program_name",
+            connor.main(['program_name',
                          input_bam_path,
                          output_deduped_bam_path,
-                         "--annotated_output_bam",
+                         '--annotated_output_bam',
                          output_annotated_bam_path,
-                         "--verbose",
-                         "--simplify_pg_header",
-                         "--force"])
+                         '--verbose',
+                         '--simplify_pg_header',
+                         '--force'])
 
             # always_match is useful for testing bai files which can change
             # subtly across versions of pysam/htslib
@@ -76,5 +76,5 @@ class ExamplesFunctionalTest(BaseConnorTestCase):
                             always_match)]
             diff_files = dict([compare_files(expected, output, match) for expected, output, match in comparisons])
 
-        files_match = set(diff_files.values()) == set(["OK"])
+        files_match = set(diff_files.values()) == set(['OK'])
         self.assertTrue(files_match, diff_files)

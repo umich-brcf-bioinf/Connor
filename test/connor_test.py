@@ -11,17 +11,17 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
-from testfixtures.tempdirectory import TempDirectory
-import connor.connor as connor
-from connor import samtools
-import connor.utils as utils
-from connor.connor import _CoordinateFamilyHolder
-from connor.samtools import ConnorAlign
-from test.samtools_test import MockAlignWriter
-from test.samtools_test import mock_align
-import test.samtools_test as samtools_test
+
+from test.consam_test.writers_test import MockAlignWriter
 from test.utils_test import BaseConnorTestCase
 from test.utils_test import MicroMock
+from testfixtures.tempdirectory import TempDirectory
+
+import connor.connor as connor
+import connor.consam.pysamwrapper as pysamwrapper
+import connor.consam.writers as writers
+from connor.consam.alignments import ConnorAlign
+from connor.consam.alignments import PairedAlignment
 
 
 def _mock_connor_align(query_name,
@@ -54,7 +54,7 @@ def _mock_tag_family(align_pairs=None,
                      filter_value=filter_value,
                      included_pair_count=included_pair_count)
 
-# #TODO: cgates: replace this with samtools_test.mock_align
+# #TODO: cgates: replace this with self.mock_align
 class MockAlignSegment(object):
     #pylint: disable=too-many-instance-attributes
     def __init__(self,
@@ -112,721 +112,10 @@ def align_seg(query_name, #pylint: disable=dangerous-default-value
 def align_pair(q, rn, rs, nrs, s1, s2, tag_length=3):
     alignL = align_seg(q, rn, rs, nrs, s1)
     alignR = align_seg(q, rn, rs, nrs, s2)
-    return samtools.PairedAlignment(alignL, alignR, tag_length)
-
-
-class TagFamiliyTest(BaseConnorTestCase):
-    def test_init(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'GGGNNN', 'TTTNNN')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        align_pairs = [pair1, pair2, pair3]
-        inexact_match_count = 42
-
-        input_umt = "AAANNNCCCNNN"
-        actual_tag_family = connor._TagFamily(input_umt,
-                                             align_pairs,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(input_umt, actual_tag_family.umt())
-        self.assertEquals(align_pairs, actual_tag_family.align_pairs)
-        self.assertEquals(42, actual_tag_family.inexact_match_count)
-
-    def test_init_setsFilterValue(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'AAANNN', 'CCCNNN')
-        align_pairs = [pair1, pair2, pair3]
-        inexact_match_count = 42
-        input_umt = "AAANNNCCCNNN"
-
-        def family_filter(family):
-            return ":".join([a.query_name for a in family.align_pairs]) +\
-                 " is too odd"
-        actual_tag_family = connor._TagFamily(input_umt,
-                                              align_pairs,
-                                              inexact_match_count,
-                                              consensus_threshold=0.6,
-                                              family_filter=family_filter)
-
-        self.assertEquals('alignA:alignB:alignC is too odd',
-                          actual_tag_family.filter_value)
-
-    def test_is_consensus_template(self):
-        def pair(name):
-            left = ConnorAlign(mock_align(query_name=name))
-            right = ConnorAlign(mock_align(query_name=name))
-            return samtools.PairedAlignment(left, right)
-        pairA = pair('alignA')
-        alignA = ConnorAlign(mock_align(query_name='alignA'))
-        alignB = ConnorAlign(mock_align(query_name='alignB'))
-        alignC = ConnorAlign(mock_align(query_name='alignC'))
-        tag_family = connor._TagFamily(umt=("AAA", "CCC"),
-                                       alignments=[pairA],
-                                       inexact_match_count=0,
-                                       consensus_threshold=0.6)
-
-        self.assertEqual(True, tag_family.is_consensus_template(alignA))
-        self.assertEqual(False, tag_family.is_consensus_template(alignB))
-        self.assertEqual(False, tag_family.is_consensus_template(alignC))
-
-    def test_umt(self):
-        left = ConnorAlign(mock_align())
-        right = ConnorAlign(mock_align())
-        pair1 = samtools.PairedAlignment(left, right)
-
-        input_umt = ('AAANNN', 'CCCNNN')
-        actual_tag_family = connor._TagFamily(input_umt,
-                                             [pair1],
-                                             inexact_match_count=42,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(input_umt, actual_tag_family.umt())
-        self.assertEquals('AAANNN~CCCNNN',
-                          actual_tag_family.umt(format_string="{left}~{right}"))
-
-    def test_consensus_rewrites_umt(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'GGGNNN', 'NNNTTT')
-        input_umts = ("AAA", "CCC")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             [pair1],
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-        actual_consensus = actual_tag_family.consensus
-
-        self.assertEquals(input_umts, actual_consensus.umt)
-        self.assertEquals('AAANNN',
-                          actual_consensus.left.query_sequence)
-        self.assertEquals('NNNCCC',
-                          actual_consensus.right.query_sequence)
-
-    def test_consensus_sequence_trivial_noop(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-        actual_consensus_seq = actual_tag_family.consensus
-
-        self.assertEquals("nnnGGG",
-                          actual_consensus_seq.left.query_sequence)
-        self.assertEquals("TTTnnn",
-                          actual_consensus_seq.right.query_sequence)
-
-    def test_consensus_sequence_majority_wins(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                              alignments,
-                                              inexact_match_count=1,
-                                              consensus_threshold=0.5)
-        consensus_pair = actual_tag_family.consensus
-
-        self.assertEquals("nnnGTG",
-                          consensus_pair.left.query_sequence)
-        self.assertEquals("TCTnnn",
-                          consensus_pair.right.query_sequence)
-
-    def test_consensus_sequence_below_threshold_Ns(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'TCTnnn')
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'TTTnnn')
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        threshold = 0.8
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             threshold)
-        consensus_pair = actual_tag_family.consensus
-
-        self.assertEquals("nnnGNG",
-                          consensus_pair.left.query_sequence)
-        self.assertEquals("TNTnnn",
-                          consensus_pair.right.query_sequence)
-
-    @staticmethod
-    def connor_align(query_name, query_sequence, mapping_quality):
-        return ConnorAlign(mock_align(query_name=query_name,
-                                      query_sequence=query_sequence,
-                                      mapping_quality=mapping_quality))
-
-    def test_consensus_qualities_maxMappingQualityScores(self):
-        alignAL = self.connor_align('alignA', 'nGT', 30)
-        alignAR = self.connor_align('alignA', 'nCT', 25)
-        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
-
-        alignBL = self.connor_align('alignB', 'nGT', 20)
-        alignBR = self.connor_align('alignB', 'nCT', 15)
-        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
-
-        alignCL = self.connor_align('alignC', 'nGT', 10)
-        alignCR = self.connor_align('alignC', 'nCT', 5)
-        pairC = samtools.PairedAlignment(alignCL, alignCR, tag_length=1)
-
-        alignments = [pairA, pairB, pairC]
-        input_umts = ("n", "n")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                               alignments,
-                                               inexact_match_count,
-                                               consensus_threshold=0.6)
-        paired_consensus = actual_tag_family.consensus
-
-        self.assertEquals(30,
-                          paired_consensus.left.mapping_quality)
-        self.assertEquals(25,
-                          paired_consensus.right.mapping_quality)
-
-
-    def test_select_template_alignment_pair_picksMaxQualityScores(self):
-        alignAL = self.connor_align('alignA', 'nGT', 20)
-        alignAR = self.connor_align('alignA', 'nCT', 15)
-        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
-
-        alignBL = self.connor_align('alignB', "nGT", 30)
-        alignBR = self.connor_align('alignB', "nCT", 25)
-        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
-
-        alignCL = self.connor_align('alignC', "nGT", 10)
-        alignCR = self.connor_align('alignC', "nCT", 5)
-        pairC = samtools.PairedAlignment(alignCL, alignCR, tag_length=1)
-
-        alignment_pairs = [pairA, pairB, pairC]
-
-        actual_template = connor._TagFamily._select_template_alignment_pair(alignment_pairs)
-
-        self.assertEquals(pairB, actual_template)
-
-    def test_select_template_alignment_pair_breaksTiesByQueryName(self):
-        alignAL = self.connor_align('alignA', "nGT", 20)
-        alignAR = self.connor_align('alignA', "nCT", 15)
-        pairA = samtools.PairedAlignment(alignAL, alignAR, tag_length=1)
-
-        alignBL = self.connor_align('alignB', "nGT", 20)
-        alignBR = self.connor_align('alignB', "nCT", 15)
-        pairB = samtools.PairedAlignment(alignBL, alignBR, tag_length=1)
-        alignment_pairs = [pairA, pairB]
-
-        actual_template = connor._TagFamily._select_template_alignment_pair(alignment_pairs)
-
-        self.assertEquals(pairA, actual_template)
-
-
-    def test_consensus_uniform_cigars_admitted(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3M"
-        pair3.right.cigarstring = "3S3M"
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        included_names = [a.left.query_name for a in actual_tag_family.align_pairs]
-        self.assertEquals(['alignA','alignB','alignC'], included_names)
-
-    def test_consensus_minority_cigars_excluded(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3I"
-        pair3.right.cigarstring = "3S3M"
-        align_pairs = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                              align_pairs,
-                                              inexact_match_count,
-                                              consensus_threshold=0.6)
-
-        pair_name_filter = {}
-        for pair in actual_tag_family.align_pairs:
-            query_name = pair.left.query_name
-            pair_name_filter[query_name] = (pair.left.filter_value,
-                                            pair.right.filter_value)
-        self.assertEquals((None, None), pair_name_filter['alignA'])
-        self.assertEquals((None, None), pair_name_filter['alignB'])
-        self.assertEquals(('minority CIGAR', 'minority CIGAR'),
-                          pair_name_filter['alignC'])
-
-
-    def test_init_distinctCigarCountTwo(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3I"
-        pair3.right.cigarstring = "3S3I"
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(2, actual_tag_family.distinct_cigar_count)
-
-    def test_init_distinctCigarCountOneForConsisentCigar(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3M"
-        pair3.right.cigarstring = "3S3M"
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(1, actual_tag_family.distinct_cigar_count)
-
-    def test_distinct_cigar_count_single_ended(self):
-        pair1 = align_pair('alignA', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair1.left.cigarstring = "3S3M"
-        pair1.right.cigarstring = "3S3M"
-        pair2 = align_pair('alignB', 'chr1', 100, 200, 'nnnGTG', 'nnnTCT')
-        pair2.left.cigarstring = "3S3M"
-        pair2.right.cigarstring = "3S3M"
-        pair3 = align_pair('alignC', 'chr1', 100, 200, 'nnnGGG', 'nnnTTT')
-        pair3.left.cigarstring = "3S3I"
-        pair3.right.cigarstring = "3S3M"
-        alignments = [pair1, pair2, pair3]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(2, actual_tag_family.distinct_cigar_count)
-
-
-    def test_init_addsFilterForMinority(self):
-        def pair(name, c1, c2):
-            left = ConnorAlign(mock_align(query_name=name, cigarstring=c1))
-            right = ConnorAlign(mock_align(query_name=name, cigarstring=c2))
-            return samtools.PairedAlignment(left, right)
-        pairA = pair('alignA', '3S3M', '3S3M')
-        pairB = pair('alignB', '3S3M', '3S3M')
-        pairC = pair('alignC', '3S1I3M', '3S3M')
-        align_pairs = [pairA, pairB, pairC]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             align_pairs,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        pair_name_filter = {}
-        for pair in actual_tag_family.align_pairs:
-            query_name = pair.left.query_name
-            pair_name_filter[query_name] = (pair.left.filter_value,
-                                            pair.right.filter_value)
-
-        self.assertEqual(3, len(pair_name_filter))
-        self.assertEqual((None, None), pair_name_filter['alignA'])
-        self.assertEqual((None, None), pair_name_filter['alignB'])
-        self.assertEqual(('minority CIGAR','minority CIGAR'),
-                         pair_name_filter['alignC'])
-
-
-    def test_included_pair_count(self):
-        def pair(c1, c2):
-            left = ConnorAlign(mock_align(cigarstring=c1))
-            right = ConnorAlign(mock_align(cigarstring=c2))
-            return samtools.PairedAlignment(left, right)
-        pairA = pair("3S3M", "3S3M")
-        pairB = pair("3S3M", "3S3M")
-        pairC = pair("3S1I3M", "3S3M")
-        alignments = [pairA, pairB, pairC]
-        input_umts = ("nnn", "nnn")
-        inexact_match_count = 0
-
-        actual_tag_family = connor._TagFamily(input_umts,
-                                             alignments,
-                                             inexact_match_count,
-                                             consensus_threshold=0.6)
-
-        self.assertEquals(2, actual_tag_family.included_pair_count)
-
-
-class CoordinateFamilyHolder(BaseConnorTestCase):
-    #pylint: disable=no-self-use
-    def _pair(self, name, left_pos, right_pos, right_end, reference_name='1'):
-        alignL = ConnorAlign(MicroMock(query_name=name,
-                                       reference_start=left_pos,
-                                       next_reference_start=right_pos,
-                                       query_sequence='AAATTTT',
-                                       reference_end=0,
-                                       reference_name=reference_name))
-        alignR = ConnorAlign(MicroMock(query_name=name,
-                                       reference_start=right_pos,
-                                       next_reference_start=left_pos,
-                                       query_sequence='AAATTTT',
-                                       reference_end=right_end,
-                                       reference_name=reference_name))
-        return samtools.PairedAlignment(alignL, alignR)
-
-    def test_build_coordinate_families_noFamilies(self):
-        holder = _CoordinateFamilyHolder()
-        pairs = []
-        actual_families = [f for f in holder.build_coordinate_families(pairs)]
-        self.assertEquals([], actual_families)
-
-    def test_build_coordinate_families_gathersSimilarCoordinates(self):
-        pair1 = self._pair('1', 100, 200, 205)
-        pair2 = self._pair('2', 100, 200, 205)
-        pair3 = self._pair('3', 100, 300, 305)
-        pair4 = self._pair('4', 100, 300, 305)
-        pairs = [pair1, pair2, pair3, pair4]
-        holder = _CoordinateFamilyHolder()
-        actual_families = set()
-        for family in holder.build_coordinate_families(pairs):
-            actual_families.add(tuple(family))
-        expected_families = set([(pair1, pair2), (pair3, pair4)])
-        self.assertEquals(expected_families, actual_families)
-
-    def test_build_coordinate_families_flushesRemaining(self):
-        pair1 = self._pair('1', 100, 200, 205)
-        pair2 = self._pair('2', 100, 300, 305)
-        pair3 = self._pair('3', 200, 400, 405)
-        pairs = [pair1, pair3, pair2]
-        holder = _CoordinateFamilyHolder()
-        actual_families = set()
-        for family in holder.build_coordinate_families(pairs):
-            actual_families.add(tuple(family))
-        expected_families = set([(pair1,), (pair2,), (pair3,)])
-        self.assertEquals(expected_families, actual_families)
-
-    def test_build_coordinate_families_streamsPartialResults(self):
-        pair1 = self._pair('1', 100, 200, 205)
-        pair2 = self._pair('2', 100, 300, 305)
-
-        class AngryError(ValueError):
-            pass
-
-        class AngryPair(object):
-            @property
-            def right(self):
-                raise AngryError("I'm angry")
-        pair3 = AngryPair()
-
-        pairs = [pair1, pair2, pair3]
-        holder = _CoordinateFamilyHolder()
-        actual_families = set()
-        try:
-            for family in holder.build_coordinate_families(pairs):
-                actual_families.add(tuple(family))
-            self.fail("Expected AngryError")
-        except AngryError:
-            pass
-        expected_families = set([(pair1,),])
-        self.assertEquals(expected_families, actual_families)
-
-    def test_pending_pair_count_and_peak(self):
-        pair1 = self._pair('A1', 100, 150, 155, reference_name='1')
-        pair2 = self._pair('B1', 200, 250, 255, reference_name='1')
-        pair3 = self._pair('B2', 200, 250, 355, reference_name='1')
-
-        holder = _CoordinateFamilyHolder()
-        self.assertEqual(0, holder.pending_pair_count)
-        self.assertEqual(0, holder.pending_pair_peak_count)
-        holder._add(pair1)
-        self.assertEqual(1, holder.pending_pair_count)
-        self.assertEqual(1, holder.pending_pair_peak_count)
-        holder._add(pair2)
-        self.assertEqual(2, holder.pending_pair_count)
-        self.assertEqual(2, holder.pending_pair_peak_count)
-        holder._add(pair3)
-        self.assertEqual(3, holder.pending_pair_count)
-        self.assertEqual(3, holder.pending_pair_peak_count)
-        for _ in holder._completed_families('1', 200):
-            pass
-        self.assertEqual(2, holder.pending_pair_count)
-        self.assertEqual(3, holder.pending_pair_peak_count)
-        for _ in holder._remaining_families():
-            pass
-        self.assertEqual(0, holder.pending_pair_count)
-        self.assertEqual(3, holder.pending_pair_peak_count)
-
-    def test_build_coordinate_families_6families(self):
-        pair1 = self._pair('1', 100, 400, 405)
-        pair2 = self._pair('2', 100, 400, 405)
-        pair3 = self._pair('3', 200, 400, 405)
-        pair4 = self._pair('4', 200, 400, 405)
-        pair5 = self._pair('5', 200, 500, 505)
-        pair6 = self._pair('6', 300, 600, 605)
-        pairs = [pair1, pair2, pair3, pair4, pair5, pair6]
-
-        holder = _CoordinateFamilyHolder()
-        actual_coord_families = set()
-        for family in holder.build_coordinate_families(pairs):
-            actual_coord_families.add(tuple(family))
-        expected_coord_families = set([(pair1, pair2),
-                                       (pair3, pair4),
-                                       (pair5,),
-                                       (pair6,)])
-        self.assertEqual(expected_coord_families, actual_coord_families)
-
-    def test_build_coordinate_families_flushesInProgressForNewChromosome(self):
-        pair1A = self._pair('1A', 100, 200, 205, reference_name='1')
-        pair1B = self._pair('1B', 100, 200, 205, reference_name='1')
-        pair1C = self._pair('1C', 300, 400, 405, reference_name='1')
-        pair2A = self._pair('2A', 100, 200, 205, reference_name='2')
-        pair2B = self._pair('2B', 100, 200, 205, reference_name='2')
-        pair2C = self._pair('2C', 400, 500, 505, reference_name='2')
-        pair3A = self._pair('3A', 600, 700, 705, reference_name='3')
-        pair3B = self._pair('3B', 600, 700, 705, reference_name='3')
-        pair3C = self._pair('3C', 800, 900, 905, reference_name='3')
-        pairs = [pair1A, pair1B, pair1C,
-                 pair2A, pair2B, pair2C,
-                 pair3A, pair3B, pair3C]
-        holder = _CoordinateFamilyHolder()
-        actual_families = set()
-        for family in holder.build_coordinate_families(pairs):
-            actual_families.add(tuple(family))
-        expected_families = set([(pair1A, pair1B),
-                                 (pair1C,),
-                                 (pair2A, pair2B),
-                                 (pair2C,),
-                                 (pair3A, pair3B),
-                                 (pair3C,)])
-        self.assertEquals(expected_families, actual_families)
+    return PairedAlignment(alignL, alignR, tag_length)
 
 
 class ConnorTest(BaseConnorTestCase):
-    def test_build_coordinate_pairs_singlePair(self):
-        align1L = ConnorAlign(mock_align(query_name='1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name='1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        aligns = [align1L, align1R]
-
-        actual_pairs = [p for p in connor._build_coordinate_pairs(aligns, None)]
-
-        self.assertEqual(1, len(actual_pairs))
-        actual_pair = actual_pairs[0]
-        self.assertEqual(align1L, actual_pair.left)
-        self.assertEqual(align1R, actual_pair.right)
-
-    def test_build_coordinate_pairs_oneCoordinate(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align2L = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        aligns = [align1L, align2L, align1R, align2R]
-
-        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, None)]
-
-        self.assertEqual(2, len(actual_pairs))
-        pairs = dict([(pair.query_name, pair) for pair in actual_pairs])
-        self.assertEqual(align1L, pairs['1'].left)
-        self.assertEqual(align1R, pairs['1'].right)
-        self.assertEqual(align2L, pairs['2'].left)
-        self.assertEqual(align2R, pairs['2'].right)
-
-    def test_build_coordinate_pairs_twoCoordinatesSameRight(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align2L = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align3L = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=125,
-                                         next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        align3R = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=200,
-                                         next_reference_start=125))
-        aligns = [align1L, align2L, align3L, align1R, align2R, align3R]
-
-        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, None)]
-
-        self.assertEqual(3, len(actual_pairs))
-        actual_pair_names = set([pair.query_name for pair in actual_pairs])
-        self.assertEqual(set(['1', '2', '3']), actual_pair_names)
-
-    def test_build_coordinate_pairs_identicalCoordinates(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=100))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=100))
-        aligns = [align1L, align1R]
-        writer = MockAlignWriter()
-        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, writer)]
-
-        self.assertEqual(1, len(actual_pairs))
-        actual_pair_names = set([pair.query_name for pair in actual_pairs])
-        self.assertEqual(set(['1']), actual_pair_names)
-
-
-    def test_build_coordinate_pairs_orphanedRightIsSafe(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        aligns = [align1L, align1R, align2R]
-        writer = MockAlignWriter()
-        actual_pairs = [f for f in connor._build_coordinate_pairs(aligns, writer)]
-
-        self.assertEqual(1, len(actual_pairs))
-        actual_pair_names = set([pair.query_name for pair in actual_pairs])
-        self.assertEqual(set(['1']), actual_pair_names)
-
-    def test_build_coordinate_pairs_orphanedRightWrittenToExcluded(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=150,
-                                         next_reference_start=100))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        aligns = [align1L, align1R, align2R]
-        writer = MockAlignWriter()
-
-        for _ in connor._build_coordinate_pairs(aligns, writer):
-            pass
-
-        self.assertEqual(1, len(writer._write_calls))
-        (actual_family, actual_align) = writer._write_calls[0]
-        self.assertEqual(None, actual_family)
-        self.assertEqual(align2R, actual_align)
-        self.assertEqual('read mate was missing or excluded',
-                         actual_align.filter_value)
-
-    def test_build_coordinate_pairs_whenExhasutedRemaindersWrittenToExcluded(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        align3L = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=150,
-                                         next_reference_start=250))
-        aligns = [align1L, align3L, align1R]
-        writer = MockAlignWriter()
-
-        for _ in connor._build_coordinate_pairs(aligns, writer):
-            pass
-
-        self.assertEqual(1, len(writer._write_calls))
-        (actual_family, actual_align) = writer._write_calls[0]
-        self.assertEqual(None, actual_family)
-        self.assertEqual(align3L, actual_align)
-        self.assertEqual('read mate was missing or excluded',
-                         actual_align.filter_value)
-
-    def test_build_coordinate_pairs_lookForPassedPops(self):
-        align1L = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align2L = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=100,
-                                         next_reference_start=200))
-        align3L = ConnorAlign(mock_align(query_name = '3',
-                                         reference_start=300,
-                                         next_reference_start=400))
-        align1R = ConnorAlign(mock_align(query_name = '1',
-                                         reference_start=200,
-                                         next_reference_start=100))
-        align2R = ConnorAlign(mock_align(query_name = '2',
-                                         reference_start=200,
-                                         next_reference_start=100))
-
-        class BombError(ValueError):
-            pass
-
-        class BombAlign(object):
-            @property
-            def orientation(self):
-                raise BombError("Boom.")
-        align4L = BombAlign()
-
-        aligns = [align1L, align2L, align1R, align2R, align3L, align4L]
-        actual_pairs = []
-        try:
-            for pair in connor._build_coordinate_pairs(aligns, None):
-                actual_pairs.append(pair)
-            self.fail("expected BombError")
-        except BombError:
-            pass
-
-        self.assertEqual(2, len(actual_pairs))
-        actual_pair_names = set([pair.query_name for pair in actual_pairs])
-        self.assertEqual(set(['1', '2']), actual_pair_names)
-
-
     def test_build_family_filter_whenFamilySizeOk(self):
         args = Namespace(min_family_size_threshold=2)
         family_filter = connor._build_family_filter(args)
@@ -1032,106 +321,6 @@ class ConnorTest(BaseConnorTestCase):
         expected_tags = [('AAA', 'GGG'), ('AAA', 'CCC'), ('TTT', 'GGG')]
         self.assertEqual(expected_tags, actual_tags)
 
-    def test_parse_command_line_args(self):
-        namespace = connor._parse_command_line_args(["command",
-                                                     "input.bam",
-                                                     "output.bam"])
-        self.assertEqual("input.bam", namespace.input_bam)
-        self.assertEqual("output.bam", namespace.output_bam)
-        self.assertEqual(False, namespace.force)
-        self.assertEqual(False, namespace.simplify_pg_header)
-        self.assertEqual(False, namespace.verbose)
-        self.assertEqual("output.bam.log", namespace.log_file)
-        self.assertEqual(None, namespace.annotated_output_bam)
-        self.assertEqual(connor.DEFAULT_CONSENSUS_FREQ_THRESHOLD,
-                         namespace.consensus_freq_threshold)
-        self.assertEqual(connor.DEFAULT_MIN_FAMILY_SIZE_THRESHOLD,
-                         namespace.min_family_size_threshold)
-        self.assertEqual(connor.DEFAULT_UMT_DISTANCE_THRESHOLD,
-                         namespace.umt_distance_threshold)
-        self.assertEquals(['command', 'input.bam', 'output.bam'],
-                          namespace.original_command_line)
-        self.assertEqual(11, len(vars(namespace)))
-
-    def test_parse_command_line_args_throwsConnorUsageError(self):
-        self.assertRaises(utils.UsageError,
-                          connor._parse_command_line_args,
-                          ["command", "input"])
-        self.assertRaises(utils.UsageError,
-                          connor._parse_command_line_args,
-                          ["command",
-                           "input",
-                           "output",
-                           "something else"])
-
-    def test_progress_logger_passesThroughItems(self):
-        base_gen = [0,1,2,3,4,5,6,7,8,9]
-        total_rows = len(base_gen)
-        actual_items = []
-        for item in connor._progress_logger(base_gen,
-                                         total_rows,
-                                         self.mock_logger):
-            actual_items.append(item)
-        self.assertEqual(actual_items, base_gen)
-
-    def test_progress_logger_logsProgress(self):
-        base_gen = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-        total_rows = len(base_gen)
-        gen = connor._progress_logger(base_gen,
-                                     total_rows,
-                                     self.mock_logger)
-        next(gen)
-        self.assertEqual("0% (1/20) alignments processed",
-                         self.mock_logger._log_calls['INFO'][0])
-        next(gen)
-        self.assertEqual("10% (2/20) alignments processed",
-                         self.mock_logger._log_calls['INFO'][1])
-        next(gen)
-        next(gen)
-        self.assertEqual("20% (4/20) alignments processed",
-                         self.mock_logger._log_calls['INFO'][2])
-        next(gen)
-        next(gen)
-        self.assertEqual("30% (6/20) alignments processed",
-                         self.mock_logger._log_calls['INFO'][3])
-        for _ in range(7, 21):
-            next(gen)
-
-        self.assertRaises(StopIteration,
-                          next,
-                          gen)
-
-        self.assertEqual("100% (20/20) alignments processed",
-                         self.mock_logger._log_calls['INFO'][-1])
-
-    def test_progress_logger_logsMem(self):
-        base_gen = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-        total_rows = len(base_gen)
-        def supplemental_log(logger):
-            logger.debug("foo")
-            logger.debug("bar")
-        gen = connor._progress_logger(base_gen,
-                                     total_rows,
-                                     self.mock_logger,
-                                     supplemental_log)
-        next(gen)
-        next(gen)
-        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][0],
-                                 "foo")
-        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][1],
-                                 "bar")
-        next(gen)
-        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][2],
-                                 "foo")
-        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][3],
-                                 "bar")
-        next(gen)
-        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][4],
-                                 "foo")
-        self.assertRegexpMatches(self.mock_logger._log_calls['DEBUG'][5],
-                                 "bar")
-
-
 
     def test_rank_tags_breaksTiesByTag(self):
         pair0 = align_pair("align0", 'chr1', 100, 200, "TTTNNN", "NNNGGG")
@@ -1163,27 +352,28 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 "input.sam",
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        "input.sam",
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(simplify_pg_header=True,
                              original_command_line='foo')
-            consensus_writer = samtools.build_writer(input_bam,
+            consensus_writer = writers.build_writer(input_bam,
                                                      output_bam,
                                                      tags=[],
                                                      args=args)
-            annotated_writer = samtools_test.MockAlignWriter()
+            annotated_writer = MockAlignWriter()
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
-                             umt_distance_threshold=1)
+                             umt_distance_threshold=1,
+                             umt_length=5)
             connor._dedup_alignments(args,
                                      consensus_writer,
                                      annotated_writer,
                                      self.mock_logger)
             consensus_writer.close()
-            alignments = samtools.alignment_file(output_bam, "rb").fetch()
+            alignments = pysamwrapper.alignment_file(output_bam, "rb").fetch()
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
@@ -1210,19 +400,20 @@ readNameC2|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        'input.sam',
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
             args = Namespace(input_bam=input_bam,
                              output_bam=output_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
                              umt_distance_threshold=1,
-                             annotated_output_bam=None)
+                             annotated_output_bam=None,
+                             umt_length=5)
             connor._dedup_alignments(args,
-                                     samtools_test.MockAlignWriter(),
-                                     samtools_test.MockAlignWriter(),
+                                     MockAlignWriter(),
+                                     MockAlignWriter(),
                                      self.mock_logger)
 
             log_iter = iter(self.mock_logger._log_calls['INFO'])
@@ -1261,28 +452,29 @@ readNameB1|147|chr10|500|20|5M|=|100|200|AAAAA|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 "input.sam",
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        "input.sam",
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, "output.bam")
             args = Namespace(input_bam=input_bam,
                              consensus_freq_threshold=0.6,
                              min_family_size_threshold=0,
                              umt_distance_threshold=1,
                              simplify_pg_header=False,
-                             original_command_line='foo')
-            consensus_writer = samtools.build_writer(input_bam,
+                             original_command_line='foo',
+                             umt_length=5)
+            consensus_writer = writers.build_writer(input_bam,
                                                      output_bam,
                                                      [],
                                                      args)
-            annotated_writer = samtools.AlignWriter.NULL
+            annotated_writer = writers.AlignWriter.NULL
 
             connor._dedup_alignments(args,
                                      consensus_writer,
                                      annotated_writer,
                                      self.mock_logger)
             consensus_writer.close()
-            alignments = samtools_test.pysam_alignments_from_bam(output_bam)
+            alignments = self.pysam_alignments_from_bam(output_bam)
 
             aligns = [(a.query_name, a.reference_start + 1) for a in alignments]
             self.assertEquals(4, len(aligns))
@@ -1306,9 +498,9 @@ readNameB1|147|chr10|400|20|5M|=|200|100|CCCCC|>>>>>
 '''.replace("|", "\t")
 
         with TempDirectory() as tmp_dir:
-            input_bam = samtools_test.create_bam(tmp_dir.path,
-                                                 'input.sam',
-                                                 sam_contents)
+            input_bam = self.create_bam(tmp_dir.path,
+                                        'input.sam',
+                                        sam_contents)
             output_bam = os.path.join(tmp_dir.path, 'output.bam')
             output_log = os.path.join(tmp_dir.path, 'output.log')
             old_dedup_alignments = connor._dedup_alignments
