@@ -4,7 +4,9 @@
 from argparse import Namespace
 from collections import defaultdict
 from collections import OrderedDict
+import getpass
 import os
+import socket
 import sys
 import unittest
 
@@ -201,7 +203,6 @@ try:
 except ImportError:
     from io import StringIO
 
-
 class MockBaseLogger(object):
     def __init__(self):
         self.lines = []
@@ -214,8 +215,32 @@ class MockBaseLogger(object):
     def warning(self, line, extra=None):
         self.info(line, extra)
 
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 class LoggerTestCase(BaseConnorTestCase):
+    @patch('getpass.getuser')
+    def test_usernameNotAvailable(self, getuser):
+        getuser.side_effect = ValueError()
+        args = Namespace(log_file="test.log", verbose=False)
+        console_stream = StringIO()
+        logger = utils.Logger(args, console_stream)
+        file_logger = MockBaseLogger()
+        logger._file_logger = file_logger
+        logger.debug("debug [{}]", "d")
+        self.assertEqual(1, len(file_logger.lines))
+
+    @patch('socket.gethostname')
+    def test_hostnameNotAvailable(self, gethostname):
+        gethostname.side_effect = ValueError()
+        args = Namespace(log_file="test.log", verbose=False)
+        console_stream = StringIO()
+        logger = utils.Logger(args, console_stream)
+        file_logger = MockBaseLogger()
+        logger._file_logger = file_logger
+        logger.debug("debug [{}]", "d")
+        self.assertEqual(1, len(file_logger.lines))
+
     def test_init_invalidPathRaisesUsageError(self):
         with TempDirectory() as tmp_dir:
             log_filepath = os.path.join(tmp_dir.path, "foo", "bar.log")
@@ -238,7 +263,6 @@ class LoggerTestCase(BaseConnorTestCase):
         self.assertEqual(3, len(fields))
         self.assertEqual(fields[1], "INFO")
         self.assertEqual(fields[2], "info [i]")
-
 
     def test_notVerbose(self):
         args = Namespace(log_file="test.log",
@@ -333,4 +357,3 @@ class UtilsTest(BaseConnorTestCase):
                            ('b2', 30),
                            ('c', 20)]
         self.assertEqual(expected_counts, actual_counts)
-

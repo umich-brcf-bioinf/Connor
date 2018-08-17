@@ -3,7 +3,7 @@ Changelog
 
 0.6x (MM/DD/YYYY)
 -------------------
-- tbd
+- Adjust logging to not crash if username/hostname not available
 
 0.6 (4/11/2018)
 -------------------

@@ -18,6 +18,20 @@ import sys
 
 import pysam
 
+def _get_username_hostname():
+    '''Best attempt to get username and hostname, returns "na" if problem.'''
+    user = 'na'
+    host = 'na'
+    try:
+        user = getpass.getuser()
+    except Exception:
+        pass
+    try:
+        host = socket.gethostname()
+    except Exception:
+        pass
+    return user, host
+
 class UsageError(Exception):
     '''Raised for malformed command or invalid arguments.'''
     def __init__(self, msg, *args):
@@ -83,8 +97,7 @@ class Logger(object):
             self._console_stream = console_stream
         else:
             self._console_stream = sys.stderr
-        user = getpass.getuser()
-        host = socket.gethostname()
+        user, host = _get_username_hostname()
         start_time = datetime.now().strftime(Logger._DATE_FORMAT)
         self._logging_dict = {'user': user,
                               'host': host,
@@ -140,7 +153,7 @@ class Logger(object):
 
 def sort_dict(key_counts, by_key=False):
     '''Accept a dict of key:values (numerics) returning list of key-value tuples ordered by desc values.
-    
+
     If by_key=True, sorts by dict key.'''
     sort_key = lambda x: (-1 * x[1], x[0])
     if by_key:
