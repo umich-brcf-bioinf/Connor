@@ -215,13 +215,22 @@ class MockBaseLogger(object):
     def warning(self, line, extra=None):
         self.info(line, extra)
 
-from unittest.mock import MagicMock
-from unittest.mock import patch
-
 class LoggerTestCase(BaseConnorTestCase):
-    @patch('getpass.getuser')
-    def test_usernameNotAvailable(self, getuser):
-        getuser.side_effect = ValueError()
+    @staticmethod
+    def angry_function():
+        raise ValueError()
+
+    def setUp(self):
+        self.getpass_getuser = getpass.getuser
+        self.socket_gethostname = socket.gethostname
+
+    def tearDown(self):
+        getpass.getuser = self.getpass_getuser
+        socket.gethostname = self.socket_gethostname
+
+    def test_usernameNotAvailable(self):
+        # Yes, I could use patch/MagicMock but it complicates py2.7
+        getpass.getuser = LoggerTestCase.angry_function
         args = Namespace(log_file="test.log", verbose=False)
         console_stream = StringIO()
         logger = utils.Logger(args, console_stream)
@@ -230,9 +239,9 @@ class LoggerTestCase(BaseConnorTestCase):
         logger.debug("debug [{}]", "d")
         self.assertEqual(1, len(file_logger.lines))
 
-    @patch('socket.gethostname')
-    def test_hostnameNotAvailable(self, gethostname):
-        gethostname.side_effect = ValueError()
+    def test_hostnameNotAvailable(self):
+        # Yes, I could use patch/MagicMock but it complicates py2.7
+        socket.gethostname = LoggerTestCase.angry_function
         args = Namespace(log_file="test.log", verbose=False)
         console_stream = StringIO()
         logger = utils.Logger(args, console_stream)
