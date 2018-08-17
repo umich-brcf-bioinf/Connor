@@ -21,7 +21,7 @@ info on requirements and more install options.
 ::
   $ pip install connor --user
   ...
-  Successfully installed Connor-0.6
+  Successfully installed Connor-0.6.1
 
 Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in your path:
 ::
@@ -32,7 +32,7 @@ Run this line (and/or add it to your ~/.bashrc file) and confirm connor is in yo
   usage: connor input_bam output_bam
   positional arguments:
   ...
-  v0.6
+  v0.6.1
 
 3. **Download the example data:**
 ::

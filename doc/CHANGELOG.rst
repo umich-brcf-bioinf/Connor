@@ -1,6 +1,10 @@
 Changelog
 =========
 
+0.6.1 (8/16/2018)
+-------------------
+- Adjust logging to not crash if username/hostname not available
+
 0.6 (4/11/2018)
 -------------------
 - Extended to support pysam v0.13, v0.14
