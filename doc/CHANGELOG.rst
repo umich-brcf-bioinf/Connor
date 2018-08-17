@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.6x (MM/DD/YYYY)
+0.6.1 (8/16/2018)
 -------------------
 - Adjust logging to not crash if username/hostname not available
 
