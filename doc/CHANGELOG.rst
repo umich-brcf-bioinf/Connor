@@ -1,6 +1,10 @@
 Changelog
 =========
 
+x.y.z (mm/dd/yyyy)
+-------------------
+-
+
 0.6.1 (8/16/2018)
 -------------------
 - Adjust logging to not crash if username/hostname not available
